@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id    String @id @default(uuid())
+  name  String @unique
+  users User[]
+
+  @@map("roles")
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  displayName     String?
+  passwordHash    String?
+  emailVerifiedAt DateTime?
+  totpEnabled     Boolean   @default(false)
+  roleId          String
+  role            Role      @relation(fields: [roleId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  totpSecret              TotpSecret?
+  oauthIdentities         OAuthIdentity[]
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+
+  @@map("users")
+}
+
+model TotpSecret {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret      String
+  confirmedAt DateTime?
+  backupCodes Json?
+
+  @@map("totp_secrets")
+}
+
+model OAuthIdentity {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       String
+  providerUserId String
+  createdAt      DateTime @default(now())
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+  @@map("oauth_identities")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model Category {
+  id          String     @id @default(uuid())
+  name        String
+  slug        String     @unique
+  description String?
+  parentId    String?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryTree")
+  products    Product[]
+
+  @@map("categories")
+}
+
+model Brand {
+  id       String    @id @default(uuid())
+  name     String
+  slug     String    @unique
+  products Product[]
+
+  @@map("brands")
+}
+
+model Product {
+  id             String   @id @default(uuid())
+  name           String
+  slug           String   @unique
+  description    String
+  price          Decimal  @db.Decimal(10, 2)
+  stockQuantity  Int
+  categoryId     String
+  category       Category @relation(fields: [categoryId], references: [id])
+  brandId        String
+  brand          Brand    @relation(fields: [brandId], references: [id])
+  weightKg       Decimal  @db.Decimal(8, 3)
+  weightLb       Decimal  @db.Decimal(8, 3)
+  lengthCm       Decimal  @db.Decimal(8, 2)
+  widthCm        Decimal  @db.Decimal(8, 2)
+  heightCm       Decimal  @db.Decimal(8, 2)
+  lengthIn       Decimal  @db.Decimal(8, 2)
+  widthIn        Decimal  @db.Decimal(8, 2)
+  heightIn       Decimal  @db.Decimal(8, 2)
+  averageRating  Float    @default(0)
+  reviewCount    Int      @default(0)
+  featured       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  images         ProductImage[]
+  attributes     ProductAttribute[]
+
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([price])
+  @@index([averageRating])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(uuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  path      String
+  altText   String
+  sortOrder Int     @default(0)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model ProductAttribute {
+  id        String  @id @default(uuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  value     String
+
+  @@index([productId])
+  @@index([name, value])
+  @@map("product_attributes")
+}

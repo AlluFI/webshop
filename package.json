@@ -1,0 +1,26 @@
+{
+  "name": "i-love-shopping1",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm --filter api dev",
+    "dev:web": "pnpm --filter web dev",
+    "build": "pnpm --filter @volt/shared build && pnpm --filter api build && pnpm --filter web build",
+    "test": "pnpm --filter api test",
+    "seed": "pnpm --filter api seed",
+    "compose:up": "docker compose up --build",
+    "compose:down": "docker compose down --volumes"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.17.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "argon2",
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild"
+    ]
+  }
+}
