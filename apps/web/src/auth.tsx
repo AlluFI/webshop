@@ -23,6 +23,7 @@ type AuthContextValue = {
   ready: boolean;
   setSession: (accessToken: string) => Promise<void>;
   refreshSession: () => Promise<boolean>;
+  reloadUser: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -61,6 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [loadMe],
   );
 
+  const reloadUser = useCallback(async () => {
+    if (!accessToken) return;
+    await loadMe(accessToken);
+  }, [accessToken, loadMe]);
+
   const logout = useCallback(async () => {
     try {
       await api("/auth/logout", {
@@ -80,8 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshSession]);
 
   const value = useMemo(
-    () => ({ accessToken, user, ready, setSession, refreshSession, logout }),
-    [accessToken, user, ready, setSession, refreshSession, logout],
+    () => ({ accessToken, user, ready, setSession, refreshSession, reloadUser, logout }),
+    [accessToken, user, ready, setSession, refreshSession, reloadUser, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

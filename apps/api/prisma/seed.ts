@@ -460,21 +460,24 @@ async function main() {
   }
 
   const demoEmail = "customer@volt.test";
-  await prisma.user.upsert({
+  const demoUser = await prisma.user.upsert({
     where: { email: demoEmail },
     update: {
       passwordHash: await argon2.hash("Shopping123"),
       emailVerifiedAt: new Date(),
       displayName: "Demo Customer",
+      totpEnabled: false,
     },
     create: {
       email: demoEmail,
       displayName: "Demo Customer",
       passwordHash: await argon2.hash("Shopping123"),
       emailVerifiedAt: new Date(),
+      totpEnabled: false,
       roleId: customerRole.id,
     },
   });
+  await prisma.totpSecret.deleteMany({ where: { userId: demoUser.id } });
 
   console.log(`Seeded ${products.length} products and demo user ${demoEmail}`);
 }

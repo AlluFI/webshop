@@ -37,8 +37,6 @@ docker compose up --build
 | Postgres (host) | `localhost:15432` |
 | Redis (host) | `localhost:6379` |
 
-The storefront uses port **8088** so it does not collide with other local apps on 8080.
-
 Google reCAPTCHA **test keys** are in `.env.example` so registration works on localhost without a Google Cloud project.
 
 ### Demo account
@@ -100,6 +98,10 @@ Coverage:
 - **Unit:** JWT generate/validate/expire, refresh rotation + reuse, input validation, product model
 - **API:** register/login/refresh/revoke, catalog fields, facets, sort, suggestions, images
 - **Security:** parameterized search (injection payload), malformed JSON, unauthenticated `/me`
+
+## Review talking points
+
+Written explanations for the oral review items (JWT, ACID, Postgres growth, search, testing, architecture) are in [docs/REVIEW_EXPLANATIONS.md](docs/REVIEW_EXPLANATIONS.md).
 
 ## Architecture notes
 
