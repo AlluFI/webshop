@@ -31,8 +31,6 @@ Code: `apps/api/src/lib/jwt.ts`, `apps/web/src/auth.tsx`.
 
 ## 2. Refresh rotation, single-use, and revocation
 
-Reviewers will ask you to prove an old refresh token dies.
-
 On login we create a **family** id and a refresh `jti`, and store `rf:{fam} = jti` in Redis.
 
 On `/auth/refresh`:
@@ -59,7 +57,7 @@ Code: `apps/api/src/lib/tokens.ts`. Automated proof: `apps/api/src/lib/tokens.te
 
 E-commerce data is relational: users, roles, categories, brands, products, images, later carts and orders. PostgreSQL gives us foreign keys, transactions, and indexes on one engine that already follows ACID.
 
-**What we use today**
+**What is used today**
 
 - B-tree indexes on `products.categoryId`, `brandId`, `price`, `averageRating`, unique slugs and emails.
 - A **GIN** index on `products.search_vector` for full-text search.
@@ -123,7 +121,7 @@ Demo: type “sony” in the header; filter Catalog → Audio + min rating 4; so
 
 ## 6. Testing approach
 
-We mix **automated** tests (run before merge / in review) with **manual** tests for things that need a browser or a third party (CAPTCHA widget, Google account picker, authenticator app).
+The current implementation mixes **automated** tests with **manual** tests for things that need a browser or a third party (CAPTCHA widget, Google account picker, authenticator app).
 
 ### Automated (Vitest + Supertest)
 
@@ -162,7 +160,7 @@ We do not pretend CAPTCHA or Google’s redirect can be fully trusted from unit 
 
 ## 7. Architecture: modular monolith
 
-We chose a **modular monolith**, not a distributed set of microservices.
+I chose a **modular monolith**, not a distributed set of microservices.
 
 - **One deployable API** (Express) with folders for auth, catalog, mail, tokens — modules, not separate repos.
 - **One React app** talking only to versioned HTTP: `/api/v1/...`. Interactive docs live at `/api/v1/docs` (OpenAPI 3 + Swagger UI).
@@ -171,11 +169,11 @@ We chose a **modular monolith**, not a distributed set of microservices.
 
 **Why this fits Part 1 and still scales**
 
-- A three-part student shop does not yet have independent teams or independent data ownership. Microservices would add queues, extra failure modes, and harder reviews without buying real scale.
-- The API is stateless aside from Redis, so we can run more API containers when traffic grows.
+- A three-part shop does not yet have independent teams or independent data ownership. Microservices would add queues, extra failure modes, and harder reviews without buying real scale.
+- The API is stateless aside from Redis, so I can run more API containers when traffic grows.
 - Part 2 can add an `apps/worker` that consumes RabbitMQ **without** splitting the catalog database on day one. If payment volume later needs its own process, that module is already a boundary.
 
-**What we would not do yet:** a separate “User Service” and “Product Service” with two databases. Joining products to brands/categories and later to order lines is exactly what one relational database is for.
+**What I would not do yet:** a separate “User Service” and “Product Service” with two databases. Joining products to brands/categories and later to order lines is exactly what one relational database is for.
 
 ---
 
