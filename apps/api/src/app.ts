@@ -8,6 +8,7 @@ import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
 import { catalogRouter } from "./routes/catalog.js";
 import { filesRouter } from "./routes/files.js";
+import { docsRouter } from "./routes/docs.js";
 import { errorHandler } from "./middleware/error-handler.js";
 
 export function createApp() {
@@ -15,7 +16,20 @@ export function createApp() {
 
   const app = express();
   app.set("trust proxy", 1);
-  app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:", "blob:"],
+          connectSrc: ["'self'"],
+        },
+      },
+    }),
+  );
   app.use(
     cors({
       origin: [
@@ -34,6 +48,7 @@ export function createApp() {
   app.use("/api/v1/auth", authRouter);
   app.use("/api/v1", catalogRouter);
   app.use("/api/v1/files", filesRouter);
+  app.use("/api/v1", docsRouter);
 
   app.use((_req, res) => {
     res.status(404).json({ error: "Not found" });

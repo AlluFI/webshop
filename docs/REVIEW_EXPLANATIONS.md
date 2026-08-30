@@ -135,6 +135,7 @@ We mix **automated** tests (run before merge / in review) with **manual** tests 
 | Unit — product model | `apps/api/src/lib/product-model.test.ts` | Required fields, dual-unit dimensions, rejects bad price/images |
 | API + DB | `apps/api/test/auth.api.test.ts` | Register, verify, login, persist user, refresh reuse, logout revoke |
 | API + DB | `apps/api/test/catalog.api.test.ts` | Required product shape, facets, sort, suggestions, image bytes |
+| API | `apps/api/test/openapi.test.ts` | OpenAPI 3 spec is served; Swagger UI HTML is available |
 | Security | `apps/api/test/security.test.ts` | Injection string in `q` does not drop tables; malformed JSON; `/me` without token |
 
 How to run (Docker stack up):
@@ -164,7 +165,7 @@ We do not pretend CAPTCHA or Google’s redirect can be fully trusted from unit 
 We chose a **modular monolith**, not a distributed set of microservices.
 
 - **One deployable API** (Express) with folders for auth, catalog, mail, tokens — modules, not separate repos.
-- **One React app** talking only to versioned HTTP: `/api/v1/...`.
+- **One React app** talking only to versioned HTTP: `/api/v1/...`. Interactive docs live at `/api/v1/docs` (OpenAPI 3 + Swagger UI).
 - **One Postgres** as the system of record; **Redis** for session state.
 - **Docker Compose** runs API, web, Postgres, Redis, Mailpit. Reviewers need Docker only.
 

@@ -33,6 +33,8 @@ docker compose up --build
 | --- | --- |
 | Storefront | http://localhost:8088 |
 | API health | http://localhost:3000/api/v1/health |
+| API docs (Swagger) | http://localhost:3000/api/v1/docs |
+| OpenAPI spec | http://localhost:3000/api/v1/openapi.json |
 | Mailpit | http://localhost:8025 |
 | Postgres (host) | `localhost:15432` |
 | Redis (host) | `localhost:6379` |
@@ -78,6 +80,7 @@ pnpm dev:web   # http://localhost:5173
 3. Create an account (CAPTCHA required), confirm via Mailpit, sign in. Access tokens never go to `localStorage`.
 4. Enable 2FA on **Account** with an authenticator app.
 5. Forgot password sends a Mailpit link.
+6. Explore or try endpoints at **http://localhost:3000/api/v1/docs**. After login, use **Authorize** with the `accessToken`.
 
 ## Tests
 
@@ -96,7 +99,7 @@ pnpm test
 Coverage:
 
 - **Unit:** JWT generate/validate/expire, refresh rotation + reuse, input validation, product model
-- **API:** register/login/refresh/revoke, catalog fields, facets, sort, suggestions, images
+- **API:** register/login/refresh/revoke, catalog fields, facets, sort, suggestions, images, OpenAPI document
 - **Security:** parameterized search (injection payload), malformed JSON, unauthenticated `/me`
 
 ## Review talking points
