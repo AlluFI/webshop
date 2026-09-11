@@ -14,13 +14,50 @@ function cmToIn(cm: number) {
   return Number((cm / 2.54).toFixed(2));
 }
 
+function wrapLabel(label: string, maxChars: number): string[] {
+  const words = label.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (word.length > maxChars && !current) {
+      let rest = word;
+      while (rest.length > maxChars) {
+        lines.push(rest.slice(0, maxChars));
+        rest = rest.slice(maxChars);
+      }
+      current = rest;
+      continue;
+    }
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > maxChars) {
+      if (current) lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 function svg(name: string, color: string, label: string) {
+  const lines = wrapLabel(label, 22);
+  const fontSize = lines.length > 2 ? 34 : 42;
+  const lineHeight = fontSize + 10;
+  const startY = 390 - ((lines.length - 1) * lineHeight) / 2;
+  const title = lines
+    .map(
+      (line, index) =>
+        `<text x="400" y="${startY + index * lineHeight}" text-anchor="middle" font-family="Georgia, serif" font-size="${fontSize}" fill="#f7f4ec">${escapeXml(line)}</text>`,
+    )
+    .join("\n  ");
+  const brandY = startY + lines.length * lineHeight + 8;
   const content = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800" role="img" aria-label="${label}">
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800" role="img" aria-label="${escapeXml(label)}">
   <rect width="800" height="800" fill="#f3efe6"/>
   <rect x="80" y="80" width="640" height="640" rx="36" fill="${color}"/>
-  <text x="400" y="390" text-anchor="middle" font-family="Georgia, serif" font-size="42" fill="#f7f4ec">${escapeXml(label)}</text>
-  <text x="400" y="450" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#d9d0bc">Volt &amp; Co</text>
+  ${title}
+  <text x="400" y="${brandY}" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#d9d0bc">Volt &amp; Co</text>
 </svg>`;
   mkdirSync(uploadDir, { recursive: true });
   writeFileSync(path.join(uploadDir, name), content);

@@ -70,10 +70,6 @@ export function AccountPage() {
       <p>
         {user.displayName || "Customer"} · {user.email}
       </p>
-      <p className="muted">
-        Access tokens stay in memory only. Refresh tokens rotate in Redis and are stored in an
-        httpOnly cookie.
-      </p>
       <p>
         Two-factor authentication:{" "}
         <strong>{user.totpEnabled ? "Active" : "Off"}</strong>
