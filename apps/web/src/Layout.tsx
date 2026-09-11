@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api } from "./api";
 import { useAuth } from "./auth";
+import { useCart } from "./cart";
 
 type Suggest = {
   products: { name: string; slug: string; href: string }[];
@@ -10,6 +11,7 @@ type Suggest = {
 
 export function Layout() {
   const { user, logout } = useAuth();
+  const { cart } = useCart();
   const [q, setQ] = useState("");
   const [suggest, setSuggest] = useState<Suggest | null>(null);
   const box = useRef<HTMLFormElement>(null);
@@ -80,8 +82,10 @@ export function Layout() {
           </form>
           <nav className="nav" aria-label="Account">
             <NavLink to="/catalog">Catalog</NavLink>
+            <NavLink to="/cart">Cart{cart.itemCount > 0 ? ` (${cart.itemCount})` : ""}</NavLink>
             {user ? (
               <>
+                <NavLink to="/orders">Orders</NavLink>
                 <NavLink to="/account">{user.displayName || user.email}</NavLink>
                 <button className="link" type="button" onClick={() => void logout()}>
                   Sign out

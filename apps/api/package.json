@@ -19,6 +19,7 @@
   "dependencies": {
     "@prisma/client": "^6.16.2",
     "@volt/shared": "workspace:*",
+    "amqplib": "^2.0.1",
     "argon2": "^0.41.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -31,11 +32,13 @@
     "otplib": "^12.0.1",
     "prisma": "^6.16.2",
     "qrcode": "^1.5.4",
+    "stripe": "^22.6.2",
     "swagger-ui-express": "^5.0.1",
     "tsx": "^4.19.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/amqplib": "^0.10.8",
     "@types/cookie-parser": "^1.4.8",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.1",

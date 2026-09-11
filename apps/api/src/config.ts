@@ -32,14 +32,24 @@ export const config = {
   webAppUrl: process.env.WEB_APP_URL ?? "http://localhost:5173",
   cookieSecure: process.env.COOKIE_SECURE === "true",
   uploadDir: process.env.UPLOAD_DIR ?? "uploads",
+  dataEncryptionKey:
+    process.env.DATA_ENCRYPTION_KEY ?? "dev_data_encryption_key_must_be_32chars!",
   recaptchaSecret: process.env.RECAPTCHA_SECRET ?? "",
   oauthCallbackBase:
     process.env.OAUTH_CALLBACK_BASE ?? "http://localhost:3000/api/v1/auth",
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
+  stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY ?? "",
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+  rabbitmqUrl: process.env.RABBITMQ_URL ?? "",
+  queueInline: process.env.QUEUE_INLINE === "true" || !process.env.RABBITMQ_URL,
   nodeEnv: process.env.NODE_ENV ?? "development",
 };
 
 if (config.jwtAccessSecret.length < 32 || config.jwtRefreshSecret.length < 32) {
   throw new Error("JWT secrets must be at least 32 characters");
+}
+if (config.dataEncryptionKey.length < 32) {
+  throw new Error("DATA_ENCRYPTION_KEY must be at least 32 characters");
 }

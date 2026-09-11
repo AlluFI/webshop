@@ -1,0 +1,10 @@
+{
+  "name": "worker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter api exec tsx src/worker.ts",
+    "start": "pnpm --filter api exec node dist/worker.js"
+  }
+}

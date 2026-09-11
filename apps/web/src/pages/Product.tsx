@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
+import { AddToCartButton } from "../cart";
 import { money, stars, type Product } from "../product";
 
 export function ProductPage() {
@@ -39,6 +40,9 @@ export function ProductPage() {
         <p className="muted">
           {product.stockQuantity > 0 ? `${product.stockQuantity} in stock` : "Currently unavailable"}
         </p>
+        <div className="actions">
+          <AddToCartButton productId={product.id} stockQuantity={product.stockQuantity} />
+        </div>
         <div className="dims">
           <div>
             <h2>Metric</h2>

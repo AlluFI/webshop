@@ -26,7 +26,16 @@ filesRouter.get(
       throw new HttpError(404, "File not found");
     }
     res.setHeader("Cache-Control", "public, max-age=86400");
-    if (name.endsWith(".svg")) res.type("image/svg+xml");
+    const types: Record<string, string> = {
+      ".svg": "image/svg+xml",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".png": "image/png",
+      ".webp": "image/webp",
+      ".gif": "image/gif",
+    };
+    const type = types[path.extname(name).toLowerCase()];
+    if (type) res.type(type);
     createReadStream(filePath).pipe(res);
   }),
 );

@@ -34,4 +34,22 @@ export const mail = {
       `Reset your password using this link (valid 1 hour):\n${link}\n\nIf you did not request this, you can ignore this email.\n`,
     );
   },
+
+  async sendOrderPaid(to: string, orderId: string, totalLabel: string) {
+    const link = `${config.webAppUrl.replace(/\/$/, "")}/orders/${orderId}`;
+    await send(
+      to,
+      "Your Volt & Co order is confirmed",
+      `Thanks for your order ${orderId}.\n\nWe received ${totalLabel}. Track it here:\n${link}\n`,
+    );
+  },
+
+  async sendPaymentFailed(to: string, orderId: string, reason: string) {
+    const link = `${config.webAppUrl.replace(/\/$/, "")}/checkout`;
+    await send(
+      to,
+      "Volt & Co payment did not go through",
+      `We could not complete payment for order ${orderId}.\n\n${reason}\n\nNothing was charged. You can try again:\n${link}\n`,
+    );
+  },
 };

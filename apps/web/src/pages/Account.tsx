@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from "react";
-import { Navigate } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
+import { Navigate, Link } from "react-router-dom";
+import { CHECKOUT_COUNTRIES, addressSchema, type AddressInput } from "@volt/shared";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
 
@@ -69,6 +70,8 @@ export function AccountPage() {
       <h1>Your account</h1>
       <p>
         {user.displayName || "Customer"} · {user.email}
+        {" · "}
+        <Link to="/orders">Orders</Link>
       </p>
       <p>
         Two-factor authentication:{" "}
@@ -119,6 +122,132 @@ export function AccountPage() {
           </button>
         </form>
       )}
+      <AddressBook token={accessToken} />
     </section>
+  );
+}
+
+type SavedAddress = AddressInput & { id: string; label?: string | null; isDefault?: boolean };
+
+function AddressBook({ token }: { token: string }) {
+  const empty: AddressInput = {
+    recipientName: "",
+    line1: "",
+    line2: "",
+    city: "",
+    region: "",
+    postal: "",
+    country: "FI",
+    phone: "",
+    label: "Home",
+  };
+  const [items, setItems] = useState<SavedAddress[]>([]);
+  const [form, setForm] = useState<AddressInput>(empty);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function load() {
+    const result = await api<{ items: SavedAddress[] }>("/addresses", { token });
+    setItems(result.items);
+  }
+
+  useEffect(() => {
+    void load().catch((err: Error) => setError(err.message));
+  }, [token]);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const parsed = addressSchema.safeParse(form);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message || "Check the address");
+      return;
+    }
+    try {
+      await api("/addresses", {
+        method: "POST",
+        token,
+        body: JSON.stringify({ ...parsed.data, isDefault: items.length === 0 }),
+      });
+      setMessage("Address saved.");
+      setError("");
+      setForm(empty);
+      await load();
+    } catch (err) {
+      if (err instanceof ApiError) setError(err.message);
+    }
+  }
+
+  async function remove(id: string) {
+    await api(`/addresses/${id}`, { method: "DELETE", token });
+    await load();
+  }
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <h2>Addresses</h2>
+      {message && <p className="banner ok">{message}</p>}
+      {error && <p className="banner error">{error}</p>}
+      {items.length === 0 && <p className="muted">No saved addresses yet. Checkout can add one.</p>}
+      <ul className="summary-list">
+        {items.map((item) => (
+          <li key={item.id}>
+            <span>
+              {item.recipientName}, {item.line1}, {item.postal} {item.city}
+              {item.isDefault ? " (default)" : ""}
+            </span>
+            <button className="link" type="button" onClick={() => void remove(item.id)}>
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={(event) => void onSubmit(event)}>
+        <label className="field">
+          <span>Label</span>
+          <input value={form.label || ""} onChange={(event) => setForm({ ...form, label: event.target.value })} />
+        </label>
+        <label className="field">
+          <span>Recipient</span>
+          <input
+            value={form.recipientName}
+            onChange={(event) => setForm({ ...form, recipientName: event.target.value })}
+          />
+        </label>
+        <label className="field">
+          <span>Street</span>
+          <input value={form.line1} onChange={(event) => setForm({ ...form, line1: event.target.value })} />
+        </label>
+        <div className="dims">
+          <label className="field">
+            <span>City</span>
+            <input value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>Postal code</span>
+            <input value={form.postal} onChange={(event) => setForm({ ...form, postal: event.target.value })} />
+          </label>
+        </div>
+        <label className="field">
+          <span>Country</span>
+          <select
+            value={form.country}
+            onChange={(event) => setForm({ ...form, country: event.target.value as AddressInput["country"] })}
+          >
+            {CHECKOUT_COUNTRIES.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Phone (optional)</span>
+          <input value={form.phone || ""} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+        </label>
+        <button className="primary" type="submit">
+          Save address
+        </button>
+      </form>
+    </div>
   );
 }

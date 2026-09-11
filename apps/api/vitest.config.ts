@@ -22,6 +22,12 @@ export default defineConfig({
       WEB_APP_URL: "http://localhost:5173",
       COOKIE_SECURE: "false",
       UPLOAD_DIR: process.env.UPLOAD_DIR ?? "uploads",
+      DATA_ENCRYPTION_KEY: "test_data_encryption_key_must_be_32ch",
+      STRIPE_SECRET_KEY: "sk_test_mock",
+      STRIPE_PUBLISHABLE_KEY: "pk_test_mock",
+      STRIPE_WEBHOOK_SECRET: "whsec_test",
+      QUEUE_INLINE: "true",
+      RABBITMQ_URL: "",
     },
   },
 });

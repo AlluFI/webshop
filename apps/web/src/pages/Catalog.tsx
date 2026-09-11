@@ -22,6 +22,7 @@ export function CatalogPage({ featuredOnly = false }: { featuredOnly?: boolean }
   const query = useMemo(() => {
     const next = new URLSearchParams(params);
     if (featuredOnly) next.set("sort", params.get("sort") || "relevance");
+    if (!next.get("pageSize")) next.set("pageSize", "24");
     return next.toString();
   }, [params, featuredOnly]);
 

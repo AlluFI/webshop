@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
 import { redis } from "../redis.js";
+import { rabbitReachable, queueInline } from "../lib/queue.js";
 import { asyncHandler } from "../middleware/error-handler.js";
 
 export const healthRouter = Router();
@@ -21,12 +22,17 @@ healthRouter.get(
     } catch {
       redisOk = false;
     }
+    let rabbitmq = queueInline() ? "inline" : "down";
+    if (!queueInline()) {
+      rabbitmq = (await rabbitReachable()) ? "up" : "down";
+    }
     const ok = postgres && redisOk;
     res.status(ok ? 200 : 503).json({
       ok,
       service: "volt-co-api",
       postgres,
       redis: redisOk,
+      rabbitmq,
     });
   }),
 );

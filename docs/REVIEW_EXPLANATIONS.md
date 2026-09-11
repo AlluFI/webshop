@@ -171,9 +171,26 @@ I chose a **modular monolith**, not a distributed set of microservices.
 
 - A three-part shop does not yet have independent teams or independent data ownership. Microservices would add queues, extra failure modes, and harder reviews without buying real scale.
 - The API is stateless aside from Redis, so I can run more API containers when traffic grows.
-- Part 2 can add an `apps/worker` that consumes RabbitMQ **without** splitting the catalog database on day one. If payment volume later needs its own process, that module is already a boundary.
+- Part 2 adds an `apps/worker` that consumes RabbitMQ **without** splitting the catalog database. Payment webhooks publish `payment.status`; the worker updates the order, sends email, and restores inventory. If payment volume later needs its own process, that module is already a boundary.
 
 **What I would not do yet:** a separate “User Service” and “Product Service” with two databases. Joining products to brands/categories and later to order lines is exactly what one relational database is for.
+
+---
+
+## 8. PCI DSS and why card data is not on our servers
+
+PCI DSS is the card-brand security standard. How much of it you must operate yourself depends on **whether cardholder data (CHD) ever touches your systems**.
+
+| If we… | Then we… |
+| --- | --- |
+| Collect PAN / CVV in our HTML and POST it to Express | Become a full CHD environment (SAQ D-level pain): encryption, logging bans, quarterly scans, tight access |
+| Use **Stripe.js / Payment Element** so the iframe talks only to Stripe | Qualify for **SAQ A**: the form is hosted by the PCI-certified provider |
+
+Volt & Co does the second. `POST /checkout/place` creates a PaymentIntent and returns a **client secret**. The browser confirms the card with Stripe. Our webhook (and the sync fallback) only see PaymentIntent **ids and statuses**, then publish that outcome to RabbitMQ. Postgres stores those ids plus AES-256-GCM order snapshots — never card numbers. The worker, not the webhook request, sends email and adjusts inventory.
+
+Demo: Network tab on Pay — no `card`, `cvc`, or `exp` fields on our API. Stripe test cards for success vs insufficient funds vs expired. Mailpit for the confirmation email. RabbitMQ management (`payment.status`) plus worker logs.
+
+Code: `apps/web/src/pages/CheckoutPay.tsx`, `apps/api/src/services/order.service.ts`, `apps/api/src/lib/queue.ts`, `apps/api/src/worker.ts`, `apps/api/src/routes/webhooks.ts`.
 
 ---
 

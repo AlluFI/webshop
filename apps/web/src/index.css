@@ -171,6 +171,8 @@ h1, h2, .serif { font-family: Fraunces, Georgia, serif; }
 }
 .pdp img {
   width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
   border-radius: var(--radius);
   border: 1px solid var(--line);
   background: #ece6d8;
@@ -186,6 +188,13 @@ h1, h2, .serif { font-family: Fraunces, Georgia, serif; }
 }
 .field { margin-bottom: 14px; }
 .field span, .field label { display: block; margin-bottom: 6px; font-weight: 500; }
+.field.choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+.field.choice input { width: auto; }
 .field .error, .banner.error { color: var(--danger); }
 .banner {
   padding: 10px 12px;
@@ -236,8 +245,92 @@ button.ghost, a.ghost {
   margin-bottom: 16px;
 }
 
+button.primary:disabled, button.ghost:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+button.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--forest-2);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.checkout-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr;
+  gap: 24px;
+  align-items: start;
+}
+.cart-list, .panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+.cart-row {
+  display: grid;
+  grid-template-columns: 88px 1fr auto;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+.cart-row:last-child { border-bottom: 0; }
+.cart-row img {
+  width: 88px;
+  height: 88px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #ece6d8;
+}
+.cart-row input[type="number"] {
+  width: 4.5rem;
+  margin: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.summary-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+.summary-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.choice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.order-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  margin: 16px 0;
+}
+.order-toolbar label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+.order-toolbar input, .order-toolbar select {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: white;
+}
+
 @media (max-width: 800px) {
-  .header-inner, .hero, .layout-split, .pdp {
+  .header-inner, .hero, .layout-split, .pdp, .checkout-grid {
     grid-template-columns: 1fr;
   }
 }

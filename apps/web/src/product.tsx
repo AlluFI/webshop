@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import { STORE_CURRENCY } from "@volt/shared";
+import { AddToCartButton } from "./cart";
 
 export type Product = {
   id: string;
@@ -22,7 +24,7 @@ export type Product = {
 };
 
 export function money(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
+  return new Intl.NumberFormat("en-IE", { style: "currency", currency: STORE_CURRENCY }).format(value);
 }
 
 export function stars(value: number) {
@@ -44,6 +46,9 @@ export function ProductCard({ product }: { product: Product }) {
           <p className="price">{money(product.price)}</p>
         </div>
       </Link>
+      <div className="card-body" style={{ paddingTop: 0 }}>
+        <AddToCartButton productId={product.id} stockQuantity={product.stockQuantity} compact />
+      </div>
     </article>
   );
 }

@@ -31,13 +31,27 @@ services:
       - "8025:8025"
       - "10250:1025"
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   api:
+    image: i-love-shopping2-api
+    pull_policy: build
     build:
       context: .
       dockerfile: docker/api.Dockerfile
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/voltco?schema=public
       REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev_jwt_access_secret_change_me_32chars}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_refresh_secret_must_be_32_chars_min}
       JWT_ACCESS_EXPIRES_SEC: "900"
@@ -53,6 +67,10 @@ services:
       COOKIE_SECURE: "false"
       PORT: "3000"
       UPLOAD_DIR: /data/uploads
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-dev_data_encryption_key_must_be_32chars!}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     volumes:
       - uploads_data:/data/uploads
     depends_on:
@@ -60,10 +78,43 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
       mailpit:
         condition: service_started
     ports:
       - "3000:3000"
+
+  worker:
+    image: i-love-shopping2-api
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    pull_policy: build
+    command: ["node", "dist/worker.js"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/voltco?schema=public
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev_jwt_access_secret_change_me_32chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_refresh_secret_must_be_32_chars_min}
+      JWT_ACCESS_EXPIRES_SEC: "900"
+      JWT_REFRESH_EXPIRES_SEC: "604800"
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_FROM: Volt & Co <no-reply@localhost>
+      WEB_APP_URL: http://localhost:8088
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-dev_data_encryption_key_must_be_32chars!}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      api:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
 
   web:
     build:

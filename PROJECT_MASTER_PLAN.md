@@ -13,9 +13,9 @@ Living source of truth for the three-part B2C e-commerce platform. Tick checkbox
 
 ## Current focus (next 3 bites)
 
-1. P2-01 Schema — cart, address, order, payment tables
-2. P2-02 Cart — add/update/remove, guest + logged-in, merge on login
-3. P2-03 Checkout page — single page, address, summary
+1. Part 2 oral items — explain cart/checkout/payment tests, then the demo script
+2. P3-01 Reviews — purchased-only, average, helpful votes
+3. P3-02 Admin 2FA + roles — enforce 2FA for admin, role assignment
 
 Copied from Part 1 freeze. Implement commerce here (`./scripts/start.sh` → http://localhost:8088). Do not push Part 2 commits back to `i-love-shopping1`.
 
@@ -532,16 +532,16 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 
 ### Part 2 build order (in `i-love-shopping2` after freeze)
 
-- [ ] **P2-01 Schema** — cart, address, order, payment tables; encryption helpers.
-- [ ] **P2-02 Cart** — add/update/remove, totals, guest + persistent, merge, out-of-stock, thumbnails.
-- [ ] **P2-03 Checkout page** — single page, prefill, address validation, summary edits, errors.
-- [ ] **P2-04 Stripe** — Elements, PaymentIntent, webhook, no CHD on server, test failure cards.
-- [ ] **P2-05 Queue + worker** — publish status; consume; update order; email; inventory; DLQ.
-- [ ] **P2-06 Oversell** — concurrent payment test proving stock never goes negative.
-- [ ] **P2-07 Orders** — filter by date/status, detail + timeline, cancel unprocessed, stock restore, refunds.
-- [ ] **P2-08 Related products** — cart recommendations.
-- [ ] **P2-09 Tests** — cart unit, order totals, registration + guest/logged-in checkout flows.
-- [ ] **P2-10 README** — commerce overview, updated ERD, Stripe CLI + Docker, usage.
+- [x] **P2-01 Schema** — cart, address, order, payment tables; encryption helpers.
+- [x] **P2-02 Cart** — add/update/remove, totals, guest + persistent, merge, out-of-stock, thumbnails.
+- [x] **P2-03 Checkout page** — single page, prefill, address validation, summary edits, errors.
+- [x] **P2-04 Stripe** — Elements, PaymentIntent, webhook, no CHD on server, test failure cards.
+- [x] **P2-05 Queue + worker** — publish status; consume; update order; email; inventory; DLQ.
+- [x] **P2-06 Oversell** — concurrent payment test proving stock never goes negative.
+- [x] **P2-07 Orders** — filter by date/status, detail + timeline, cancel unprocessed, stock restore, refunds.
+- [x] **P2-08 Related products** — cart recommendations.
+- [x] **P2-09 Tests** — cart unit, order totals, registration + guest/logged-in checkout flows.
+- [x] **P2-10 README** — commerce overview, updated ERD, Stripe CLI + Docker, usage.
 
 ### Part 3 build order (in `i-love-shopping3` after freeze)
 
@@ -618,46 +618,46 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 
 ### Mandatory
 
-- [ ] README updated: overview, ERD, setup, usage for commerce
-- [ ] Schema supports guest carts and persistent logged-in carts
-- [ ] Cart shows name, price, thumbnail per item
-- [ ] Add, remove, update quantities; real-time totals
-- [ ] Guest cart saves selections temporarily
-- [ ] Logged-in cart persists across sessions
-- [ ] Out-of-stock handled when adding to cart
-- [ ] Single-page checkout
-- [ ] Checkout collects basic info, address, payment selection
-- [ ] Logged-in users get prefilled checkout
-- [ ] Shipping address validated for accuracy
-- [ ] Order summary with items, quantities, costs
-- [ ] Email confirmation after successful order
-- [ ] Checkout errors for invalid input and failed transactions
-- [ ] Specific errors: missing fields, invalid email/phone/address, payment validation, network errors
-- [ ] Stripe (or similar) sandbox integration
-- [ ] Payment form uses provider secure elements (no raw card POST to our API)
-- [ ] Front-end checks card number format, expiry, CVV before submit (via Stripe.js)
-- [ ] You can explain PCI DSS and why CHD is not stored on our servers
-- [ ] Order status updates from payment success/failure callbacks
-- [ ] Payment status published to a message queue
-- [ ] Emails for successful and failed payments
-- [ ] Failure scenarios: insufficient funds, invalid card, expired card, gateway timeout
-- [ ] Concurrent payments cannot oversell inventory
-- [ ] Orders filterable by date and status
-- [ ] Order detail shows full info and status updates
-- [ ] Cancel unprocessed orders
-- [ ] Stock updates on place and cancel
-- [ ] Sensitive order/payment/address data encrypted at rest
+- [x] README updated: overview, ERD, setup, usage for commerce
+- [x] Schema supports guest carts and persistent logged-in carts
+- [x] Cart shows name, price, thumbnail per item
+- [x] Add, remove, update quantities; real-time totals
+- [x] Guest cart saves selections temporarily
+- [x] Logged-in cart persists across sessions
+- [x] Out-of-stock handled when adding to cart
+- [x] Single-page checkout
+- [x] Checkout collects basic info, address, payment selection
+- [x] Logged-in users get prefilled checkout
+- [x] Shipping address validated for accuracy
+- [x] Order summary with items, quantities, costs
+- [x] Email confirmation after successful order
+- [x] Checkout errors for invalid input and failed transactions
+- [x] Specific errors: missing fields, invalid email/phone/address, payment validation, network errors
+- [x] Stripe (or similar) sandbox integration
+- [x] Payment form uses provider secure elements (no raw card POST to our API)
+- [x] Front-end checks card number format, expiry, CVV before submit (via Stripe.js)
+- [x] You can explain PCI DSS and why CHD is not stored on our servers
+- [x] Order status updates from payment success/failure callbacks
+- [x] Payment status published to a message queue
+- [x] Emails for successful and failed payments
+- [x] Failure scenarios: insufficient funds, invalid card, expired card, gateway timeout
+- [x] Concurrent payments cannot oversell inventory
+- [x] Orders filterable by date and status
+- [x] Order detail shows full info and status updates
+- [x] Cancel unprocessed orders
+- [x] Stock updates on place and cancel
+- [x] Sensitive order/payment/address data encrypted at rest
 - [ ] You can explain testing of cart, checkout, payments
-- [ ] Automated unit tests (cart, order calculations) and critical flows (registration, checkout)
+- [x] Automated unit tests (cart, order calculations) and critical flows (registration, checkout)
 - [ ] You can explain and demo those tests
 
 ### Extra
 
-- [ ] Cart UX and guest/logged-in persistence quality
-- [ ] Checkout flow, errors, and guidance
-- [ ] Payment security and failure handling
-- [ ] Order management, tracking, queue implementation
-- [ ] Dockerized; host prerequisites = Docker + payment simulation CLI only
+- [x] Cart UX and guest/logged-in persistence quality
+- [x] Checkout flow, errors, and guidance
+- [x] Payment security and failure handling
+- [x] Order management, tracking, queue implementation
+- [x] Dockerized; host prerequisites = Docker + payment simulation CLI only
 
 ### Part 2 demo script
 

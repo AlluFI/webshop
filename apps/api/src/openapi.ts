@@ -87,7 +87,7 @@ const product = {
       items: {
         type: "object",
         properties: {
-          url: { type: "string", example: "/api/v1/files/headphones.svg" },
+          url: { type: "string", example: "/api/v1/files/sony-wh-1000xm5.jpg" },
           altText: { type: "string" },
         },
       },
@@ -137,9 +137,9 @@ export const openApiDocument: OpenAPIV3.Document = {
     title: "Volt & Co API",
     version: "1.0.0",
     description:
-      "Part 1 storefront API: accounts, JWT sessions, optional TOTP, Google OAuth, and a faceted electronics catalog.\n\n" +
+      "Part 2 storefront API: accounts, JWT sessions, optional TOTP, Google OAuth, a faceted electronics catalog, guest and logged-in carts, addresses, and checkout quotes.\n\n" +
       "Demo account: `customer@volt.test` / `Shopping123`.\n\n" +
-      "Access tokens live 15 minutes. After **Authorize**, paste an `accessToken` from `/auth/login`. Refresh tokens rotate in Redis and are also stored as an httpOnly cookie.",
+      "Access tokens live 15 minutes. After **Authorize**, paste an `accessToken` from `/auth/login`. Refresh tokens rotate in Redis and are also stored as an httpOnly cookie. Guest carts use the httpOnly `cart_token` cookie.",
   },
   servers: [
     { url: "/", description: "This host (API :3000 or storefront proxy :8088)" },
@@ -148,6 +148,10 @@ export const openApiDocument: OpenAPIV3.Document = {
     { name: "Health" },
     { name: "Auth" },
     { name: "Catalog" },
+    { name: "Cart" },
+    { name: "Checkout" },
+    { name: "Orders" },
+    { name: "Addresses" },
     { name: "Files" },
   ],
   components: {
@@ -164,6 +168,68 @@ export const openApiDocument: OpenAPIV3.Document = {
       TokenPair: tokenPair,
       User: publicUser,
       Product: product,
+      Cart: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          guest: { type: "boolean" },
+          itemCount: { type: "integer" },
+          subtotal: { type: "number" },
+          warnings: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                productId: { type: "string" },
+                message: { type: "string" },
+              },
+            },
+          },
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                productId: { type: "string", format: "uuid" },
+                name: { type: "string" },
+                slug: { type: "string" },
+                price: { type: "number" },
+                thumbnail: { type: "string", nullable: true },
+                thumbnailAlt: { type: "string" },
+                quantity: { type: "integer" },
+                stockQuantity: { type: "integer" },
+                lineTotal: { type: "number" },
+              },
+            },
+          },
+        },
+      },
+      AddressInput: {
+        type: "object",
+        required: ["recipientName", "line1", "city", "postal", "country"],
+        properties: {
+          recipientName: { type: "string" },
+          line1: { type: "string" },
+          line2: { type: "string" },
+          city: { type: "string" },
+          region: { type: "string" },
+          postal: { type: "string" },
+          country: { type: "string", example: "FI" },
+          phone: { type: "string" },
+          label: { type: "string" },
+          isDefault: { type: "boolean" },
+        },
+      },
+      Address: {
+        allOf: [
+          { $ref: "#/components/schemas/AddressInput" },
+          {
+            type: "object",
+            properties: { id: { type: "string", format: "uuid" } },
+          },
+        ],
+      },
     },
     responses: {
       ValidationError: {
@@ -193,6 +259,7 @@ export const openApiDocument: OpenAPIV3.Document = {
                     service: { type: "string" },
                     postgres: { type: "boolean" },
                     redis: { type: "boolean" },
+                    rabbitmq: { type: "string", example: "inline" },
                   },
                 },
               },
@@ -902,6 +969,372 @@ export const openApiDocument: OpenAPIV3.Document = {
           "200": { description: "Image bytes" },
           "400": { $ref: "#/components/responses/ValidationError" },
           "404": { description: "File not found" },
+        },
+      },
+    },
+    "/api/v1/cart": {
+      get: {
+        tags: ["Cart"],
+        summary: "Current cart (guest cookie or signed-in user)",
+        security: [{ bearerAuth: [] }, {}],
+        responses: {
+          "200": {
+            description: "Cart with line items, thumbnails, and live totals",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Cart" } } },
+          },
+        },
+      },
+      delete: {
+        tags: ["Cart"],
+        summary: "Remove every line from the cart",
+        security: [{ bearerAuth: [] }, {}],
+        responses: {
+          "200": {
+            description: "Empty cart",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Cart" } } },
+          },
+        },
+      },
+    },
+    "/api/v1/cart/related": {
+      get: {
+        tags: ["Cart"],
+        summary: "Related products for the current cart",
+        security: [{ bearerAuth: [] }, {}],
+        responses: {
+          "200": {
+            description: "In-stock products from the same categories or brands",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    items: { type: "array", items: { $ref: "#/components/schemas/Product" } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/cart/items": {
+      post: {
+        tags: ["Cart"],
+        summary: "Add a product (clamped to stock)",
+        security: [{ bearerAuth: [] }, {}],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["productId", "quantity"],
+                properties: {
+                  productId: { type: "string", format: "uuid" },
+                  quantity: { type: "integer", minimum: 1, maximum: 99 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "201": {
+            description: "Item added",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Cart" } } },
+          },
+          "409": {
+            description: "Out of stock or quantity exceeds availability",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
+          },
+        },
+      },
+    },
+    "/api/v1/cart/items/{itemId}": {
+      patch: {
+        tags: ["Cart"],
+        summary: "Update quantity (0 removes the line)",
+        security: [{ bearerAuth: [] }, {}],
+        parameters: [{ name: "itemId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["quantity"],
+                properties: { quantity: { type: "integer", minimum: 0, maximum: 99 } },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Updated cart",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Cart" } } },
+          },
+          "409": {
+            description: "Quantity exceeds stock",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
+          },
+        },
+      },
+      delete: {
+        tags: ["Cart"],
+        summary: "Remove one line",
+        security: [{ bearerAuth: [] }, {}],
+        parameters: [{ name: "itemId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": {
+            description: "Updated cart",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Cart" } } },
+          },
+        },
+      },
+    },
+    "/api/v1/addresses": {
+      get: {
+        tags: ["Addresses"],
+        summary: "Saved addresses for the signed-in user",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          "200": {
+            description: "Decrypted address book",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    items: { type: "array", items: { $ref: "#/components/schemas/Address" } },
+                  },
+                },
+              },
+            },
+          },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+      post: {
+        tags: ["Addresses"],
+        summary: "Save an address (encrypted at rest)",
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { $ref: "#/components/schemas/AddressInput" } } },
+        },
+        responses: {
+          "201": {
+            description: "Saved",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Address" } } },
+          },
+          "400": { $ref: "#/components/responses/ValidationError" },
+        },
+      },
+    },
+    "/api/v1/checkout/countries": {
+      get: {
+        tags: ["Checkout"],
+        summary: "Countries accepted for shipping",
+        responses: {
+          "200": {
+            description: "ISO country list used by address validation",
+          },
+        },
+      },
+    },
+    "/api/v1/checkout/prefill": {
+      get: {
+        tags: ["Checkout"],
+        summary: "Prefill checkout from the signed-in profile",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          "200": { description: "Email, name, default address" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+    },
+    "/api/v1/checkout/quote": {
+      post: {
+        tags: ["Checkout"],
+        summary: "Live totals for the current cart and shipping method",
+        security: [{ bearerAuth: [] }, {}],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  shippingMethod: { type: "string", enum: ["standard", "express"] },
+                  address: { $ref: "#/components/schemas/AddressInput" },
+                  addressId: { type: "string", format: "uuid" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Subtotal, shipping, tax, total" },
+          "400": { $ref: "#/components/responses/ValidationError" },
+        },
+      },
+    },
+    "/api/v1/checkout/validate": {
+      post: {
+        tags: ["Checkout"],
+        summary: "Validate identity, address, and cart before payment",
+        security: [{ bearerAuth: [] }, {}],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["email", "displayName", "phone", "shippingMethod"],
+                properties: {
+                  email: { type: "string", format: "email" },
+                  displayName: { type: "string" },
+                  phone: { type: "string" },
+                  shippingMethod: { type: "string", enum: ["standard", "express"] },
+                  address: { $ref: "#/components/schemas/AddressInput" },
+                  addressId: { type: "string", format: "uuid" },
+                  saveAddress: { type: "boolean" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Checkout payload is valid" },
+          "400": { $ref: "#/components/responses/ValidationError" },
+        },
+      },
+    },
+    "/api/v1/checkout/config": {
+      get: {
+        tags: ["Checkout"],
+        summary: "Stripe publishable key for Payment Element",
+        responses: {
+          "200": { description: "configured flag and pk_test key" },
+        },
+      },
+    },
+    "/api/v1/checkout/place": {
+      post: {
+        tags: ["Checkout"],
+        summary: "Reserve stock, create a PaymentIntent, return client secret",
+        security: [{ bearerAuth: [] }, {}],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/AddressInput" },
+            },
+          },
+        },
+        responses: {
+          "201": { description: "clientSecret, order, and one-time orderAccessToken" },
+          "400": { $ref: "#/components/responses/ValidationError" },
+          "409": { description: "Out of stock" },
+          "503": { description: "Stripe keys missing" },
+          "504": { description: "Simulated gateway timeout (non-production)" },
+        },
+      },
+    },
+    "/api/v1/checkout/orders/{id}": {
+      get: {
+        tags: ["Checkout"],
+        summary: "Order confirmation (owner or X-Order-Token)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "Order, payment status, timeline" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/api/v1/checkout/orders/{id}/sync": {
+      post: {
+        tags: ["Checkout"],
+        summary: "Pull PaymentIntent status from Stripe (webhook fallback)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "Updated order" },
+        },
+      },
+    },
+    "/api/v1/webhooks/stripe": {
+      post: {
+        tags: ["Checkout"],
+        summary: "Stripe webhook (raw body, Stripe-Signature)",
+        responses: {
+          "200": { description: "received" },
+          "400": { description: "Invalid signature" },
+        },
+      },
+    },
+    "/api/v1/orders": {
+      get: {
+        tags: ["Orders"],
+        summary: "List the signed-in user's orders",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "status",
+            in: "query",
+            schema: {
+              type: "string",
+              enum: [
+                "PENDING_PAYMENT",
+                "PAYMENT_FAILED",
+                "PAID",
+                "PROCESSING",
+                "SHIPPED",
+                "DELIVERED",
+                "CANCELLED",
+                "REFUNDED",
+              ],
+            },
+          },
+          { name: "from", in: "query", schema: { type: "string", example: "2026-01-01" } },
+          { name: "to", in: "query", schema: { type: "string", example: "2026-12-31" } },
+          { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+          { name: "pageSize", in: "query", schema: { type: "integer", default: 20 } },
+        ],
+        responses: {
+          "200": { description: "Filtered order list" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+    },
+    "/api/v1/orders/{id}": {
+      get: {
+        tags: ["Orders"],
+        summary: "Order detail (owner or X-Order-Token)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "Full order, shipping snapshot, and status timeline" },
+          "404": { description: "Not found" },
+        },
+      },
+    },
+    "/api/v1/orders/{id}/cancel": {
+      post: {
+        tags: ["Orders"],
+        summary: "Cancel an unprocessed order and restore stock",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "Cancelled" },
+          "409": { description: "Order is not pending payment" },
+        },
+      },
+    },
+    "/api/v1/orders/{id}/refund": {
+      post: {
+        tags: ["Orders"],
+        summary: "Refund a paid order via Stripe sandbox and restore stock",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "Refunded" },
+          "409": { description: "Order is not paid" },
         },
       },
     },

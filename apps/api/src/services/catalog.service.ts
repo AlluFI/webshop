@@ -193,6 +193,34 @@ export const catalogService = {
     return mapProduct(product);
   },
 
+  async recommend(options: { excludeIds: string[]; categoryIds: string[]; brandIds: string[]; take?: number }) {
+    const take = options.take ?? 4;
+    const exclude = options.excludeIds.filter(Boolean);
+    if (options.categoryIds.length === 0 && options.brandIds.length === 0) return [];
+    const candidates = await prisma.product.findMany({
+      where: {
+        id: exclude.length ? { notIn: exclude } : undefined,
+        stockQuantity: { gt: 0 },
+        OR: [
+          options.categoryIds.length ? { categoryId: { in: options.categoryIds } } : undefined,
+          options.brandIds.length ? { brandId: { in: options.brandIds } } : undefined,
+        ].filter(Boolean) as Prisma.ProductWhereInput[],
+      },
+      include,
+      take: 24,
+      orderBy: [{ featured: "desc" }, { averageRating: "desc" }],
+    });
+    const scored = candidates
+      .map((product) => {
+        let score = 0;
+        if (options.categoryIds.includes(product.categoryId)) score += 2;
+        if (options.brandIds.includes(product.brandId)) score += 1;
+        return { product, score };
+      })
+      .sort((a, b) => b.score - a.score || b.product.averageRating - a.product.averageRating);
+    return scored.slice(0, take).map((row) => mapProduct(row.product));
+  },
+
   async suggest(rawQuery: unknown) {
     const { q } = suggestQuerySchema.parse(rawQuery);
     const products = await prisma.product.findMany({

@@ -31,6 +31,9 @@ model User {
   oauthIdentities         OAuthIdentity[]
   passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  addresses               Address[]
+  cart                    Cart?
+  orders                  Order[]
 
   @@map("users")
 }
@@ -132,6 +135,9 @@ model Product {
   updatedAt      DateTime @updatedAt
   images         ProductImage[]
   attributes     ProductAttribute[]
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  reservations   InventoryReservation[]
 
   @@index([categoryId])
   @@index([brandId])
@@ -162,4 +168,165 @@ model ProductAttribute {
   @@index([productId])
   @@index([name, value])
   @@map("product_attributes")
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAYMENT_FAILED
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  REQUIRES_PAYMENT
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+model Address {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label            String?
+  recipientNameEnc String
+  line1Enc         String
+  line2Enc         String?
+  cityEnc          String
+  regionEnc        String?
+  postalEnc        String
+  country          String
+  phoneEnc         String?
+  isDefault        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  shippingOrders   Order[]  @relation("ShippingAddress")
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model Cart {
+  id         String     @id @default(uuid())
+  userId     String?    @unique
+  user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestToken String?    @unique
+  expiresAt  DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  items      CartItem[]
+
+  @@index([expiresAt])
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId])
+  @@index([productId])
+  @@map("cart_items")
+}
+
+model Order {
+  id                  String        @id @default(uuid())
+  userId              String?
+  user                User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status              OrderStatus   @default(PENDING_PAYMENT)
+  currency            String        @default("EUR")
+  subtotal            Decimal       @db.Decimal(10, 2)
+  shippingCost        Decimal       @db.Decimal(10, 2)
+  tax                 Decimal       @db.Decimal(10, 2)
+  total               Decimal       @db.Decimal(10, 2)
+  shippingMethod      String
+  contactEmailEnc     String
+  contactNameEnc      String
+  contactPhoneEnc     String?
+  shippingAddressEnc  String
+  billingAddressEnc   String?
+  shippingAddressId   String?
+  shippingAddress     Address?      @relation("ShippingAddress", fields: [shippingAddressId], references: [id], onDelete: SetNull)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  items               OrderItem[]
+  events              OrderStatusEvent[]
+  payment             Payment?
+  reservations        InventoryReservation[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id            String  @id @default(uuid())
+  orderId       String
+  order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product @relation(fields: [productId], references: [id])
+  productName   String
+  quantity      Int
+  unitPrice     Decimal @db.Decimal(10, 2)
+  lineTotal     Decimal @db.Decimal(10, 2)
+  thumbnailPath String?
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model OrderStatusEvent {
+  id        String      @id @default(uuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  createdAt DateTime    @default(now())
+
+  @@index([orderId])
+  @@map("order_status_events")
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  orderId               String        @unique
+  order                 Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status                PaymentStatus @default(REQUIRES_PAYMENT)
+  stripePaymentIntentId String?
+  amount                Decimal       @db.Decimal(10, 2)
+  currency              String        @default("EUR")
+  metadataEnc           String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@map("payments")
+}
+
+model InventoryReservation {
+  id         String    @id @default(uuid())
+  orderId    String
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id])
+  quantity   Int
+  releasedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("inventory_reservations")
 }

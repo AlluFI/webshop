@@ -1,10 +1,13 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import * as argon2 from "argon2";
+import { encrypt, encryptOptional } from "../src/lib/crypto.js";
 
 const prisma = new PrismaClient();
 const uploadDir = process.env.UPLOAD_DIR ?? "uploads";
+const seedImagesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "seed-images");
 
 function kgToLb(kg: number) {
   return Number((kg * 2.20462).toFixed(3));
@@ -61,6 +64,19 @@ function svg(name: string, color: string, label: string) {
 </svg>`;
   mkdirSync(uploadDir, { recursive: true });
   writeFileSync(path.join(uploadDir, name), content);
+}
+
+function placeProductImage(slug: string, label: string, color: string): string {
+  mkdirSync(uploadDir, { recursive: true });
+  const jpgName = `${slug}.jpg`;
+  const src = path.join(seedImagesDir, jpgName);
+  if (existsSync(src)) {
+    copyFileSync(src, path.join(uploadDir, jpgName));
+    return jpgName;
+  }
+  const svgName = `${slug}.svg`;
+  svg(svgName, color, label);
+  return svgName;
 }
 
 function escapeXml(value: string) {
@@ -431,8 +447,7 @@ async function main() {
   }
 
   for (const product of products) {
-    const imageName = `${product.slug}.svg`;
-    svg(imageName, product.color, product.name);
+    const imageName = placeProductImage(product.slug, product.name, product.color);
     const row = await prisma.product.upsert({
       where: { slug: product.slug },
       update: {
@@ -515,6 +530,20 @@ async function main() {
     },
   });
   await prisma.totpSecret.deleteMany({ where: { userId: demoUser.id } });
+  await prisma.address.deleteMany({ where: { userId: demoUser.id } });
+  await prisma.address.create({
+    data: {
+      userId: demoUser.id,
+      label: "Home",
+      isDefault: true,
+      recipientNameEnc: encrypt("Demo Customer"),
+      line1Enc: encrypt("Mannerheimintie 12"),
+      cityEnc: encrypt("Helsinki"),
+      postalEnc: encrypt("00100"),
+      country: "FI",
+      phoneEnc: encryptOptional("+358401234567"),
+    },
+  });
 
   console.log(`Seeded ${products.length} products and demo user ${demoEmail}`);
 }
