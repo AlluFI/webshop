@@ -1,6 +1,6 @@
-# Volt & Co — I Love Shopping (Part 1)
+# Volt & Co — I Love Shopping (Part 2)
 
-B2C electronics shop: accounts, a PostgreSQL catalog, faceted search, and a React storefront. This is **Project 1 (Foundation)** of three. Cart, checkout, and admin land in later repos.
+B2C electronics shop: accounts, a PostgreSQL catalog, faceted search, and a React storefront. This is **Project 2 (Commerce)** of three, copied from the Part 1 freeze. Cart, checkout, Stripe, and the order worker land here. Admin stays in Part 3.
 
 ## Stack
 

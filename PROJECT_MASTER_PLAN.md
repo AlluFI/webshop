@@ -4,20 +4,20 @@ Living source of truth for the three-part B2C e-commerce platform. Tick checkbox
 
 | Field | Value |
 | --- | --- |
-| **Current repo** | `i-love-shopping1` |
-| **Current part** | 1 — Foundation |
+| **Current repo** | `i-love-shopping2` |
+| **Current part** | 2 — Commerce |
 | **Product category** | Electronics and Technology |
 | **Store name (working)** | Volt & Co |
 | **Architecture** | Modular monolith (API + web; Part 2 adds a worker) |
-| **Last freeze** | none yet |
+| **Last freeze** | `part-1-freeze` (`i-love-shopping1`) |
 
 ## Current focus (next 3 bites)
 
-1. Practice the Part 1 demo script (in-memory access token, refresh reuse, Mailpit, facets)
-2. Optional: add real `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` so the Google button appears
-3. When review-ready: tag `part-1-freeze`, push `i-love-shopping1`, copy into `i-love-shopping2`
+1. P2-01 Schema — cart, address, order, payment tables
+2. P2-02 Cart — add/update/remove, guest + logged-in, merge on login
+3. P2-03 Checkout page — single page, address, summary
 
-Part 1 implementation is in this repo and demoable in Docker (`./scripts/start.sh` → http://localhost:8088). Do not start Part 2 features here.
+Copied from Part 1 freeze. Implement commerce here (`./scripts/start.sh` → http://localhost:8088). Do not push Part 2 commits back to `i-love-shopping1`.
 
 ---
 
