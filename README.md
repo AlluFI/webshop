@@ -146,7 +146,7 @@ Coverage:
 
 ## Review talking points
 
-Written explanations for the oral review items (JWT, ACID, Postgres growth, search, testing, architecture) are in [docs/REVIEW_EXPLANATIONS.md](docs/REVIEW_EXPLANATIONS.md).
+Written explanations for the oral review items (JWT, ACID, Postgres growth, search, cart/checkout/payment tests, architecture, PCI) are in [docs/REVIEW_EXPLANATIONS.md](docs/REVIEW_EXPLANATIONS.md).
 
 ## Architecture notes
 

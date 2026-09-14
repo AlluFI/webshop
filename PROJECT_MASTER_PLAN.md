@@ -9,15 +9,15 @@ Living source of truth for the three-part B2C e-commerce platform. Tick checkbox
 | **Product category** | Electronics and Technology |
 | **Store name (working)** | Volt & Co |
 | **Architecture** | Modular monolith (API + web; Part 2 adds a worker) |
-| **Last freeze** | `part-1-freeze` (`i-love-shopping1`) |
+| **Last freeze** | `part-2-freeze` (this repo) |
 
 ## Current focus (next 3 bites)
 
-1. Part 2 oral items — explain cart/checkout/payment tests, then the demo script
-2. P3-01 Reviews — purchased-only, average, helpful votes
-3. P3-02 Admin 2FA + roles — enforce 2FA for admin, role assignment
+1. Practice the Part 2 demo script (guest cart, Stripe, Mailpit, oversell, queue)
+2. Oral: explain cart, checkout, and payment tests (`docker compose exec api pnpm test`)
+3. After review: copy this freeze into `i-love-shopping3` — do not start Part 3 features here
 
-Copied from Part 1 freeze. Implement commerce here (`./scripts/start.sh` → http://localhost:8088). Do not push Part 2 commits back to `i-love-shopping1`.
+Copied from Part 1 freeze. Commerce is implemented here (`./scripts/start.sh` → http://localhost:8088). Do not push Part 3 commits into this repo, and do not push Part 2 commits back to `i-love-shopping1`.
 
 ---
 
@@ -151,7 +151,7 @@ git remote add origin <i-love-shopping2-url>
 git push -u origin HEAD
 ```
 
-Tag `part-2-freeze` when commerce is review-ready.
+Tag `part-2-freeze` when commerce is review-ready. This tree is at that freeze: later-part features belong in `i-love-shopping3`.
 
 ### Bootstrap Part 3 (`i-love-shopping3`)
 

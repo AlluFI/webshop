@@ -1,4 +1,4 @@
-# Part 1 review explanations
+# Part 1 and Part 2 review explanations
 
 Written answers for the “student can explain / demonstrate” items. The live demo still matters; this document is the same story in writing so reviewers can read it before or after the call.
 
@@ -72,7 +72,7 @@ E-commerce data is relational: users, roles, categories, brands, products, image
 | More writes (orders in Part 2) | Keep checkout in a single Postgres transaction; later read replicas for listing/search |
 | Huge order history | Partition `orders` by created month |
 | Need to scale the HTTP layer | Run more API containers in front of the same database (stateless API; sessions already in Redis) |
-| Need to split payments later | The modular monolith already isolates catalog/auth; a worker can move out (Part 2 RabbitMQ plan) |
+| Need to split payments later | The modular monolith already isolates catalog/auth; `apps/worker` already consumes RabbitMQ and can scale as its own process |
 
 Vertical first (indexes, caching, connection pooling), then replicas and extra API replicas. We did **not** start with microservices because one catalog and one user table do not justify network hops yet.
 
@@ -82,12 +82,12 @@ Vertical first (indexes, caching, connection pooling), then replicas and extra A
 
 | Letter | Meaning | Why it matters here |
 | --- | --- | --- |
-| **Atomicity** | All steps in a transaction commit, or none do | Password reset updates the hash **and** marks the token used together (`prisma.$transaction`). Part 2 checkout must decrement stock and create the order together or you oversell / orphan orders. |
-| **Consistency** | Constraints stay true after every commit | Unique email, FK from product → category/brand, non-negative stock later. Invalid states cannot be saved. |
-| **Isolation** | Concurrent transactions behave as if they ran one after another | Two customers buying the last unit must not both succeed. Part 2 will use row locks (`SELECT FOR UPDATE`) inside a transaction. |
-| **Durability** | A committed write survives a crash | Postgres WAL + a Docker volume. After `migrate`/`seed`, a restart still has the catalog. |
+| **Atomicity** | All steps in a transaction commit, or none do | Password reset updates the hash **and** marks the token used together. Checkout creates the order, writes encrypted address snapshots, and decrements stock in one `prisma.$transaction` — or none of that happens. |
+| **Consistency** | Constraints stay true after every commit | Unique email, FKs, and stock that cannot go negative. Invalid states cannot be saved. |
+| **Isolation** | Concurrent transactions behave as if they ran one after another | Two customers buying the last unit must not both succeed. Place-order locks the product row (`SELECT FOR UPDATE`) so only one checkout gets quantity 1. |
+| **Durability** | A committed write survives a crash | Postgres WAL + a Docker volume. After `migrate`/`seed`, a restart still has the catalog and unpaid orders. |
 
-Part 1 already uses transactions for email verify, password reset, and 2FA enable/disable. The catalog itself is mostly reads; ACID becomes critical the moment money and stock move.
+Part 1 already uses transactions for email verify, password reset, and 2FA. Part 2 is where ACID matters for money: the concurrent last-unit test in `apps/api/test/payment.api.test.ts` is the proof.
 
 ---
 
@@ -131,8 +131,15 @@ The current implementation mixes **automated** tests with **manual** tests for t
 | Unit — rotation | `apps/api/src/lib/tokens.test.ts` | New refresh issued, old refresh rejected, access denylist |
 | Unit — validation | `apps/api/src/lib/validation.test.ts` | Email/password/CAPTCHA field errors |
 | Unit — product model | `apps/api/src/lib/product-model.test.ts` | Required fields, dual-unit dimensions, rejects bad price/images |
+| Unit — cart math | `apps/api/src/lib/cart-math.test.ts` | Line totals, free-shipping threshold, clamp to stock, euros → integer cents for Stripe |
+| Unit — encryption | `apps/api/src/lib/crypto.test.ts` | AES-256-GCM round-trip, unique ciphertext, reject tampered bytes |
+| Unit — order email | `apps/api/src/lib/order-email.test.ts` | Confirmation HTML/text includes items, totals, shipping, status |
 | API + DB | `apps/api/test/auth.api.test.ts` | Register, verify, login, persist user, refresh reuse, logout revoke |
 | API + DB | `apps/api/test/catalog.api.test.ts` | Required product shape, facets, sort, suggestions, image bytes |
+| API + DB | `apps/api/test/cart.api.test.ts` | Guest add/persist/update, stock 409, merge on login, logged-in cart across sessions |
+| API + DB | `apps/api/test/checkout.api.test.ts` | Empty-cart quote, field errors, Finnish postcode, prefill, encrypted address column |
+| API + DB | `apps/api/test/payment.api.test.ts` | Stripe place + webhook, decline restores stock, timeout holds nothing, last-unit race |
+| API + DB | `apps/api/test/orders.api.test.ts` | Filter, cancel unpaid, refund paid, hide retry after a later paid order |
 | API | `apps/api/test/openapi.test.ts` | OpenAPI 3 spec is served; Swagger UI HTML is available |
 | Security | `apps/api/test/security.test.ts` | Injection string in `q` does not drop tables; malformed JSON; `/me` without token |
 
@@ -153,8 +160,34 @@ Unit tests always run. API/security tests skip if the database is down, so a lap
 | CAPTCHA | Open Register, submit without the widget → client error; complete the test-key widget → account created; Mailpit shows the verify link |
 | OAuth | Set `GOOGLE_*` in `.env`, restart API, click Continue with Google; cancel on Google’s screen should not create a broken session |
 | 2FA | Account → enable, scan QR, confirm; sign out; login asks for a 6-digit code; disable with a current code |
+| Stripe | Pay with `4242…4242`; decline `4000…9995`; Network tab has no PAN on our API; Mailpit HTML confirmation |
+| Queue | RabbitMQ `payment.status` after Pay; worker log line; failed messages land on `payment.status.dlq` if the handler throws |
 
 We do not pretend CAPTCHA or Google’s redirect can be fully trusted from unit tests alone (test keys / bypass tokens exist only for `NODE_ENV=test`).
+
+### How I test cart, checkout, and payments (Part 2 oral)
+
+I split **pure money math** from **HTTP + database** so I can say what each layer is allowed to prove.
+
+**Cart**
+
+- Unit: `cart-math.test.ts` — line totals use rounded cents so `19.99 × 3` is `59.97`, not a float surprise. Quantity is clamped to stock. Stripe amounts are integer cents.
+- API: `cart.api.test.ts` — a guest cookie cart can add, persist across `GET /cart`, update quantity, and get **409** when the add would oversell or stock is 0. After register/login, the same agent’s guest lines merge onto the user cart. A second client with the access token still sees those lines (persistent logged-in cart).
+
+**Checkout**
+
+- Validation lives in Zod (`validation.test.ts` plus `checkout.api.test.ts`): empty cart cannot quote; bad email/phone/postcode return **field** errors, not a generic 500; a signed-in user with a saved address gets prefill. The address row in Postgres is ciphertext (`cityEnc` does not contain `"Helsinki"`; `decrypt` does).
+
+**Payments**
+
+- Stripe is mocked at the SDK in `payment.api.test.ts`. I still hit our real routes and Postgres.
+- Place order → stock decrements immediately, cart empties, status `PENDING_PAYMENT`, client secret returned. A **signed** `payment_intent.succeeded` webhook (or the inline queue in tests) marks the order `PAID`. Shipping ciphertext still has no plaintext city.
+- `payment_intent.payment_failed` restores stock **and** puts the lines back in the cart.
+- `X-Volt-Simulate: stripe-timeout` on place returns **504** and does **not** decrement stock (gateway never created an intent).
+- Two agents checkout the last unit in `Promise.all`: statuses are `[201, 409]`, remaining stock is 0.
+- Tests set `QUEUE_INLINE=true` so the worker handler runs in-process. In Docker, the same handler is `apps/worker` consuming RabbitMQ.
+
+**What I still demo by hand:** Stripe.js Payment Element (no PAN on our Network tab), Mailpit HTML confirmation, RabbitMQ `payment.status`, decline cards `4000…9995` / `4000…0069`.
 
 ---
 
@@ -165,13 +198,13 @@ I chose a **modular monolith**, not a distributed set of microservices.
 - **One deployable API** (Express) with folders for auth, catalog, mail, tokens — modules, not separate repos.
 - **One React app** talking only to versioned HTTP: `/api/v1/...`. Interactive docs live at `/api/v1/docs` (OpenAPI 3 + Swagger UI).
 - **One Postgres** as the system of record; **Redis** for session state.
-- **Docker Compose** runs API, web, Postgres, Redis, Mailpit. Reviewers need Docker only.
+- **Docker Compose** runs API, web, worker, Postgres, Redis, Mailpit, RabbitMQ. Reviewers need Docker plus optional Stripe CLI.
 
-**Why this fits Part 1 and still scales**
+**Why this fits Part 2 and still scales**
 
-- A three-part shop does not yet have independent teams or independent data ownership. Microservices would add queues, extra failure modes, and harder reviews without buying real scale.
+- A three-part shop does not yet have independent teams or independent data ownership. Microservices would add extra failure modes and harder reviews without buying real scale.
 - The API is stateless aside from Redis, so I can run more API containers when traffic grows.
-- Part 2 adds an `apps/worker` that consumes RabbitMQ **without** splitting the catalog database. Payment webhooks publish `payment.status`; the worker updates the order, sends email, and restores inventory. If payment volume later needs its own process, that module is already a boundary.
+- Part 2 added `apps/worker` that consumes RabbitMQ **without** splitting the catalog database. Payment webhooks publish `payment.status`; the worker updates the order, sends email, and restores inventory. If payment volume later needs its own process, that module is already a boundary.
 
 **What I would not do yet:** a separate “User Service” and “Product Service” with two databases. Joining products to brands/categories and later to order lines is exactly what one relational database is for.
 
@@ -200,5 +233,8 @@ Code: `apps/web/src/pages/CheckoutPay.tsx`, `apps/api/src/services/order.service
 2. Login `customer@volt.test` / `Shopping123`. Show empty Local Storage. Open jwt.io on an access token from the Network tab (header / payload / signature).
 3. Call refresh twice with the **first** refresh token (or use the automated test) — second call 401 “reuse”.
 4. Catalog facets + sort + typeahead; open a PDP and point at metric and imperial dimensions.
-5. `docker compose exec api pnpm test` and name the three layers (unit / API / security).
-6. Walk ACID + Postgres growth + “why not microservices” from sections 3, 4, and 7 above.
+5. Guest: add to cart, refresh, still there; hit stock limit. Sign in: cart merges.
+6. Checkout: prefill, bad postcode field error, Pay with `4242…4242`; Mailpit HTML confirmation; order timeline.
+7. Decline card `4000…9995` → failed email, stock back, Return to cart. Point at RabbitMQ `payment.status` and worker logs.
+8. `docker compose exec api pnpm test` — name cart math, checkout validation, Stripe webhook, and the last-unit race.
+9. Walk ACID (row lock) + PCI (SAQ A, no PAN) + “why not microservices” from sections 3, 4, 7, and 8.
