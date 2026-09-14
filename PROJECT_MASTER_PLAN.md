@@ -4,20 +4,20 @@ Living source of truth for the three-part B2C e-commerce platform. Tick checkbox
 
 | Field | Value |
 | --- | --- |
-| **Current repo** | `i-love-shopping2` |
-| **Current part** | 2 — Commerce |
+| **Current repo** | `i-love-shopping3` |
+| **Current part** | 3 — Experience |
 | **Product category** | Electronics and Technology |
 | **Store name (working)** | Volt & Co |
-| **Architecture** | Modular monolith (API + web; Part 2 adds a worker) |
-| **Last freeze** | `part-2-freeze` (this repo) |
+| **Architecture** | Modular monolith (API + web + worker; Part 3 adds TLS nginx) |
+| **Last freeze** | `part-2-freeze` (`i-love-shopping2`) |
 
 ## Current focus (next 3 bites)
 
-1. Practice the Part 2 demo script (guest cart, Stripe, Mailpit, oversell, queue)
-2. Oral: explain cart, checkout, and payment tests (`docker compose exec api pnpm test`)
-3. After review: copy this freeze into `i-love-shopping3` — do not start Part 3 features here
+1. P3-01 Reviews — purchased-only, average, helpful votes
+2. P3-02 Admin 2FA + roles — enforce 2FA for admin, role assignment
+3. P3-03 Admin CRUD — products, categories, orders, refunds, shipping, users
 
-Copied from Part 1 freeze. Commerce is implemented here (`./scripts/start.sh` → http://localhost:8088). Do not push Part 3 commits into this repo, and do not push Part 2 commits back to `i-love-shopping1`.
+Copied from Part 2 freeze. Implement experience here (`./scripts/start.sh` → http://localhost:8088). Do not push Part 3 commits back to `i-love-shopping2`.
 
 ---
 
@@ -151,11 +151,11 @@ git remote add origin <i-love-shopping2-url>
 git push -u origin HEAD
 ```
 
-Tag `part-2-freeze` when commerce is review-ready. This tree is at that freeze: later-part features belong in `i-love-shopping3`.
+Tag `part-2-freeze` when commerce is review-ready. Part 2 is frozen on `i-love-shopping2`; this repo is the Part 3 working copy.
 
 ### Bootstrap Part 3 (`i-love-shopping3`)
 
-Same pattern from the frozen Part 2 tree. Tag `part-3-freeze` when experience + load report are review-ready.
+Same pattern from the frozen Part 2 tree. This working copy is that bootstrap. Tag `part-3-freeze` when experience + load report are review-ready.
 
 This file travels with each copy so later repos still have the full checklist.
 

@@ -1,6 +1,6 @@
-# Volt & Co — I Love Shopping (Part 2)
+# Volt & Co — I Love Shopping (Part 3)
 
-B2C electronics shop: accounts, a PostgreSQL catalog, faceted search, and a React storefront. This is **Project 2 (Commerce)** of three. Cart, checkout, Stripe sandbox payments, RabbitMQ order worker, and encrypted addresses live here. Admin stays in Part 3.
+B2C electronics shop: accounts, a PostgreSQL catalog, faceted search, and a React storefront. This is **Project 3 (Experience)** of three. Reviews, admin, TLS, and the load report start here. Cart, checkout, Stripe sandbox payments, RabbitMQ, and encrypted addresses stay from Part 2.
 
 ## Stack
 
