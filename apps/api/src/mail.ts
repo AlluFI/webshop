@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { config } from "./config.js";
+import { buildOrderPaidEmail, type OrderEmailDetails } from "./lib/order-email.js";
 
 const transporter = nodemailer.createTransport({
   host: config.mailHost,
@@ -7,9 +8,9 @@ const transporter = nodemailer.createTransport({
   secure: config.mailPort === 465,
 });
 
-async function send(to: string, subject: string, text: string) {
+async function send(to: string, subject: string, text: string, html?: string) {
   try {
-    await transporter.sendMail({ from: config.mailFrom, to, subject, text });
+    await transporter.sendMail({ from: config.mailFrom, to, subject, text, html });
   } catch (error) {
     console.warn("[mail] send failed; logging instead", error);
     console.info(`[mail] To: ${to}\n${subject}\n${text}`);
@@ -31,17 +32,13 @@ export const mail = {
     await send(
       to,
       "Reset your Volt & Co password",
-      `Reset your password using this link (valid 1 hour):\n${link}\n\nIf you did not request this, you can ignore this email.\n`,
+      `Reset your password using this link (valid 1 hour):\n${link}\n\nIf you signed in with Google, this lets you add an email-and-password sign-in as well.\n\nIf you did not request this, you can ignore this email.\n`,
     );
   },
 
-  async sendOrderPaid(to: string, orderId: string, totalLabel: string) {
-    const link = `${config.webAppUrl.replace(/\/$/, "")}/orders/${orderId}`;
-    await send(
-      to,
-      "Your Volt & Co order is confirmed",
-      `Thanks for your order ${orderId}.\n\nWe received ${totalLabel}. Track it here:\n${link}\n`,
-    );
+  async sendOrderPaid(details: OrderEmailDetails) {
+    const built = buildOrderPaidEmail(details);
+    await send(details.email, built.subject, built.text, built.html);
   },
 
   async sendPaymentFailed(to: string, orderId: string, reason: string) {

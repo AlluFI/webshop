@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useLocation } from "react-router-dom";
 import { api, userErrorMessage } from "./api";
 import { useAuth } from "./auth";
 
@@ -55,6 +56,7 @@ const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const { accessToken, ready: authReady } = useAuth();
+  const location = useLocation();
   const [cart, setCart] = useState<Cart>(emptyCart);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
@@ -69,9 +71,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!authReady) return;
     void refresh()
-      .catch((err: Error) => setError(err.message))
+      .catch((err: Error) => setError(userErrorMessage(err, "Could not load your cart.")))
       .finally(() => setReady(true));
-  }, [authReady, refresh]);
+  }, [authReady, refresh, location.pathname]);
 
   const addItem = useCallback(
     async (productId: string, quantity = 1) => {

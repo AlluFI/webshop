@@ -21,8 +21,8 @@ import { AccountPage } from "./pages/Account";
 export default function App() {
   return (
     <AuthProvider>
-      <CartProvider>
       <BrowserRouter>
+        <CartProvider>
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<CatalogPage featuredOnly />} />
@@ -41,8 +41,8 @@ export default function App() {
             <Route path="/account" element={<AccountPage />} />
           </Route>
         </Routes>
+        </CartProvider>
       </BrowserRouter>
-      </CartProvider>
     </AuthProvider>
   );
 }

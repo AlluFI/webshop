@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, userErrorMessage, readOrderToken } from "../api";
 import { useAuth } from "../auth";
+import { useCart } from "../cart";
 import { money } from "../product";
 
 type Order = {
@@ -25,6 +26,8 @@ type Order = {
   } | null;
   canCancel: boolean;
   canRefund: boolean;
+  canRetry?: boolean;
+  replacedByOrderId?: string | null;
   items: { id: string; name: string; slug: string; quantity: number; lineTotal: number }[];
   events: { id: string; status: string; note: string | null; createdAt: string }[];
 };
@@ -32,6 +35,7 @@ type Order = {
 export function OrderConfirmationPage() {
   const { id = "" } = useParams();
   const { accessToken } = useAuth();
+  const { refresh } = useCart();
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -55,6 +59,9 @@ export function OrderConfirmationPage() {
         if (!cancelled) {
           setOrder(next);
           setError("");
+          if (next.status === "PAYMENT_FAILED") {
+            void refresh().catch(() => undefined);
+          }
         }
         return next;
       } catch (err) {
@@ -74,7 +81,7 @@ export function OrderConfirmationPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, accessToken]);
+  }, [id, accessToken, refresh]);
 
   async function act(path: "cancel" | "refund") {
     if (!order) return;
@@ -99,7 +106,14 @@ export function OrderConfirmationPage() {
       <section>
         <h1>Order</h1>
         <p className="banner error">{error}</p>
-        <Link to="/checkout">Back to checkout</Link>
+        <div className="actions">
+          <Link className="button" to="/checkout">
+            Back to checkout
+          </Link>
+          <Link className="ghost" to="/orders">
+            All orders
+          </Link>
+        </div>
       </section>
     );
   }
@@ -109,6 +123,7 @@ export function OrderConfirmationPage() {
   const failed = order.status === "PAYMENT_FAILED";
   const cancelled = order.status === "CANCELLED";
   const refunded = order.status === "REFUNDED";
+  const canRetry = failed && (order.canRetry ?? true) && !order.replacedByOrderId;
   const title = paid
     ? "Payment received"
     : failed
@@ -125,9 +140,17 @@ export function OrderConfirmationPage() {
       <h1>{title}</h1>
       {error && <p className="banner error">{error}</p>}
       {paid && <p className="banner ok">A confirmation email is on the way (check Mailpit).</p>}
-      {failed && (
+      {failed && canRetry && (
         <p className="banner error">
-          Nothing was charged. Items were returned to your cart so you can try another card.
+          Nothing was charged. Your items are back in the cart so you can try another card.
+        </p>
+      )}
+      {failed && !canRetry && (
+        <p className="banner ok">
+          Nothing was charged on this attempt.
+          {order.replacedByOrderId
+            ? ` You later paid for these items in order ${order.replacedByOrderId.slice(0, 8)}.`
+            : " A later order already covers these items."}
         </p>
       )}
       {cancelled && <p className="banner ok">Stock was returned. Nothing was charged.</p>}
@@ -187,11 +210,24 @@ export function OrderConfirmationPage() {
           </li>
         ))}
       </ol>
-      <p style={{ marginTop: 16 }}>
-        {failed ? <Link to="/checkout">Try checkout again</Link> : <Link to="/catalog">Continue shopping</Link>}
-        {" · "}
-        <Link to="/orders">All orders</Link>
-      </p>
+      <div className="actions" style={{ marginTop: 24 }}>
+        {canRetry ? (
+          <Link className="button" to="/cart">
+            Return to cart
+          </Link>
+        ) : failed && order.replacedByOrderId ? (
+          <Link className="button" to={`/orders/${order.replacedByOrderId}`}>
+            View paid order
+          </Link>
+        ) : (
+          <Link className="button" to="/catalog">
+            Continue shopping
+          </Link>
+        )}
+        <Link className="ghost" to="/orders">
+          All orders
+        </Link>
+      </div>
     </section>
   );
 }

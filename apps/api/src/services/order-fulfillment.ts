@@ -1,8 +1,10 @@
 import { Prisma } from "@prisma/client";
 import type { PaymentStatusMessage } from "@volt/shared";
 import { prisma } from "../prisma.js";
+import { config } from "../config.js";
 import { encryptJson, decrypt, decryptJson } from "../lib/crypto.js";
 import { mail } from "../mail.js";
+import type { OrderEmailShipping } from "../lib/order-email.js";
 
 export type PaymentMeta = {
   guestAccessHash: string;
@@ -12,6 +14,36 @@ export type PaymentMeta = {
 
 function moneyNumber(value: Prisma.Decimal | number | string) {
   return Number(value);
+}
+
+function storeOrigin() {
+  return config.webAppUrl.replace(/\/$/, "");
+}
+
+function shippingForEmail(enc: string): OrderEmailShipping | null {
+  try {
+    const snap = decryptJson<{
+      recipientName: string;
+      line1: string;
+      line2?: string;
+      city: string;
+      region?: string;
+      postal: string;
+      country?: string;
+      countryName?: string;
+    }>(enc);
+    return {
+      recipientName: snap.recipientName,
+      line1: snap.line1,
+      line2: snap.line2,
+      city: snap.city,
+      region: snap.region,
+      postal: snap.postal,
+      countryName: snap.countryName || snap.country || "",
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function releaseReservations(tx: Prisma.TransactionClient, orderId: string) {
@@ -36,7 +68,7 @@ export async function restoreCartFromOrder(
   cartId: string | undefined,
 ) {
   let id = cartId;
-  if (!id && order.userId) {
+  if (order.userId) {
     const existing = await tx.cart.findUnique({ where: { userId: order.userId } });
     id = existing?.id;
     if (!id) {
@@ -65,7 +97,13 @@ export async function restoreCartFromOrder(
 export async function handlePaymentStatus(message: PaymentStatusMessage) {
   const payment = await prisma.payment.findUnique({
     where: { orderId: message.orderId },
-    include: { order: { include: { items: true } } },
+    include: {
+      order: {
+        include: {
+          items: { include: { product: { select: { slug: true } } } },
+        },
+      },
+    },
   });
   if (!payment) return { ignored: true as const };
 
@@ -92,11 +130,32 @@ export async function handlePaymentStatus(message: PaymentStatusMessage) {
         data: { orderId: payment.orderId, status: "PAID", note: "Stripe confirmed the payment." },
       }),
     ]);
-    await mail.sendOrderPaid(
-      decrypt(payment.order.contactEmailEnc),
-      payment.orderId,
-      `${payment.order.currency} ${moneyNumber(payment.order.total).toFixed(2)}`,
-    );
+    const origin = storeOrigin();
+    await mail.sendOrderPaid({
+      orderId: payment.orderId,
+      orderUrl: `${origin}/orders/${payment.orderId}`,
+      status: "PAID",
+      paymentStatus: "SUCCEEDED",
+      placedAt: payment.order.createdAt,
+      customerName: decrypt(payment.order.contactNameEnc),
+      email: decrypt(payment.order.contactEmailEnc),
+      phone: payment.order.contactPhoneEnc ? decrypt(payment.order.contactPhoneEnc) : "",
+      items: payment.order.items.map((item) => ({
+        name: item.productName,
+        quantity: item.quantity,
+        unitPrice: moneyNumber(item.unitPrice),
+        lineTotal: moneyNumber(item.lineTotal),
+        thumbnailUrl: item.thumbnailPath ? `${origin}/api/v1/files/${item.thumbnailPath}` : null,
+        productUrl: `${origin}/products/${item.product.slug}`,
+      })),
+      subtotal: moneyNumber(payment.order.subtotal),
+      shippingCost: moneyNumber(payment.order.shippingCost),
+      shippingMethod: payment.order.shippingMethod,
+      tax: moneyNumber(payment.order.tax),
+      total: moneyNumber(payment.order.total),
+      currency: payment.order.currency,
+      shipping: shippingForEmail(payment.order.shippingAddressEnc),
+    });
     return { status: "PAID" as const };
   }
 

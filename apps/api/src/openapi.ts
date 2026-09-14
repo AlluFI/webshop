@@ -1311,7 +1311,7 @@ export const openApiDocument: OpenAPIV3.Document = {
         summary: "Order detail (owner or X-Order-Token)",
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
         responses: {
-          "200": { description: "Full order, shipping snapshot, and status timeline" },
+          "200": { description: "Full order, shipping snapshot, timeline, and canRetry if a later paid order replaced a failed attempt" },
           "404": { description: "Not found" },
         },
       },

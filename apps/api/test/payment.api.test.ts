@@ -158,6 +158,8 @@ describeLive("Stripe checkout", () => {
     expect((await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQuantity).toBe(
       stockBefore - 1,
     );
+    const emptied = await agent.get("/api/v1/cart");
+    expect(emptied.body.items).toHaveLength(0);
 
     const payload = JSON.stringify({
       id: "evt_fail",
@@ -186,6 +188,12 @@ describeLive("Stripe checkout", () => {
     expect(order.body.status).toBe("PAYMENT_FAILED");
     const stockAfter = (await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQuantity;
     expect(stockAfter).toBe(stockBefore);
+    const restored = await agent.get("/api/v1/cart");
+    expect(
+      restored.body.items.some(
+        (item: { productId: string; quantity: number }) => item.productId === productId && item.quantity >= 1,
+      ),
+    ).toBe(true);
   });
 
   it("lets only one of two concurrent checkouts take the last unit", async () => {

@@ -105,4 +105,22 @@ describeLive("auth API", () => {
       .send({ refreshToken });
     expect(refresh.status).toBe(401);
   });
+
+  it("issues a reset token for Google-only accounts that have no password", async () => {
+    const oauthEmail = `oauth-${Date.now()}@volt.test`;
+    const role = await prisma.role.findUniqueOrThrow({ where: { name: "customer" } });
+    await prisma.user.create({
+      data: { email: oauthEmail, emailVerifiedAt: new Date(), roleId: role.id },
+    });
+    try {
+      const res = await request(app).post("/api/v1/auth/forgot-password").send({ email: oauthEmail });
+      expect(res.status).toBe(200);
+      const tokens = await prisma.passwordResetToken.count({
+        where: { user: { email: oauthEmail }, usedAt: null },
+      });
+      expect(tokens).toBe(1);
+    } finally {
+      await prisma.user.deleteMany({ where: { email: oauthEmail } });
+    }
+  });
 });

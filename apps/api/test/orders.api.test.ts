@@ -125,6 +125,30 @@ describeLive("orders API", () => {
     expect(hook.status).toBe(200);
   }
 
+  async function markFailed(orderId: string, intentId: string) {
+    const payload = JSON.stringify({
+      id: `evt_${intentId}_fail`,
+      object: "event",
+      type: "payment_intent.payment_failed",
+      data: {
+        object: {
+          id: intentId,
+          object: "payment_intent",
+          status: "requires_payment_method",
+          metadata: { orderId },
+          last_payment_error: { message: "Your card was declined." },
+        },
+      },
+    });
+    const signature = Stripe.webhooks.generateTestHeaderString({ payload, secret: webhookSecret });
+    const hook = await request(app)
+      .post("/api/v1/webhooks/stripe")
+      .set("stripe-signature", signature)
+      .set("content-type", "application/json")
+      .send(payload);
+    expect(hook.status).toBe(200);
+  }
+
   it("cancels a pending order and restores stock", async () => {
     const stockBefore = (await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQuantity;
     const orderId = await placeOrder("pi_cancel");
@@ -174,6 +198,25 @@ describeLive("orders API", () => {
     expect((await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQuantity).toBe(
       stockBefore,
     );
+  });
+
+  it("hides retry on a failed order after a later paid order for the same items", async () => {
+    const failedId = await placeOrder("pi_fail_then_pay");
+    await markFailed(failedId, "pi_fail_then_pay");
+    const before = await request(app)
+      .get(`/api/v1/orders/${failedId}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(before.body.status).toBe("PAYMENT_FAILED");
+    expect(before.body.canRetry).toBe(true);
+    expect(before.body.replacedByOrderId).toBeNull();
+
+    const paidId = await placeOrder("pi_pay_after_fail");
+    await markPaid(paidId, "pi_pay_after_fail");
+    const after = await request(app)
+      .get(`/api/v1/orders/${failedId}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(after.body.canRetry).toBe(false);
+    expect(after.body.replacedByOrderId).toBe(paidId);
   });
 
   it("rejects listing orders without a session", async () => {

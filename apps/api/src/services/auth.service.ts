@@ -239,7 +239,7 @@ export const authService = {
   async forgotPassword(input: unknown) {
     const { email } = forgotPasswordSchema.parse(input);
     const user = await prisma.user.findUnique({ where: { email } });
-    if (user?.passwordHash) {
+    if (user) {
       await prisma.passwordResetToken.updateMany({
         where: { userId: user.id, usedAt: null },
         data: { usedAt: new Date() },

@@ -6,11 +6,24 @@ import { useCart } from "../cart";
 import { ProductCard, money, type Product } from "../product";
 
 export function CartPage() {
-  const { cart, ready, error, updateItem, removeItem } = useCart();
+  const { cart, ready, error, refresh, updateItem, removeItem } = useCart();
   const [related, setRelated] = useState<Product[]>([]);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    if (!ready) return;
+    let cancelled = false;
+    void refresh()
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setHydrated(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!ready || !hydrated) return;
     if (cart.items.length === 0) {
       setRelated([]);
       return;
@@ -18,9 +31,9 @@ export function CartPage() {
     void api<{ items: Product[] }>("/cart/related")
       .then((result) => setRelated(result.items))
       .catch(() => setRelated([]));
-  }, [ready, cart.items]);
+  }, [ready, hydrated, cart.items]);
 
-  if (!ready) return <p>Loading cart…</p>;
+  if (!ready || !hydrated) return <p>Loading cart…</p>;
 
   async function onQuantity(itemId: string, quantity: number) {
     try {

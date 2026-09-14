@@ -64,6 +64,7 @@ export function CheckoutPage() {
     tax: number;
   } | null>(null);
   const [stripeReady, setStripeReady] = useState<boolean | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     void api<{ configured: boolean }>("/checkout/config")
@@ -108,6 +109,19 @@ export function CheckoutPage() {
     }),
     [email, displayName, phone, shippingMethod, saveAddress, addressId, address, user],
   );
+
+  useEffect(() => {
+    if (payment) return;
+    let cancelled = false;
+    void refresh()
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setHydrated(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [payment, refresh]);
 
   useEffect(() => {
     if (!ready || payment || cart.items.length === 0) return;
@@ -197,7 +211,7 @@ export function CheckoutPage() {
     }
   }
 
-  if (!ready) return <p>Loading checkout…</p>;
+  if (!ready || (!payment && !hydrated)) return <p>Loading checkout…</p>;
   if (!payment && cart.items.length === 0) {
     return (
       <section>

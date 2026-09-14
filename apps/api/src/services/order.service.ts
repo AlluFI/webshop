@@ -85,8 +85,34 @@ function shippingOf(enc: string): ShippingSnapshot | null {
   }
 }
 
-function publicOrder(order: NonNullable<Awaited<ReturnType<typeof loadOrder>>>) {
+async function findPaidReplacement(
+  order: NonNullable<Awaited<ReturnType<typeof loadOrder>>>,
+) {
+  if (order.status !== "PAYMENT_FAILED" || !order.userId) return null;
+  const needed = [...new Set(order.items.map((item) => item.productId))];
+  if (needed.length === 0) return null;
+  const candidates = await prisma.order.findMany({
+    where: {
+      id: { not: order.id },
+      userId: order.userId,
+      status: "PAID",
+      createdAt: { gt: order.createdAt },
+      items: { some: { productId: { in: needed } } },
+    },
+    select: { id: true, items: { select: { productId: true } } },
+    orderBy: { createdAt: "asc" },
+    take: 20,
+  });
+  return (
+    candidates.find((candidate) =>
+      needed.every((productId) => candidate.items.some((item) => item.productId === productId)),
+    )?.id ?? null
+  );
+}
+
+async function publicOrder(order: NonNullable<Awaited<ReturnType<typeof loadOrder>>>) {
   const status = order.status as OrderStatus;
+  const replacedByOrderId = await findPaidReplacement(order);
   return {
     id: order.id,
     status,
@@ -104,6 +130,8 @@ function publicOrder(order: NonNullable<Awaited<ReturnType<typeof loadOrder>>>) 
     createdAt: order.createdAt.toISOString(),
     canCancel: status === "PENDING_PAYMENT",
     canRefund: status === "PAID",
+    canRetry: status === "PAYMENT_FAILED" && !replacedByOrderId,
+    replacedByOrderId,
     items: order.items.map((item) => ({
       id: item.id,
       name: item.productName,
@@ -339,7 +367,7 @@ export const orderService = {
         clientSecret: intent.client_secret,
         publishableKey: stripePublishableKey(),
         orderAccessToken: guestAccess,
-        order: publicOrder(loaded),
+        order: await publicOrder(loaded),
       };
     } catch (error) {
       await handlePaymentStatus({
@@ -360,7 +388,7 @@ export const orderService = {
     if (!order || !canRead(order, ctx, orderToken)) {
       throw new HttpError(404, "Order not found");
     }
-    return publicOrder(order);
+    return await publicOrder(order);
   },
 
   async list(userId: string, rawQuery: unknown) {
@@ -422,7 +450,7 @@ export const orderService = {
     await this.applyPaymentIntent({ ...intent, metadata: { ...intent.metadata, orderId } });
     const loaded = await loadOrder(orderId);
     if (!loaded) throw new HttpError(404, "Order not found");
-    return publicOrder(loaded);
+    return await publicOrder(loaded);
   },
 
   async applyStripeEvent(rawBody: Buffer, signature: string | undefined) {
@@ -497,7 +525,7 @@ export const orderService = {
     });
     const loaded = await loadOrder(orderId);
     if (!loaded) throw new HttpError(404, "Order not found");
-    return publicOrder(loaded);
+    return await publicOrder(loaded);
   },
 
   async refund(ctx: CartContext, orderId: string, orderToken?: string) {
@@ -536,6 +564,6 @@ export const orderService = {
     });
     const loaded = await loadOrder(orderId);
     if (!loaded) throw new HttpError(404, "Order not found");
-    return publicOrder(loaded);
+    return await publicOrder(loaded);
   },
 };
