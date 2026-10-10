@@ -2,6 +2,7 @@ import { authenticator } from "otplib";
 import QRCode from "qrcode";
 import {
   forgotPasswordSchema,
+  isStaffRole,
   loginSchema,
   mfaCompleteSchema,
   registerSchema,
@@ -19,6 +20,8 @@ import { verifyCaptcha } from "../lib/captcha.js";
 import { tokens } from "./tokens.js";
 import { config } from "../config.js";
 import jwt from "jsonwebtoken";
+import { encrypt, revealSecret } from "../lib/crypto.js";
+import { updateProfileSchema } from "@volt/shared";
 
 const VERIFY_TTL_MS = 48 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
@@ -128,6 +131,12 @@ export const authService = {
     if (!user.emailVerifiedAt) {
       throw new HttpError(401, "Please verify your email before signing in.");
     }
+    if (isStaffRole(user.role.name) && !user.totpEnabled) {
+      throw new HttpError(
+        403,
+        "Staff accounts must enable two-factor authentication before signing in.",
+      );
+    }
     if (user.totpEnabled) {
       const mfaToken = jwt.sign(
         { sub: user.id, typ: "mfa" },
@@ -165,7 +174,7 @@ export const authService = {
     if (dto.totpCode) {
       const ok = authenticator.verify({
         token: dto.totpCode,
-        secret: user.totpSecret.secret,
+        secret: revealSecret(user.totpSecret.secret),
       });
       if (!ok) throw new HttpError(401, "Invalid authenticator code");
     } else if (dto.backupCode) {
@@ -233,6 +242,16 @@ export const authService = {
       include: { role: true },
     });
     if (!user) throw new HttpError(401, "Sign in to continue");
+    return publicUser(user);
+  },
+
+  async updateProfile(userId: string, input: unknown) {
+    const dto = updateProfileSchema.parse(input);
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { displayName: dto.displayName },
+      include: { role: true },
+    });
     return publicUser(user);
   },
 
@@ -306,13 +325,13 @@ export const authService = {
       prisma.totpSecret.upsert({
         where: { userId },
         update: {
-          secret,
+          secret: encrypt(secret),
           confirmedAt: new Date(),
           backupCodes: codes.map(sha256Hex),
         },
         create: {
           userId,
-          secret,
+          secret: encrypt(secret),
           confirmedAt: new Date(),
           backupCodes: codes.map(sha256Hex),
         },
@@ -333,14 +352,17 @@ export const authService = {
     const { code } = totpDisableSchema.parse(input);
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: { totpSecret: true },
+      include: { totpSecret: true, role: true },
     });
     if (!user?.totpSecret?.secret || !user.totpEnabled) {
       throw new HttpError(400, "Two-factor authentication is not active.");
     }
+    if (isStaffRole(user.role.name)) {
+      throw new HttpError(403, "Staff accounts cannot disable two-factor authentication.");
+    }
     const ok = authenticator.verify({
       token: code,
-      secret: user.totpSecret.secret,
+      secret: revealSecret(user.totpSecret.secret),
     });
     if (!ok) throw new HttpError(401, "Invalid authenticator code");
     await prisma.$transaction([

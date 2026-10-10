@@ -3,7 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import * as argon2 from "argon2";
-import { encrypt, encryptOptional } from "../src/lib/crypto.js";
+import { DEMO_ADMIN_TOTP_SECRET, EXPRESS_SHIPPING, FREE_STANDARD_THRESHOLD, STANDARD_SHIPPING } from "@volt/shared";
+import { encrypt, encryptJson, encryptOptional } from "../src/lib/crypto.js";
+import { writeDerivedImages } from "../src/lib/images.js";
 
 const prisma = new PrismaClient();
 const uploadDir = process.env.UPLOAD_DIR ?? "uploads";
@@ -392,6 +394,14 @@ const products: SeedProduct[] = [
 async function main() {
   mkdirSync(uploadDir, { recursive: true });
 
+  const existing = await prisma.product.count();
+  if (existing > 0) {
+    console.log(
+      `Catalog already has ${existing} products; skipping seed so demo addresses and 2FA stay intact.`,
+    );
+    return;
+  }
+
   const roles = ["customer", "admin", "support", "sales"];
   const roleRecords = [];
   for (const name of roles) {
@@ -404,6 +414,9 @@ async function main() {
     );
   }
   const customerRole = roleRecords.find((r) => r.name === "customer")!;
+  const adminRole = roleRecords.find((r) => r.name === "admin")!;
+  const supportRole = roleRecords.find((r) => r.name === "support")!;
+  const salesRole = roleRecords.find((r) => r.name === "sales")!;
 
   const categories = [
     { name: "Audio", slug: "audio", description: "Headphones, earbuds, and speakers" },
@@ -448,6 +461,7 @@ async function main() {
 
   for (const product of products) {
     const imageName = placeProductImage(product.slug, product.name, product.color);
+    const derived = await writeDerivedImages(uploadDir, imageName);
     const row = await prisma.product.upsert({
       where: { slug: product.slug },
       update: {
@@ -465,8 +479,8 @@ async function main() {
         lengthIn: cmToIn(product.l),
         widthIn: cmToIn(product.w),
         heightIn: cmToIn(product.h),
-        averageRating: product.rating,
-        reviewCount: Math.round(product.rating * 12),
+        averageRating: 0,
+        reviewCount: 0,
         featured: Boolean(product.featured),
       },
       create: {
@@ -485,8 +499,8 @@ async function main() {
         lengthIn: cmToIn(product.l),
         widthIn: cmToIn(product.w),
         heightIn: cmToIn(product.h),
-        averageRating: product.rating,
-        reviewCount: Math.round(product.rating * 12),
+        averageRating: 0,
+        reviewCount: 0,
         featured: Boolean(product.featured),
       },
     });
@@ -494,7 +508,8 @@ async function main() {
     await prisma.productImage.create({
       data: {
         productId: row.id,
-        path: imageName,
+        path: derived.full,
+        thumbPath: derived.thumb,
         altText: `${product.name} product photo`,
         sortOrder: 0,
       },
@@ -545,7 +560,231 @@ async function main() {
     },
   });
 
-  console.log(`Seeded ${products.length} products and demo user ${demoEmail}`);
+  const passwordHash = await argon2.hash("Shopping123");
+  async function staffUser(email: string, name: string, roleId: string) {
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: {
+        passwordHash,
+        emailVerifiedAt: new Date(),
+        displayName: name,
+        totpEnabled: true,
+        roleId,
+      },
+      create: {
+        email,
+        displayName: name,
+        passwordHash,
+        emailVerifiedAt: new Date(),
+        totpEnabled: true,
+        roleId,
+      },
+    });
+    const totpCipher = encrypt(DEMO_ADMIN_TOTP_SECRET);
+    await prisma.totpSecret.upsert({
+      where: { userId: user.id },
+      update: { secret: totpCipher, confirmedAt: new Date(), backupCodes: [] },
+      create: {
+        userId: user.id,
+        secret: totpCipher,
+        confirmedAt: new Date(),
+        backupCodes: [],
+      },
+    });
+    return user;
+  }
+  await staffUser("admin@volt.test", "Volt Admin", adminRole.id);
+  await staffUser("support@volt.test", "Volt Support", supportRole.id);
+  await staffUser("sales@volt.test", "Volt Sales", salesRole.id);
+
+  await prisma.shippingOption.upsert({
+    where: { code: "standard" },
+    update: {
+      name: "Standard",
+      description: "3–5 business days",
+      price: STANDARD_SHIPPING,
+      freeThreshold: FREE_STANDARD_THRESHOLD,
+      minDays: 3,
+      maxDays: 5,
+      active: true,
+      sortOrder: 0,
+    },
+    create: {
+      code: "standard",
+      name: "Standard",
+      description: "3–5 business days",
+      price: STANDARD_SHIPPING,
+      freeThreshold: FREE_STANDARD_THRESHOLD,
+      minDays: 3,
+      maxDays: 5,
+      active: true,
+      sortOrder: 0,
+    },
+  });
+  await prisma.shippingOption.upsert({
+    where: { code: "express" },
+    update: {
+      name: "Express",
+      description: "1–2 business days",
+      price: EXPRESS_SHIPPING,
+      freeThreshold: null,
+      minDays: 1,
+      maxDays: 2,
+      active: true,
+      sortOrder: 1,
+    },
+    create: {
+      code: "express",
+      name: "Express",
+      description: "1–2 business days",
+      price: EXPRESS_SHIPPING,
+      minDays: 1,
+      maxDays: 2,
+      active: true,
+      sortOrder: 1,
+    },
+  });
+
+  const headphones = await prisma.product.findUnique({ where: { slug: "sony-wh-1000xm5" } });
+  const bose = await prisma.product.findUnique({ where: { slug: "bose-quietcomfort-ultra" } });
+  const airpods = await prisma.product.findUnique({ where: { slug: "apple-airpods-pro-2" } });
+  if (headphones) {
+    await prisma.order.deleteMany({
+      where: { userId: demoUser.id, items: { some: { productId: headphones.id } } },
+    });
+    await prisma.order.create({
+      data: {
+        userId: demoUser.id,
+        status: "DELIVERED",
+        subtotal: headphones.price,
+        shippingCost: 0,
+        tax: 0,
+        total: headphones.price,
+        shippingMethod: "standard",
+        contactEmailEnc: encrypt(demoEmail),
+        contactNameEnc: encrypt("Demo Customer"),
+        contactPhoneEnc: encryptOptional("+358401234567"),
+        shippingAddressEnc: encryptJson({
+          recipientName: "Demo Customer",
+          line1: "Mannerheimintie 12",
+          city: "Helsinki",
+          postal: "00100",
+          country: "FI",
+          countryName: "Finland",
+        }),
+        items: {
+          create: {
+            productId: headphones.id,
+            productName: headphones.name,
+            quantity: 1,
+            unitPrice: headphones.price,
+            lineTotal: headphones.price,
+          },
+        },
+        events: {
+          create: [
+            { status: "PAID", note: "Seeded demo purchase" },
+            { status: "DELIVERED", note: "Delivered" },
+          ],
+        },
+        payment: {
+          create: {
+            status: "SUCCEEDED",
+            amount: headphones.price,
+            currency: "EUR",
+          },
+        },
+      },
+    });
+  }
+
+  const reviewers = [
+    { email: "riku@volt.test", name: "Riku", stars: 5, product: headphones, body: "Best commute headphones I have owned. ANC is quiet enough for the tram." },
+    { email: "aisha@volt.test", name: "Aisha", stars: 4, product: headphones, body: "Comfortable for long calls. The app takes a minute to learn but the sound is excellent." },
+    { email: "leo@volt.test", name: "Leo", stars: 5, product: bose, body: "The spatial mode is a gimmick; the quiet is not. I take these on every flight." },
+    { email: "nora@volt.test", name: "Nora", stars: 4, product: airpods, body: "They stay in during runs and the case is tiny. Battery lasts a full work day." },
+  ];
+  await prisma.review.deleteMany({
+    where: { user: { email: { in: reviewers.map((row) => row.email) } } },
+  });
+  await prisma.order.deleteMany({
+    where: { user: { email: { in: reviewers.map((row) => row.email) } } },
+  });
+  for (const reviewer of reviewers) {
+    if (!reviewer.product) continue;
+    const user = await prisma.user.upsert({
+      where: { email: reviewer.email },
+      update: { passwordHash, emailVerifiedAt: new Date(), displayName: reviewer.name, roleId: customerRole.id },
+      create: {
+        email: reviewer.email,
+        displayName: reviewer.name,
+        passwordHash,
+        emailVerifiedAt: new Date(),
+        roleId: customerRole.id,
+      },
+    });
+    await prisma.order.create({
+      data: {
+        userId: user.id,
+        status: "PAID",
+        subtotal: reviewer.product.price,
+        shippingCost: 0,
+        tax: 0,
+        total: reviewer.product.price,
+        shippingMethod: "standard",
+        contactEmailEnc: encrypt(reviewer.email),
+        contactNameEnc: encrypt(reviewer.name),
+        shippingAddressEnc: encryptJson({
+          recipientName: reviewer.name,
+          line1: "Seed Street 1",
+          city: "Helsinki",
+          postal: "00100",
+          country: "FI",
+        }),
+        items: {
+          create: {
+            productId: reviewer.product.id,
+            productName: reviewer.product.name,
+            quantity: 1,
+            unitPrice: reviewer.product.price,
+            lineTotal: reviewer.product.price,
+          },
+        },
+        events: { create: { status: "PAID", note: "Seeded reviewer purchase" } },
+      },
+    });
+    await prisma.review.upsert({
+      where: { productId_userId: { productId: reviewer.product.id, userId: user.id } },
+      update: { stars: reviewer.stars, body: reviewer.body, status: "PUBLISHED" },
+      create: {
+        productId: reviewer.product.id,
+        userId: user.id,
+        stars: reviewer.stars,
+        body: reviewer.body,
+        helpfulCount: reviewer.stars === 5 ? 6 : 2,
+      },
+    });
+  }
+
+  for (const product of [headphones, bose, airpods]) {
+    if (!product) continue;
+    const published = await prisma.review.findMany({
+      where: { productId: product.id, status: "PUBLISHED" },
+    });
+    const sum = published.reduce((total, row) => total + row.stars, 0);
+    const count = published.length;
+    await prisma.product.update({
+      where: { id: product.id },
+      data: {
+        averageRating: count ? Math.round((sum / count) * 10) / 10 : 0,
+        reviewCount: count,
+      },
+    });
+  }
+
+  console.log(
+    `Seeded ${products.length} products, demo ${demoEmail}, staff admin@volt.test (2FA secret ${DEMO_ADMIN_TOTP_SECRET})`,
+  );
 }
 
 main()

@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, Link } from "react-router-dom";
-import { CHECKOUT_COUNTRIES, addressSchema, type AddressInput } from "@volt/shared";
+import { CHECKOUT_COUNTRIES, addressSchema, isStaffRole, type AddressInput } from "@volt/shared";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
+import { PageMeta } from "../seo";
+import { money } from "../product";
 
 export function AccountPage() {
   const { user, accessToken, ready, reloadUser } = useAuth();
@@ -10,6 +12,11 @@ export function AccountPage() {
   const [backup, setBackup] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [displayName, setDisplayName] = useState("");
+
+  useEffect(() => {
+    if (user) setDisplayName(user.displayName || "");
+  }, [user]);
 
   if (!ready) return <p>Loading…</p>;
   if (!user || !accessToken) return <Navigate to="/login" replace />;
@@ -67,12 +74,43 @@ export function AccountPage() {
 
   return (
     <section className="auth-card" style={{ maxWidth: 560 }}>
+      <PageMeta
+        title="Account — Volt & Co"
+        description="Manage your Volt & Co profile, order history, two-factor authentication, and saved shipping addresses."
+      />
       <h1>Your account</h1>
       <p>
         {user.displayName || "Customer"} · {user.email}
-        {" · "}
-        <Link to="/orders">Orders</Link>
       </p>
+      <form
+        className="panel"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setError("");
+          void api("/auth/me", {
+            method: "PATCH",
+            token: accessToken,
+            body: JSON.stringify({ displayName }),
+          })
+            .then(async () => {
+              setMessage("Profile updated.");
+              await reloadUser();
+            })
+            .catch((err) => {
+              setError(err instanceof ApiError ? err.message : "Could not update profile");
+            });
+        }}
+      >
+        <h2>Profile</h2>
+        <label className="field">
+          <span>Display name</span>
+          <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required />
+        </label>
+        <button className="primary" type="submit">
+          Save profile
+        </button>
+      </form>
+      <RecentOrders token={accessToken} />
       <p>
         Two-factor authentication:{" "}
         <strong>{user.totpEnabled ? "Active" : "Off"}</strong>
@@ -111,7 +149,7 @@ export function AccountPage() {
           </form>
         </>
       )}
-      {user.totpEnabled && (
+      {user.totpEnabled && !isStaffRole(user.role) && (
         <form onSubmit={(event) => void disableTotp(event)}>
           <label className="field">
             <span>Disable 2FA with a current authenticator code</span>
@@ -122,12 +160,54 @@ export function AccountPage() {
           </button>
         </form>
       )}
+      {user.totpEnabled && isStaffRole(user.role) && (
+        <p className="muted">Staff accounts must keep two-factor authentication on.</p>
+      )}
       <AddressBook token={accessToken} />
     </section>
   );
 }
 
 type SavedAddress = AddressInput & { id: string; label?: string | null; isDefault?: boolean };
+
+function RecentOrders({ token }: { token: string }) {
+  const [items, setItems] = useState<
+    { id: string; status: string; total: number; summary: string; createdAt: string }[]
+  >([]);
+
+  useEffect(() => {
+    void api<{ items: typeof items }>("/orders", { token })
+      .then((result) => setItems(result.items.slice(0, 5)))
+      .catch(() => undefined);
+  }, [token]);
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <h2>Order history</h2>
+      {items.length === 0 ? (
+        <p className="muted">No orders yet.</p>
+      ) : (
+        <ul className="summary-list">
+          {items.map((item) => (
+            <li key={item.id}>
+              <span>
+                <Link to={`/orders/${item.id}`}>{item.summary || item.id.slice(0, 8)}</Link>
+                <br />
+                <span className="muted">
+                  {item.status} · {new Date(item.createdAt).toLocaleDateString()}
+                </span>
+              </span>
+              <span>{money(item.total)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p>
+        <Link to="/orders">View all orders</Link>
+      </p>
+    </div>
+  );
+}
 
 function AddressBook({ token }: { token: string }) {
   const empty: AddressInput = {

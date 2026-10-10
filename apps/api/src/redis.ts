@@ -10,6 +10,11 @@ type RedisClient = {
   srem(key: string, member: string): Promise<unknown>;
   smembers(key: string): Promise<string[]>;
   expire(key: string, seconds: number): Promise<unknown>;
+  eval(
+    script: string,
+    numKeys: number,
+    ...args: (string | number)[]
+  ): Promise<unknown>;
   disconnect(): void;
 };
 

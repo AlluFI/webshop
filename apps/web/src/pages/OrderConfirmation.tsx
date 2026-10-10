@@ -4,13 +4,17 @@ import { api, userErrorMessage, readOrderToken } from "../api";
 import { useAuth } from "../auth";
 import { useCart } from "../cart";
 import { money } from "../product";
+import { PageMeta } from "../seo";
 
 type Order = {
   id: string;
+  reference?: string;
   status: string;
   paymentStatus: string;
   total: number;
   shippingMethod: string;
+  estimatedDelivery?: { from: string; to: string; label: string } | null;
+  tracking?: { carrier: string; carrierName: string; code: string; url: string } | null;
   email: string;
   displayName: string;
   phone: string;
@@ -107,8 +111,8 @@ export function OrderConfirmationPage() {
         <h1>Order</h1>
         <p className="banner error">{error}</p>
         <div className="actions">
-          <Link className="button" to="/checkout">
-            Back to checkout
+          <Link className="button" to="/cart">
+            Return to cart
           </Link>
           <Link className="ghost" to="/orders">
             All orders
@@ -136,7 +140,11 @@ export function OrderConfirmationPage() {
 
   return (
     <section>
-      <p className="kicker">Order {order.id.slice(0, 8)}</p>
+      <PageMeta
+        title="Order confirmation — Volt & Co"
+        description="Your Volt & Co order summary, reference number, estimated delivery, and shipping details after checkout."
+      />
+      <p className="kicker">Order {order.reference || order.id.slice(0, 8)}</p>
       <h1>{title}</h1>
       {error && <p className="banner error">{error}</p>}
       {paid && <p className="banner ok">A confirmation email is on the way (check Mailpit).</p>}
@@ -157,6 +165,12 @@ export function OrderConfirmationPage() {
       {refunded && <p className="banner ok">Stripe issued a sandbox refund and stock was restored.</p>}
       <div className="panel">
         <p>
+          Order ID: <strong>{order.id}</strong>
+        </p>
+        <p>
+          Reference: <strong>{order.reference || order.id.slice(0, 8)}</strong>
+        </p>
+        <p>
           Status: <strong>{order.status.replaceAll("_", " ")}</strong>
         </p>
         <p>Payment: {order.paymentStatus.replaceAll("_", " ")}</p>
@@ -173,6 +187,16 @@ export function OrderConfirmationPage() {
             {order.shipping.countryName || order.shipping.country}
             {" · "}
             {order.shippingMethod}
+            {order.estimatedDelivery ? ` · Est. delivery ${order.estimatedDelivery.label}` : ""}
+          </p>
+        )}
+        {order.tracking && (
+          <p>
+            Tracking: {order.tracking.carrierName} <strong>{order.tracking.code}</strong>
+            {" · "}
+            <a href={order.tracking.url} target="_blank" rel="noreferrer">
+              Track with {order.tracking.carrierName}
+            </a>
           </p>
         )}
         <ul className="summary-list">

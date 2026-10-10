@@ -28,6 +28,7 @@ export function shippingCost(method: "standard" | "express", subtotal: number) {
   return STANDARD_SHIPPING;
 }
 
+/** Catalog prices already include VAT; a tax line is still kept on the order snapshot. */
 export function taxAmount(_subtotal: number) {
   return 0;
 }

@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import { config } from "./config.js";
-import { buildOrderPaidEmail, type OrderEmailDetails } from "./lib/order-email.js";
+import { buildOrderPaidEmail, buildOrderShippedEmail, type OrderEmailDetails, type OrderShippedEmailDetails } from "./lib/order-email.js";
 
 const transporter = nodemailer.createTransport({
   host: config.mailHost,
@@ -41,12 +41,21 @@ export const mail = {
     await send(details.email, built.subject, built.text, built.html);
   },
 
-  async sendPaymentFailed(to: string, orderId: string, reason: string) {
-    const link = `${config.webAppUrl.replace(/\/$/, "")}/checkout`;
+  async sendOrderShipped(details: OrderShippedEmailDetails) {
+    const built = buildOrderShippedEmail(details);
+    await send(details.email, built.subject, built.text, built.html);
+  },
+
+  async sendPaymentFailed(details: OrderEmailDetails) {
+    const built = buildOrderPaidEmail(details);
+    await send(details.email, built.subject, built.text, built.html);
+  },
+
+  async sendContact(input: { name: string; email: string; subject: string; message: string }) {
     await send(
-      to,
-      "Volt & Co payment did not go through",
-      `We could not complete payment for order ${orderId}.\n\n${reason}\n\nNothing was charged. You can try again:\n${link}\n`,
+      "support@localhost",
+      `Contact: ${input.subject}`,
+      `From: ${input.name} <${input.email}>\n\n${input.message}\n`,
     );
   },
 };

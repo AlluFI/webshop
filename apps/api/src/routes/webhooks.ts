@@ -8,6 +8,7 @@ export const webhooksRouter = Router();
 webhooksRouter.post(
   "/stripe",
   asyncHandler(async (req: Request, res) => {
+    // Signature is checked in orderService.applyStripeEvent against the raw body.
     const signature = req.header("stripe-signature");
     const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body ?? {}));
     res.json(await orderService.applyStripeEvent(raw, signature));

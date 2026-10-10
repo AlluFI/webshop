@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { isStaffRole } from "@volt/shared";
 import { api } from "./api";
 import { useAuth } from "./auth";
 import { useCart } from "./cart";
+import { money } from "./product";
 
 type Suggest = {
   products: { name: string; slug: string; href: string }[];
@@ -14,7 +16,9 @@ export function Layout() {
   const { cart } = useCart();
   const [q, setQ] = useState("");
   const [suggest, setSuggest] = useState<Suggest | null>(null);
+  const [bagOpen, setBagOpen] = useState(false);
   const box = useRef<HTMLFormElement>(null);
+  const bag = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -33,6 +37,7 @@ export function Layout() {
   useEffect(() => {
     function onClick(event: MouseEvent) {
       if (!box.current?.contains(event.target as Node)) setSuggest(null);
+      if (!bag.current?.contains(event.target as Node)) setBagOpen(false);
     }
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
@@ -82,10 +87,48 @@ export function Layout() {
           </form>
           <nav className="nav" aria-label="Account">
             <NavLink to="/catalog">Catalog</NavLink>
-            <NavLink to="/cart">Cart{cart.itemCount > 0 ? ` (${cart.itemCount})` : ""}</NavLink>
+            <div className="bag-wrap" ref={bag}>
+              <button className="link bag-toggle" type="button" onClick={() => setBagOpen((open) => !open)}>
+                Cart{cart.itemCount > 0 ? ` (${cart.itemCount})` : ""}
+              </button>
+              {bagOpen && (
+                <div className="quick-cart" role="dialog" aria-label="Cart preview">
+                  {cart.items.length === 0 ? (
+                    <p className="muted">Your bag is empty.</p>
+                  ) : (
+                    <ul>
+                      {cart.items.slice(0, 4).map((item) => (
+                        <li key={item.id}>
+                          {item.thumbnail && <img src={item.thumbnail} alt="" />}
+                          <span>
+                            {item.name}
+                            <br />
+                            <span className="muted">
+                              ×{item.quantity} · {money(item.lineTotal)}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="price">Subtotal {money(cart.subtotal)}</p>
+                  <div className="actions">
+                    <Link className="button" to="/cart" onClick={() => setBagOpen(false)}>
+                      View cart
+                    </Link>
+                    {cart.items.length > 0 && (
+                      <Link className="ghost" to="/checkout" onClick={() => setBagOpen(false)}>
+                        Checkout
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             {user ? (
               <>
                 <NavLink to="/orders">Orders</NavLink>
+                {isStaffRole(user.role) && <NavLink to="/admin">Admin</NavLink>}
                 <NavLink to="/account">{user.displayName || user.email}</NavLink>
                 <button className="link" type="button" onClick={() => void logout()}>
                   Sign out
@@ -103,7 +146,16 @@ export function Layout() {
       <main id="main" className="page">
         <Outlet />
       </main>
-      <footer className="footer">Volt &amp; Co — electronics, chosen with care.</footer>
+      <footer className="footer">
+        <nav aria-label="Footer">
+          <Link to="/about">About</Link>
+          <Link to="/contact">Contact</Link>
+          <Link to="/faq">FAQ</Link>
+          <Link to="/terms">Terms</Link>
+          <Link to="/catalog">Catalog</Link>
+        </nav>
+        <p>Volt &amp; Co — electronics, chosen with care.</p>
+      </footer>
     </>
   );
 }

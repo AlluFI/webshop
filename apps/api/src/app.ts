@@ -14,9 +14,14 @@ import { ordersRouter } from "./routes/orders.js";
 import { webhooksRouter } from "./routes/webhooks.js";
 import { filesRouter } from "./routes/files.js";
 import { docsRouter } from "./routes/docs.js";
+import { reviewsRouter } from "./routes/reviews.js";
+import { contactRouter } from "./routes/contact.js";
+import { shippingRouter } from "./routes/shipping.js";
+import { adminRouter } from "./routes/admin.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { setPaymentStatusHandler } from "./lib/queue.js";
 import { handlePaymentStatus } from "./services/order-fulfillment.js";
+import { apiRateLimit } from "./lib/rate-limit.js";
 
 export function createApp() {
   mkdirSync(config.uploadDir, { recursive: true });
@@ -45,13 +50,16 @@ export function createApp() {
         "http://localhost:5173",
         "http://localhost:8080",
         "http://localhost:8088",
+        "https://localhost:8443",
       ],
       credentials: true,
     }),
   );
+  // Stripe needs the raw body for signature verification — mount before json().
   app.use("/api/v1/webhooks", express.raw({ type: "application/json" }), webhooksRouter);
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
+  app.use("/api/v1", apiRateLimit);
 
   app.use("/api/v1/health", healthRouter);
   app.use("/api/v1/auth", authRouter);
@@ -61,6 +69,10 @@ export function createApp() {
   app.use("/api/v1/checkout", checkoutRouter);
   app.use("/api/v1/orders", ordersRouter);
   app.use("/api/v1/files", filesRouter);
+  app.use("/api/v1", reviewsRouter);
+  app.use("/api/v1/contact", contactRouter);
+  app.use("/api/v1/shipping", shippingRouter);
+  app.use("/api/v1/admin", adminRouter);
   app.use("/api/v1", docsRouter);
 
   app.use((_req, res) => {

@@ -3,6 +3,7 @@ import { prisma } from "../prisma.js";
 import { redis } from "../redis.js";
 import { rabbitReachable, queueInline } from "../lib/queue.js";
 import { asyncHandler } from "../middleware/error-handler.js";
+import { rateLimit } from "../lib/rate-limit.js";
 
 export const healthRouter = Router();
 
@@ -35,4 +36,12 @@ healthRouter.get(
       rabbitmq,
     });
   }),
+);
+
+healthRouter.get(
+  "/limited",
+  rateLimit("test", 5, 0.01),
+  (_req, res) => {
+    res.json({ ok: true });
+  },
 );

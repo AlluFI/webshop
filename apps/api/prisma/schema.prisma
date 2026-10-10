@@ -34,6 +34,9 @@ model User {
   addresses               Address[]
   cart                    Cart?
   orders                  Order[]
+  reviews                 Review[]
+  reviewVotes             ReviewVote[]
+  auditLogs               AuditLog[]
 
   @@map("users")
 }
@@ -138,6 +141,7 @@ model Product {
   cartItems      CartItem[]
   orderItems     OrderItem[]
   reservations   InventoryReservation[]
+  reviews        Review[]
 
   @@index([categoryId])
   @@index([brandId])
@@ -151,6 +155,7 @@ model ProductImage {
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   path      String
+  thumbPath String?
   altText   String
   sortOrder Int     @default(0)
 
@@ -195,12 +200,12 @@ model Address {
   userId           String
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   label            String?
-  recipientNameEnc String
-  line1Enc         String
+  recipientNameEnc String // AES-256-GCM
+  line1Enc         String // AES-256-GCM
   line2Enc         String?
-  cityEnc          String
+  cityEnc          String // AES-256-GCM
   regionEnc        String?
-  postalEnc        String
+  postalEnc        String // AES-256-GCM
   country          String
   phoneEnc         String?
   isDefault        Boolean  @default(false)
@@ -216,7 +221,7 @@ model Cart {
   id         String     @id @default(uuid())
   userId     String?    @unique
   user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  guestToken String?    @unique
+  guestToken String?    @unique // SHA-256 of the cookie; raw token is never stored
   expiresAt  DateTime?
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
@@ -252,13 +257,18 @@ model Order {
   tax                 Decimal       @db.Decimal(10, 2)
   total               Decimal       @db.Decimal(10, 2)
   shippingMethod      String
-  contactEmailEnc     String
-  contactNameEnc      String
+  contactEmailEnc     String // AES-256-GCM
+  contactNameEnc      String // AES-256-GCM
   contactPhoneEnc     String?
-  shippingAddressEnc  String
+  shippingAddressEnc  String // AES-256-GCM JSON snapshot
   billingAddressEnc   String?
   shippingAddressId   String?
   shippingAddress     Address?      @relation("ShippingAddress", fields: [shippingAddressId], references: [id], onDelete: SetNull)
+  trackingCarrier     String?
+  trackingCode        String?
+  shippedAt           DateTime?
+  estimatedDeliveryFrom DateTime?
+  estimatedDeliveryTo   DateTime?
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
   items               OrderItem[]
@@ -306,10 +316,10 @@ model Payment {
   orderId               String        @unique
   order                 Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   status                PaymentStatus @default(REQUIRES_PAYMENT)
-  stripePaymentIntentId String?
+  stripePaymentIntentId String? // Stripe id only — never PAN / CVC
   amount                Decimal       @db.Decimal(10, 2)
   currency              String        @default("EUR")
-  metadataEnc           String?
+  metadataEnc           String? // AES-256-GCM (guest access hash, last error)
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
@@ -329,4 +339,75 @@ model InventoryReservation {
   @@index([orderId])
   @@index([productId])
   @@map("inventory_reservations")
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+}
+
+model Review {
+  id            String       @id @default(uuid())
+  productId     String
+  product       Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stars         Int
+  title         String?
+  body          String
+  helpfulCount  Int          @default(0)
+  status        ReviewStatus @default(PUBLISHED)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  votes         ReviewVote[]
+
+  @@unique([productId, userId])
+  @@index([productId, helpfulCount])
+  @@index([userId])
+  @@map("reviews")
+}
+
+model ReviewVote {
+  id        String   @id @default(uuid())
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([reviewId, userId])
+  @@index([userId])
+  @@map("review_votes")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  metaEnc   String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model ShippingOption {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  description   String?
+  price         Decimal  @db.Decimal(10, 2)
+  freeThreshold Decimal? @db.Decimal(10, 2)
+  minDays       Int
+  maxDays       Int
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@map("shipping_options")
 }

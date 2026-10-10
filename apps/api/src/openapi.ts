@@ -137,9 +137,10 @@ export const openApiDocument: OpenAPIV3.Document = {
     title: "Volt & Co API",
     version: "1.0.0",
     description:
-      "Part 2 storefront API: accounts, JWT sessions, optional TOTP, Google OAuth, a faceted electronics catalog, guest and logged-in carts, addresses, and checkout quotes.\n\n" +
-      "Demo account: `customer@volt.test` / `Shopping123`.\n\n" +
-      "Access tokens live 15 minutes. After **Authorize**, paste an `accessToken` from `/auth/login`. Refresh tokens rotate in Redis and are also stored as an httpOnly cookie. Guest carts use the httpOnly `cart_token` cookie.",
+      "Part 3 storefront API: accounts, JWT sessions, TOTP (required for staff), Google OAuth, catalog, reviews, carts, checkout, and admin CRUD.\n\n" +
+      "Demo customer: `customer@volt.test` / `Shopping123`.\n" +
+      "Demo admin: `admin@volt.test` / `Shopping123` plus TOTP secret `DEMOADMIN2FASECRETKEYAA`.\n\n" +
+      "Access tokens live 15 minutes. After **Authorize**, paste an `accessToken` from `/auth/login` (staff also need `/auth/mfa/complete`).",
   },
   servers: [
     { url: "/", description: "This host (API :3000 or storefront proxy :8088)" },
@@ -153,6 +154,10 @@ export const openApiDocument: OpenAPIV3.Document = {
     { name: "Orders" },
     { name: "Addresses" },
     { name: "Files" },
+    { name: "Reviews" },
+    { name: "Contact" },
+    { name: "Shipping" },
+    { name: "Admin" },
   ],
   components: {
     securitySchemes: {
@@ -1336,6 +1341,121 @@ export const openApiDocument: OpenAPIV3.Document = {
           "200": { description: "Refunded" },
           "409": { description: "Order is not paid" },
         },
+      },
+    },
+    "/api/v1/products/{idOrSlug}/reviews": {
+      get: {
+        tags: ["Reviews"],
+        summary: "Published reviews, default sort helpfulness",
+        parameters: [
+          { name: "idOrSlug", in: "path", required: true, schema: { type: "string" } },
+          { name: "sort", in: "query", schema: { type: "string", enum: ["helpful", "newest"] } },
+        ],
+        responses: { "200": { description: "Review list" } },
+      },
+      post: {
+        tags: ["Reviews"],
+        summary: "Leave a review (purchased products only)",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "idOrSlug", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "201": { description: "Created" },
+          "403": { description: "Not purchased" },
+        },
+      },
+    },
+    "/api/v1/reviews/{id}/vote": {
+      post: {
+        tags: ["Reviews"],
+        summary: "Mark a review as helpful",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Vote recorded" } },
+      },
+    },
+    "/api/v1/contact": {
+      post: {
+        tags: ["Contact"],
+        summary: "Contact form (CAPTCHA, emailed via Mailpit)",
+        responses: { "201": { description: "Accepted" }, "429": { description: "Rate limited" } },
+      },
+    },
+    "/api/v1/shipping": {
+      get: {
+        tags: ["Shipping"],
+        summary: "Active delivery options",
+        responses: { "200": { description: "Shipping options" } },
+      },
+    },
+    "/api/v1/admin/audit": {
+      get: {
+        tags: ["Admin"],
+        summary: "Staff change log for products, categories, orders, reviews, and shipping",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "entity", in: "query", schema: { type: "string", enum: ["product", "category", "order", "review", "shipping"] } },
+          { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+          { name: "pageSize", in: "query", schema: { type: "integer", default: 30 } },
+        ],
+        responses: { "200": { description: "Audit entries with old → new values" } },
+      },
+    },
+    "/api/v1/admin/products": {
+      get: {
+        tags: ["Admin"],
+        summary: "Admin product list",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Products" }, "403": { description: "Forbidden" } },
+      },
+      post: {
+        tags: ["Admin"],
+        summary: "Create a product",
+        security: [{ bearerAuth: [] }],
+        responses: { "201": { description: "Created" } },
+      },
+    },
+    "/api/v1/admin/products/bulk": {
+      post: {
+        tags: ["Admin"],
+        summary: "Bulk upload products (JSON or CSV)",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Import result" } },
+      },
+    },
+    "/api/v1/admin/orders": {
+      get: {
+        tags: ["Admin"],
+        summary: "All orders",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Orders" } },
+      },
+    },
+    "/api/v1/admin/orders/{id}/status": {
+      post: {
+        tags: ["Admin"],
+        summary: "Update order status. SHIPPED requires carrier (posti, postnord, budbee) and tracking code, then emails the customer.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "Updated order" },
+          "400": { description: "Tracking required when shipping" },
+        },
+      },
+    },
+    "/api/v1/admin/users": {
+      get: {
+        tags: ["Admin"],
+        summary: "List users",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Users" } },
+      },
+    },
+    "/api/v1/admin/reviews": {
+      get: {
+        tags: ["Admin"],
+        summary: "Moderate reviews",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Reviews" } },
       },
     },
   },

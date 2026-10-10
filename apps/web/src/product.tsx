@@ -11,7 +11,8 @@ export type Product = {
   stockQuantity: number;
   category: { name: string; slug: string };
   brand: { name: string; slug: string };
-  images: { url: string; altText: string }[];
+  images: { url: string; thumbUrl?: string; altText: string }[];
+  featured?: boolean;
   weightKg: number;
   weightLb: number;
   dimensions: {
@@ -33,20 +34,27 @@ export function stars(value: number) {
 }
 
 export function ProductCard({ product }: { product: Product }) {
+  const href = `/products/${product.slug}`;
+  const image = product.images[0];
+
   return (
     <article className="card">
-      <Link to={`/products/${product.slug}`}>
-        <img src={product.images[0]?.url} alt={product.images[0]?.altText || product.name} />
-        <div className="card-body">
-          <p className="muted">{product.brand.name}</p>
-          <h2 style={{ fontSize: "1.05rem", margin: "4px 0 8px" }}>{product.name}</h2>
-          <p className="stars" aria-label={`${product.averageRating} out of 5`}>
-            {stars(product.averageRating)}
-          </p>
-          <p className="price">{money(product.price)}</p>
-        </div>
+      <Link className="card-media" to={href}>
+        <img src={image?.thumbUrl || image?.url} alt={image?.altText || product.name} />
       </Link>
-      <div className="card-body" style={{ paddingTop: 0 }}>
+      <div className="card-body">
+        <p className="muted">{product.brand.name}</p>
+        <h2 className="card-title">
+          <Link to={href}>{product.name}</Link>
+        </h2>
+        <p className="stars" aria-label={`${product.averageRating} out of 5`}>
+          {stars(product.averageRating)}
+          {product.reviewCount > 0 ? <span className="muted"> ({product.reviewCount})</span> : null}
+        </p>
+        {product.description ? <p className="card-excerpt">{product.description}</p> : null}
+      </div>
+      <div className="card-actions">
+        <p className="price">{money(product.price)}</p>
         <AddToCartButton productId={product.id} stockQuantity={product.stockQuantity} compact />
       </div>
     </article>

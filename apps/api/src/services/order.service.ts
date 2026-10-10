@@ -1,6 +1,8 @@
 import Stripe from "stripe";
 import { Prisma, type OrderStatus, type PaymentStatus } from "@prisma/client";
 import {
+  carrierName,
+  carrierTrackingUrl,
   CHECKOUT_COUNTRIES,
   checkoutPlaceSchema,
   orderListQuerySchema,
@@ -12,11 +14,12 @@ import { config } from "../config.js";
 import { HttpError } from "../http-error.js";
 import { encrypt, encryptJson, decrypt, decryptJson } from "../lib/crypto.js";
 import { randomToken, sha256Hex } from "../lib/hash.js";
-import { orderTotal, shippingCost, taxAmount, toCents } from "../lib/cart-math.js";
+import { orderTotal, taxAmount, toCents } from "../lib/cart-math.js";
 import { requireStripe, stripeConfigured, stripePublishableKey } from "../lib/stripe.js";
 import { publishPaymentStatus } from "../lib/queue.js";
 import { cartService, type CartContext } from "./cart.service.js";
 import { addressService } from "./address.service.js";
+import { shippingService } from "./shipping.service.js";
 import {
   handlePaymentStatus,
   releaseReservations,
@@ -113,8 +116,26 @@ async function findPaidReplacement(
 async function publicOrder(order: NonNullable<Awaited<ReturnType<typeof loadOrder>>>) {
   const status = order.status as OrderStatus;
   const replacedByOrderId = await findPaidReplacement(order);
+  const shippingOptions = await shippingService.list(true);
+  const option = shippingOptions.find((row) => row.code === order.shippingMethod);
+  const estimatedDelivery =
+    order.estimatedDeliveryFrom && order.estimatedDeliveryTo
+      ? shippingService.window(order.estimatedDeliveryFrom, order.estimatedDeliveryTo)
+      : option
+        ? shippingService.estimate(option, order.shippedAt ?? order.createdAt)
+        : null;
+  const tracking =
+    order.trackingCarrier && order.trackingCode
+      ? {
+          carrier: order.trackingCarrier,
+          carrierName: carrierName(order.trackingCarrier),
+          code: order.trackingCode,
+          url: carrierTrackingUrl(order.trackingCarrier, order.trackingCode),
+        }
+      : null;
   return {
     id: order.id,
+    reference: `VC-${order.id.replaceAll("-", "").slice(0, 8).toUpperCase()}`,
     status,
     paymentStatus: (order.payment?.status ?? "REQUIRES_PAYMENT") as PaymentStatus,
     currency: order.currency,
@@ -123,6 +144,8 @@ async function publicOrder(order: NonNullable<Awaited<ReturnType<typeof loadOrde
     tax: moneyNumber(order.tax),
     total: moneyNumber(order.total),
     shippingMethod: order.shippingMethod,
+    estimatedDelivery,
+    tracking,
     email: decrypt(order.contactEmailEnc),
     displayName: decrypt(order.contactNameEnc),
     phone: order.contactPhoneEnc ? decrypt(order.contactPhoneEnc) : "",
@@ -249,7 +272,8 @@ export const orderService = {
       Object.assign(shippingAddress, toAddressInput(saved));
     }
 
-    const shipping = shippingCost(dto.shippingMethod, cart.dto.subtotal);
+    const quoted = await shippingService.quote(dto.shippingMethod, cart.dto.subtotal);
+    const shipping = quoted.cost;
     const tax = taxAmount(cart.dto.subtotal);
     const total = orderTotal(cart.dto.subtotal, shipping, tax);
     const guestAccess = randomToken();
@@ -259,6 +283,7 @@ export const orderService = {
     };
     const cartId = cart.dto.id ?? undefined;
 
+    // Lock products in id order so two concurrent checkouts cannot deadlock or oversell.
     const created = await prisma.$transaction(async (tx) => {
       const ids = [...new Set(cart.dto.items.map((item) => item.productId))].sort();
       for (const id of ids) {
@@ -295,6 +320,11 @@ export const orderService = {
           contactNameEnc: encrypt(dto.displayName),
           contactPhoneEnc: encrypt(dto.phone),
           shippingAddressEnc: encryptJson(snapshot),
+          billingAddressEnc: encryptJson(
+            dto.billingSameAsShipping === false && dto.billingAddress
+              ? { ...dto.billingAddress, countryName: countryName(dto.billingAddress.country) }
+              : snapshot,
+          ),
           shippingAddressId: dto.addressId ?? null,
           items: {
             create: cart.dto.items.map((item) => {
@@ -305,7 +335,7 @@ export const orderService = {
                 quantity: item.quantity,
                 unitPrice: product.price,
                 lineTotal: new Prisma.Decimal(item.lineTotal),
-                thumbnailPath: product.images[0]?.path ?? null,
+                thumbnailPath: product.images[0]?.thumbPath || product.images[0]?.path || null,
               };
             }),
           },
@@ -346,6 +376,8 @@ export const orderService = {
       return order;
     });
 
+    // Stock is already reserved. If Stripe cannot create the intent, fail the order
+    // through the same worker path so inventory and the cart come back.
     try {
       const intent = await requireStripe().paymentIntents.create({
         amount: toCents(total),
@@ -493,12 +525,12 @@ export const orderService = {
     return { queued: message.outcome };
   },
 
-  async cancel(ctx: CartContext, orderId: string, orderToken?: string) {
+  async cancel(ctx: CartContext, orderId: string, orderToken?: string, asStaff = false) {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: { payment: true, items: true },
     });
-    if (!order || !canRead(order, ctx, orderToken)) {
+    if (!order || (!asStaff && !canRead(order, ctx, orderToken))) {
       throw new HttpError(404, "Order not found");
     }
     if (order.status !== "PENDING_PAYMENT") {
@@ -528,12 +560,12 @@ export const orderService = {
     return await publicOrder(loaded);
   },
 
-  async refund(ctx: CartContext, orderId: string, orderToken?: string) {
+  async refund(ctx: CartContext, orderId: string, orderToken?: string, asStaff = false) {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: { payment: true, items: true },
     });
-    if (!order || !canRead(order, ctx, orderToken)) {
+    if (!order || (!asStaff && !canRead(order, ctx, orderToken))) {
       throw new HttpError(404, "Order not found");
     }
     if (order.status !== "PAID") {
@@ -565,5 +597,15 @@ export const orderService = {
     const loaded = await loadOrder(orderId);
     if (!loaded) throw new HttpError(404, "Order not found");
     return await publicOrder(loaded);
+  },
+
+  async adminGet(orderId: string) {
+    const loaded = await loadOrder(orderId);
+    if (!loaded) throw new HttpError(404, "Order not found");
+    return await publicOrder(loaded);
+  },
+
+  async adminRefund(orderId: string) {
+    return this.refund({ userId: undefined }, orderId, undefined, true);
   },
 };

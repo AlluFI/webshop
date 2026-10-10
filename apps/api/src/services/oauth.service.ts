@@ -3,6 +3,7 @@ import { redis } from "../redis.js";
 import { config } from "../config.js";
 import { HttpError } from "../http-error.js";
 import { authService } from "./auth.service.js";
+import { isStaffRole } from "@volt/shared";
 
 const STATE_TTL = 300;
 
@@ -78,5 +79,8 @@ export async function googleCallback(code: string, state: string) {
     email: profile.email,
     displayName: profile.name,
   });
+  if (isStaffRole(user.role.name)) {
+    throw new HttpError(403, "Staff accounts must sign in with email and a two-factor code.");
+  }
   return authService.issuePair(user.id, user.email, user.role.name);
 }

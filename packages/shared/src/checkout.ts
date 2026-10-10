@@ -94,6 +94,8 @@ export const checkoutQuoteSchema = z.object({
   addressId: z.string().uuid().optional(),
   address: addressSchema.optional(),
   saveAddress: z.boolean().optional(),
+  billingSameAsShipping: z.boolean().optional(),
+  billingAddress: addressSchema.optional(),
 });
 
 export const checkoutValidateSchema = z
@@ -105,6 +107,8 @@ export const checkoutValidateSchema = z
     addressId: z.string().uuid().optional(),
     address: addressSchema.optional(),
     saveAddress: z.boolean().optional(),
+    billingSameAsShipping: z.boolean().optional().default(true),
+    billingAddress: addressSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (!value.addressId && !value.address) {
@@ -112,6 +116,13 @@ export const checkoutValidateSchema = z
         code: z.ZodIssueCode.custom,
         message: "Shipping address is required",
         path: ["address"],
+      });
+    }
+    if (value.billingSameAsShipping === false && !value.billingAddress) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Billing address is required when it differs from shipping",
+        path: ["billingAddress"],
       });
     }
   });

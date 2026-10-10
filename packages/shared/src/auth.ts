@@ -64,5 +64,9 @@ export const totpDisableSchema = z.object({
   code: z.string().regex(/^\d{6}$/, "Enter the 6-digit authenticator code"),
 });
 
+export const updateProfileSchema = z.object({
+  displayName: z.string().trim().min(1, "Name is required").max(80, "Name is too long"),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

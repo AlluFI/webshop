@@ -13,6 +13,7 @@ import { useAuth } from "../auth";
 import { useCart } from "../cart";
 import { money } from "../product";
 import { CheckoutPay } from "./CheckoutPay";
+import { PageMeta } from "../seo";
 
 type SavedAddress = AddressInput & { id: string; label?: string | null; isDefault?: boolean };
 
@@ -46,6 +47,8 @@ export function CheckoutPage() {
   const [addressId, setAddressId] = useState("");
   const [saved, setSaved] = useState<SavedAddress[]>([]);
   const [saveAddress, setSaveAddress] = useState(true);
+  const [billingSame, setBillingSame] = useState(true);
+  const [billing, setBilling] = useState<AddressInput>(emptyAddress);
   const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard");
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteWarning, setQuoteWarning] = useState("");
@@ -106,8 +109,10 @@ export function CheckoutPage() {
       saveAddress: Boolean(user) && saveAddress && !addressId,
       addressId: addressId || undefined,
       address: addressId ? undefined : address,
+      billingSameAsShipping: billingSame,
+      billingAddress: billingSame ? undefined : billing,
     }),
-    [email, displayName, phone, shippingMethod, saveAddress, addressId, address, user],
+    [email, displayName, phone, shippingMethod, saveAddress, addressId, address, user, billingSame, billing],
   );
 
   useEffect(() => {
@@ -215,6 +220,10 @@ export function CheckoutPage() {
   if (!payment && cart.items.length === 0) {
     return (
       <section>
+        <PageMeta
+          title="Checkout — Volt & Co"
+          description="Guest or signed-in checkout at Volt & Co: shipping, billing, delivery method, and Stripe sandbox payment."
+        />
         <h1>Checkout</h1>
         <p>
           Your cart is empty. <Link to="/catalog">Add something first</Link>
@@ -225,6 +234,10 @@ export function CheckoutPage() {
 
   return (
     <section>
+      <PageMeta
+        title="Checkout — Volt & Co"
+        description="Guest or signed-in checkout at Volt & Co: shipping, billing, delivery method, and Stripe sandbox payment."
+      />
       <p className="kicker">Checkout</p>
       <h1>Complete your order</h1>
       {error && <p className="banner error">{error}</p>}
@@ -380,6 +393,63 @@ export function CheckoutPage() {
             )}
           </div>
           <div className="panel" style={{ marginTop: 16 }}>
+            <h2>Billing address</h2>
+            <label className="field choice">
+              <input type="checkbox" checked={billingSame} onChange={(event) => setBillingSame(event.target.checked)} />
+              Same as shipping
+            </label>
+            {!billingSame && (
+              <>
+                <label className="field">
+                  <span>Recipient</span>
+                  <input
+                    value={billing.recipientName}
+                    onChange={(event) => setBilling({ ...billing, recipientName: event.target.value })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Street</span>
+                  <input
+                    value={billing.line1}
+                    onChange={(event) => setBilling({ ...billing, line1: event.target.value })}
+                  />
+                </label>
+                <div className="dims">
+                  <label className="field">
+                    <span>City</span>
+                    <input
+                      value={billing.city}
+                      onChange={(event) => setBilling({ ...billing, city: event.target.value })}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Postal code</span>
+                    <input
+                      value={billing.postal}
+                      onChange={(event) => setBilling({ ...billing, postal: event.target.value })}
+                    />
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Country</span>
+                  <select
+                    value={billing.country}
+                    onChange={(event) =>
+                      setBilling({ ...billing, country: event.target.value as AddressInput["country"] })
+                    }
+                  >
+                    {CHECKOUT_COUNTRIES.map((country) => (
+                      <option key={country.code} value={country.code}>
+                        {country.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {fields.billingAddress && <p className="error">{fields.billingAddress}</p>}
+              </>
+            )}
+          </div>
+          <div className="panel" style={{ marginTop: 16 }}>
             <h2>Shipping</h2>
             <label className="field choice">
               <input
@@ -421,8 +491,8 @@ export function CheckoutPage() {
                   </p>
                 )}
                 <p className="muted">
-                  Card details stay in Stripe Elements. We store PaymentIntent ids, never card
-                  numbers. After you confirm the address, Stripe collects the card.
+                  Card details stay in Stripe Elements. Only PaymentIntent ids are stored, never
+                  card numbers. After the address is confirmed, the card is collected by Stripe.
                 </p>
                 <button className="primary" type="submit" disabled={busy || stripeReady === false}>
                   {busy ? "Reserving stock…" : "Continue to payment"}

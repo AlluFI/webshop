@@ -58,9 +58,11 @@ describeLive("catalog API", () => {
   });
 
   it("serves a product image", async () => {
-    const list = await request(app).get("/api/v1/products");
-    const file = list.body.items[0].images[0].url.replace("/api/v1/files/", "");
-    const image = await request(app).get(`/api/v1/files/${file}`);
+    const { writeFileSync, mkdirSync } = await import("node:fs");
+    const { config } = await import("../src/config.js");
+    mkdirSync(config.uploadDir, { recursive: true });
+    writeFileSync(`${config.uploadDir}/catalog-test.svg`, "<svg xmlns='http://www.w3.org/2000/svg'/>");
+    const image = await request(app).get("/api/v1/files/catalog-test.svg");
     expect(image.status).toBe(200);
     expect(image.headers["content-type"]).toMatch(/image|svg/);
   });

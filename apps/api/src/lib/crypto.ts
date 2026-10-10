@@ -1,3 +1,5 @@
+// AES-256-GCM for PII at rest (addresses, order contact, payment metadata).
+// Format: v1:<iv>:<tag>:<ciphertext> (base64url). Key is SHA-256(DATA_ENCRYPTION_KEY).
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
 const PREFIX = "v1";
@@ -52,4 +54,10 @@ export function encryptJson(value: unknown): string {
 
 export function decryptJson<T>(payload: string): T {
   return JSON.parse(decrypt(payload)) as T;
+}
+
+/** TOTP secrets and similar: decrypt AES-GCM, or return legacy plaintext. */
+export function revealSecret(value: string) {
+  if (value.startsWith(`${PREFIX}:`)) return decrypt(value);
+  return value;
 }

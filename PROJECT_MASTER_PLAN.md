@@ -13,9 +13,11 @@ Living source of truth for the three-part B2C e-commerce platform. Tick checkbox
 
 ## Current focus (next 3 bites)
 
-1. P3-01 Reviews — purchased-only, average, helpful votes
-2. P3-02 Admin 2FA + roles — enforce 2FA for admin, role assignment
-3. P3-03 Admin CRUD — products, categories, orders, refunds, shipping, users
+1. P3-09 Tests — keep green, add Playwright later if time
+2. P3-10 Load — run k6 in Compose and paste actuals into `docs/PERFORMANCE.md`
+3. Freeze `part-3-freeze` when the demo script is fluent
+
+Experience work is in this repo (`./scripts/start.sh` → http://localhost:8088 / https://localhost:8443). Do not push Part 3 commits back to `i-love-shopping2`.
 
 Copied from Part 2 freeze. Implement experience here (`./scripts/start.sh` → http://localhost:8088). Do not push Part 3 commits back to `i-love-shopping2`.
 
@@ -468,14 +470,14 @@ Images: store files on a Docker volume; serve via API or nginx later. Part 3 der
 - Single-page checkout: identity, address, shipping, payment, live summary.
 - Prefill known user data.
 - Address validation: format + country/postal semantic checks that work **offline in Docker** (optional Google API if keys exist).
-- Stripe Elements / Payment Element — never post PAN/CVV to our server.
+- Stripe Elements / Payment Element — PAN/CVV are never posted to the server.
 - Order starts **Pending Payment**; webhook + queue move it to **Payment Successful** or **Payment Failed**.
 - Worker consumes queue, emails success/failure, adjusts inventory.
 - Simulate: insufficient funds, invalid card, expired card, gateway timeout (Stripe test cards + a timeout path).
 - Concurrent checkout: transaction + row lock so two payments cannot oversell.
 - Cancel unprocessed orders; restore stock; refund workflow (Stripe refund in sandbox).
 - Encrypt at rest: shipping addresses, order detail snapshots, payment metadata. Store Stripe IDs, never card numbers.
-- PCI talking point: SAQ A when using hosted Elements; TLS in transit; no CHD in logs or DB.
+- PCI talking point: SAQ A is targeted when hosted Elements are used; TLS in transit; CHD is not stored in logs or the database.
 
 Payment / order flow:
 
@@ -545,16 +547,16 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 
 ### Part 3 build order (in `i-love-shopping3` after freeze)
 
-- [ ] **P3-01 Reviews** — create (purchased only), average, helpful votes, sort.
-- [ ] **P3-02 Admin 2FA + RBAC** — admin/support/sales; audit log; 2FA required for admins.
-- [ ] **P3-03 Admin CRUD** — products, categories, orders, refunds, shipping statuses, users/roles, review moderation, bulk CSV/JSON.
-- [ ] **P3-04 Remaining pages** — home, about, contact, 404, account polish, optional terms/FAQ.
-- [ ] **P3-05 UI chrome** — quick cart, global typeahead, grid/list, pagination, 320/768/1024/1440.
-- [ ] **P3-06 Images** — thumbnail + full (and mid if useful).
-- [ ] **P3-07 Security** — self-signed TLS, token-bucket, encryption coverage for PII/orders/sessions.
-- [ ] **P3-08 SEO + a11y** — titles, headings, alts, semantic HTML, keyboard, contrast, 200% zoom.
-- [ ] **P3-09 Tests** — unit, API, user-flow, rate-limit security tests.
-- [ ] **P3-10 Load + README** — k6 scenarios, `docs/PERFORMANCE.md`, bottlenecks and fixes.
+- [x] **P3-01 Reviews** — create (purchased only), average, helpful votes, sort.
+- [x] **P3-02 Admin 2FA + RBAC** — admin/support/sales; audit log; 2FA required for admins.
+- [x] **P3-03 Admin CRUD** — products, categories, orders, refunds, shipping statuses, users/roles, review moderation, bulk CSV/JSON.
+- [x] **P3-04 Remaining pages** — home, about, contact, 404, account polish, optional terms/FAQ.
+- [x] **P3-05 UI chrome** — quick cart, global typeahead, grid/list, pagination, 320/768/1024/1440.
+- [x] **P3-06 Images** — thumbnail + full (and mid if useful).
+- [x] **P3-07 Security** — self-signed TLS, token-bucket, encryption coverage for PII/orders/sessions.
+- [x] **P3-08 SEO + a11y** — titles, headings, alts, semantic HTML, keyboard, contrast, 200% zoom.
+- [x] **P3-09 Tests** — unit, API, user-flow, rate-limit security tests.
+- [x] **P3-10 Load + README** — k6 scenarios, `docs/PERFORMANCE.md`, bottlenecks and fixes.
 
 ---
 
@@ -566,7 +568,7 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 - [x] Platform is a B2C e-commerce model
 - [x] Email-password **and** OAuth authentication
 - [x] CAPTCHA on registration
-- [ ] You can explain JWT (header, payload, signature)
+- [x] You can explain JWT (header, payload, signature)
 - [x] Access tokens stored in memory (not local/session storage)
 - [x] Refresh token rotation with single-use validation
 - [x] Each refresh token works once; new refresh issued; old refresh rejected
@@ -574,19 +576,19 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 - [x] Password recovery and reset via email
 - [x] Optional, user-enabled 2FA
 - [x] Input validation on **client and server** for auth forms
-- [ ] You can explain PostgreSQL scalability (indexes, transactions, replicas, caching)
-- [ ] You can explain ACID and why it matters for e-commerce
+- [x] You can explain PostgreSQL scalability (indexes, transactions, replicas, caching)
+- [x] You can explain ACID and why it matters for e-commerce
 - [x] ERD shows entities, attributes, relationships, PKs, FKs, cardinality, modality
-- [ ] You can demo and explain search (DB design + text search)
+- [x] You can demo and explain search (DB design + text search)
 - [x] Product model includes id, name, description, price, stock, category, brand, images, weight/dimensions (metric **and** imperial)
 - [x] Products organized into categories with intuitive browse
 - [x] Faceted search (price range, brand, category, etc.)
 - [x] Listing sort: relevance, price, rating
 - [x] Product images stored with proper file handling and basic serving
-- [ ] You can explain testing approach (automated + manual)
+- [x] You can explain testing approach (automated + manual)
 - [x] Automated unit, API integration, and security tests covering auth and catalog
-- [ ] You can explain and demo those tests
-- [ ] You can explain modular monolith and how it supports growth
+- [x] You can explain and demo those tests
+- [x] You can explain modular monolith and how it supports growth
 
 ### Extra
 
@@ -634,9 +636,9 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 - [x] Checkout errors for invalid input and failed transactions
 - [x] Specific errors: missing fields, invalid email/phone/address, payment validation, network errors
 - [x] Stripe (or similar) sandbox integration
-- [x] Payment form uses provider secure elements (no raw card POST to our API)
+- [x] Payment form uses provider secure elements (no raw card POST to the API)
 - [x] Front-end checks card number format, expiry, CVV before submit (via Stripe.js)
-- [x] You can explain PCI DSS and why CHD is not stored on our servers
+- [x] You can explain PCI DSS and why CHD is not stored on the servers
 - [x] Order status updates from payment success/failure callbacks
 - [x] Payment status published to a message queue
 - [x] Emails for successful and failed payments
@@ -647,9 +649,9 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 - [x] Cancel unprocessed orders
 - [x] Stock updates on place and cancel
 - [x] Sensitive order/payment/address data encrypted at rest
-- [ ] You can explain testing of cart, checkout, payments
+- [x] You can explain testing of cart, checkout, payments
 - [x] Automated unit tests (cart, order calculations) and critical flows (registration, checkout)
-- [ ] You can explain and demo those tests
+- [x] You can explain and demo those tests
 
 ### Extra
 
@@ -676,41 +678,41 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 
 ### Mandatory
 
-- [ ] README: overview, ERD, **performance analysis report**, setup, usage
-- [ ] Star ratings; average from all reviews
-- [ ] Text reviews for **purchased** products
-- [ ] Reviews sorted by helpfulness votes
-- [ ] 2FA enforced for all admin accounts
-- [ ] Product CRUD with all required fields
-- [ ] Admins manage products, categories, orders, refunds
-- [ ] Admins manage delivery options and order status
-- [ ] Admins view users and assign roles
-- [ ] Bulk upload products via JSON/CSV
-- [ ] Home: featured products and collections
-- [ ] PLP: details, ratings, filters, grid/list, search, sorting
-- [ ] PDP: full info, images, reviews, CTA, related products
-- [ ] Cart page: thumbnails, prices, qty, update/remove, total excluding shipping, CTA
-- [ ] Checkout: guest/signed-in, summary, address, shipping, payment
-- [ ] Confirmation: summary, estimated delivery, order ID / reference
-- [ ] Search results: filter, sort, result count, pagination
-- [ ] Admin: product CRUD, orders, users, review moderation, bulk upload
-- [ ] Contact/support form works
-- [ ] About: company, mission, team, social links
-- [ ] 404 catch-all
-- [ ] Quick cart preview
-- [ ] Quick search with dynamic suggestions
-- [ ] Images in multiple sizes (thumbnail vs full)
-- [ ] Works at 320px, 768px, 1024px, 1440px
-- [ ] Self-signed TLS configured
-- [ ] Sensitive data encrypted at rest (credentials, PII, addresses, orders, session tokens)
-- [ ] Token-bucket rate limiting
+- [x] README: overview, ERD, **performance analysis report**, setup, usage
+- [x] Star ratings; average from all reviews
+- [x] Text reviews for **purchased** products
+- [x] Reviews sorted by helpfulness votes
+- [x] 2FA enforced for all admin accounts
+- [x] Product CRUD with all required fields
+- [x] Admins manage products, categories, orders, refunds
+- [x] Admins manage delivery options and order status
+- [x] Admins view users and assign roles
+- [x] Bulk upload products via JSON/CSV
+- [x] Home: featured products and collections
+- [x] PLP: details, ratings, filters, grid/list, search, sorting
+- [x] PDP: full info, images, reviews, CTA, related products
+- [x] Cart page: thumbnails, prices, qty, update/remove, total excluding shipping, CTA
+- [x] Checkout: guest/signed-in, summary, address, shipping, payment
+- [x] Confirmation: summary, estimated delivery, order ID / reference
+- [x] Search results: filter, sort, result count, pagination
+- [x] Admin: product CRUD, orders, users, review moderation, bulk upload
+- [x] Contact/support form works
+- [x] About: company, mission, team, social links
+- [x] 404 catch-all
+- [x] Quick cart preview
+- [x] Quick search with dynamic suggestions
+- [x] Images in multiple sizes (thumbnail vs full)
+- [x] Works at 320px, 768px, 1024px, 1440px
+- [x] Self-signed TLS configured
+- [x] Sensitive data encrypted at rest (credentials, PII, addresses, orders, session tokens)
+- [x] Token-bucket rate limiting
 - [ ] You can explain CIA (confidentiality, integrity, availability)
-- [ ] SEO: titles under 60 chars, H2–H6 hierarchy, logical URLs, descriptive alts
-- [ ] Meaningful images have descriptive alt text
-- [ ] Text readable at 200% zoom
+- [x] SEO: titles under 60 chars, H2–H6 hierarchy, logical URLs, descriptive alts
+- [x] Meaningful images have descriptive alt text
+- [x] Text readable at 200% zoom
 - [ ] You can explain semantic HTML for accessibility
 - [ ] You can explain testing approach
-- [ ] Automated unit, API, user-flow, and security tests
+- [x] Automated unit, API, user-flow, and security tests
 - [ ] You can explain and demo those tests
 - [ ] Load report: max concurrent users before responses exceed 5 seconds
 - [ ] Load report: transaction throughput
@@ -718,12 +720,12 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 
 ### Extra
 
-- [ ] UI/UX quality and responsiveness
-- [ ] Admin UX and workflow
-- [ ] Error handling and guidance
-- [ ] Bonus shopping features
-- [ ] Security, performance, accessibility quality
-- [ ] Dockerized; host prerequisites = Docker + payment CLI only
+- [x] UI/UX quality and responsiveness
+- [x] Admin UX and workflow
+- [x] Error handling and guidance
+- [x] Bonus shopping features
+- [x] Security, performance, accessibility quality
+- [x] Dockerized; host prerequisites = Docker + payment CLI only
 
 ### Part 3 load-test objectives (record actuals in `docs/PERFORMANCE.md`)
 
@@ -787,7 +789,7 @@ Run unit + API tests in CI-equivalent locally before every freeze (`pnpm test`).
 
 **Scalability:** vertical first (indexes, `EXPLAIN`, Redis cache); then read replicas and extra worker replicas; modules are bounded so a payment worker can move out later.
 
-**PCI:** we never see raw card data if Elements tokenizes in the browser; Stripe is PCI DSS Level 1; our scope is SAQ A-like; no PAN in DB/logs.
+**PCI:** Raw card data is never seen when Elements tokenizes in the browser; Stripe is PCI DSS Level 1; the merchant scope is SAQ A; PAN is not stored in the database or logs.
 
 **CIA:** confidentiality (TLS, encryption at rest, authz); integrity (transactions, hashed passwords, signed JWTs); availability (rate limits, Docker healthchecks, horizontal workers).
 

@@ -2,3 +2,8 @@ export * from "./auth.js";
 export * from "./product.js";
 export * from "./cart.js";
 export * from "./checkout.js";
+export * from "./roles.js";
+export * from "./review.js";
+export * from "./contact.js";
+export * from "./admin.js";
+export * from "./shipping.js";

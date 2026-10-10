@@ -1,4 +1,4 @@
-# Part 1 and Part 2 review explanations
+# Part 1–3 review explanations
 
 Written answers for the “student can explain / demonstrate” items. The live demo still matters; this document is the same story in writing so reviewers can read it before or after the call.
 
@@ -165,9 +165,9 @@ Unit tests always run. API/security tests skip if the database is down, so a lap
 
 We do not pretend CAPTCHA or Google’s redirect can be fully trusted from unit tests alone (test keys / bypass tokens exist only for `NODE_ENV=test`).
 
-### How I test cart, checkout, and payments (Part 2 oral)
+### Testing of cart, checkout, and payments
 
-I split **pure money math** from **HTTP + database** so I can say what each layer is allowed to prove.
+**Pure money math** is split from **HTTP + database**.
 
 **Cart**
 
@@ -180,14 +180,14 @@ I split **pure money math** from **HTTP + database** so I can say what each laye
 
 **Payments**
 
-- Stripe is mocked at the SDK in `payment.api.test.ts`. I still hit our real routes and Postgres.
+- Stripe is mocked at the SDK in `payment.api.test.ts`. Routes and Postgres are real.
 - Place order → stock decrements immediately, cart empties, status `PENDING_PAYMENT`, client secret returned. A **signed** `payment_intent.succeeded` webhook (or the inline queue in tests) marks the order `PAID`. Shipping ciphertext still has no plaintext city.
 - `payment_intent.payment_failed` restores stock **and** puts the lines back in the cart.
 - `X-Volt-Simulate: stripe-timeout` on place returns **504** and does **not** decrement stock (gateway never created an intent).
 - Two agents checkout the last unit in `Promise.all`: statuses are `[201, 409]`, remaining stock is 0.
 - Tests set `QUEUE_INLINE=true` so the worker handler runs in-process. In Docker, the same handler is `apps/worker` consuming RabbitMQ.
 
-**What I still demo by hand:** Stripe.js Payment Element (no PAN on our Network tab), Mailpit HTML confirmation, RabbitMQ `payment.status`, decline cards `4000…9995` / `4000…0069`.
+**Still demoed by hand:** Stripe.js Payment Element (no PAN on the shop Network tab), Mailpit HTML confirmation, RabbitMQ `payment.status`, decline cards `4000…9995` / `4000…0069`.
 
 ---
 
@@ -210,31 +210,64 @@ I chose a **modular monolith**, not a distributed set of microservices.
 
 ---
 
-## 8. PCI DSS and why card data is not on our servers
+## 8. PCI DSS and why cardholder data is not stored on the servers
 
-PCI DSS is the card-brand security standard. How much of it you must operate yourself depends on **whether cardholder data (CHD) ever touches your systems**.
+PCI DSS is the card-brand security standard. How much of it must be operated by the merchant depends on whether **cardholder data (CHD)** — PAN, expiry, CVC — ever touches the merchant systems.
 
-| If we… | Then we… |
+| If PAN / CVC is… | Then the shop… |
 | --- | --- |
-| Collect PAN / CVV in our HTML and POST it to Express | Become a full CHD environment (SAQ D-level pain): encryption, logging bans, quarterly scans, tight access |
-| Use **Stripe.js / Payment Element** so the iframe talks only to Stripe | Qualify for **SAQ A**: the form is hosted by the PCI-certified provider |
+| Collected in shop HTML and posted to Express | Becomes a CHD environment (SAQ D-level): encryption of PAN, logging bans, quarterly scans |
+| Collected by **Stripe.js / Payment Element** so the iframe talks only to Stripe | Qualifies for **SAQ A**: the form is hosted by a PCI DSS Level 1 provider |
 
-Volt & Co does the second. `POST /checkout/place` creates a PaymentIntent and returns a **client secret**. The browser confirms the card with Stripe. Our webhook (and the sync fallback) only see PaymentIntent **ids and statuses**, then publish that outcome to RabbitMQ. Postgres stores those ids plus AES-256-GCM order snapshots — never card numbers. The worker, not the webhook request, sends email and adjusts inventory.
+The second option is used.
 
-Demo: Network tab on Pay — no `card`, `cvc`, or `exp` fields on our API. Stripe test cards for success vs insufficient funds vs expired. Mailpit for the confirmation email. RabbitMQ management (`payment.status`) plus worker logs.
+1. `POST /checkout/place` creates a Stripe PaymentIntent and a **client secret** is returned. Stock is reserved in the same request. No card fields are accepted on that body.
+2. The card is confirmed **with Stripe**. Number format, expiry, and CVC are checked by Stripe.js before submit.
+3. The shop webhook is called by Stripe (or `/checkout/orders/:id/sync` is hit by the shopper). Only PaymentIntent **ids and statuses** are received.
+4. That outcome is published to RabbitMQ. Stripe ids plus AES-256-GCM snapshots of address and contact are stored in Postgres — never PAN, expiry, or CVC. Public TLS is the `tls` nginx service. The worker, not the webhook request, sends email and adjusts inventory.
+
+**Demo:** Network tab on Pay — no `card`, `cvc`, or `exp` on the shop API. Stripe test cards. Mailpit. RabbitMQ `payment.status`.
 
 Code: `apps/web/src/pages/CheckoutPay.tsx`, `apps/api/src/services/order.service.ts`, `apps/api/src/lib/queue.ts`, `apps/api/src/worker.ts`, `apps/api/src/routes/webhooks.ts`.
 
 ---
 
+## 9. CIA (confidentiality, integrity, availability)
+
+| Goal | How this shop does it |
+| --- | --- |
+| **Confidentiality** | TLS at nginx (`https://localhost:8443`); AES-256-GCM for addresses, order snapshots, payment metadata, audit `metaEnc`; access JWT only in memory; staff 2FA; RBAC on `/admin` |
+| **Integrity** | Signed JWTs; Argon2 password hashes; checkout `SELECT FOR UPDATE`; purchased-only reviews; audit log of staff writes |
+| **Availability** | Docker healthchecks; Redis token-bucket (429 before the process melts); worker can scale off HTTP; k6 report in `docs/PERFORMANCE.md` |
+
+---
+
+## 10. Semantic HTML and accessibility
+
+We use native landmarks (`header`, `nav`, `main`, `footer`, `aside`, `article`), one `h1` per page, `h2` for sections, real `button`s (not clickable `div`s), `label` + `for` on filters, a skip link, and `:focus-visible` outlines. Star ratings expose an `aria-label`. Contrast for body text is forest-on-paper; star glyphs use a darker gold (`#7a5a12`) so they stay readable. Font sizes are `rem`, so 200% zoom still reflows (header stacks under 600px).
+
+---
+
+## 11. Part 3 tests (reviews, admin, rate limit)
+
+- Unit: `apps/api/src/lib/review.test.ts` (average + Zod), `apps/api/src/lib/rate-limit.test.ts` (Redis token bucket).
+- API: `apps/api/test/reviews.api.test.ts` (403 without purchase, 201 after a paid order, sort + vote).
+- Admin: `apps/api/test/admin.api.test.ts` (MFA required, CRUD, bulk JSON, refuse staff role without 2FA).
+- Security: unauthenticated `/admin/users` is 401.
+
+Demo: `docker compose exec api pnpm test`. For load: `docker compose --profile load run --rm k6` and open `docs/PERFORMANCE.md`.
+
+---
+
 ## Quick demo script (same as README, with “explain” beats)
 
-1. `./scripts/start.sh` → storefront http://localhost:8088, Mailpit http://localhost:8025.
+1. `./scripts/start.sh` → https://localhost:8443 (accept the cert) or http://localhost:8088, Mailpit http://localhost:8025.
 2. Login `customer@volt.test` / `Shopping123`. Show empty Local Storage. Open jwt.io on an access token from the Network tab (header / payload / signature).
 3. Call refresh twice with the **first** refresh token (or use the automated test) — second call 401 “reuse”.
-4. Catalog facets + sort + typeahead; open a PDP and point at metric and imperial dimensions.
-5. Guest: add to cart, refresh, still there; hit stock limit. Sign in: cart merges.
-6. Checkout: prefill, bad postcode field error, Pay with `4242…4242`; Mailpit HTML confirmation; order timeline.
-7. Decline card `4000…9995` → failed email, stock back, Return to cart. Point at RabbitMQ `payment.status` and worker logs.
-8. `docker compose exec api pnpm test` — name cart math, checkout validation, Stripe webhook, and the last-unit race.
-9. Walk ACID (row lock) + PCI (SAQ A, no PAN) + “why not microservices” from sections 3, 4, 7, and 8.
+4. Catalog facets + sort + typeahead + grid/list; open a PDP (thumbs + full, metric/imperial, reviews).
+5. Leave/vote a review on the seeded Sony purchase; average updates.
+6. Guest: add to cart, refresh, still there; header quick cart. Sign in: cart merges.
+7. Checkout: prefill, bad postcode field error, Pay with `4242…4242`; confirmation shows `VC-` reference + estimated delivery; Mailpit HTML.
+8. Admin `admin@volt.test` + TOTP `DEMOADMIN2FASECRETKEYAA`: CRUD, bulk CSV, hide a review, change shipment, refuse a role until 2FA.
+9. Contact form → Mailpit; unknown URL → 404; burst `/auth/login` → 429.
+10. `docker compose exec api pnpm test` then k6 + `docs/PERFORMANCE.md`. Walk ACID, PCI, CIA, semantic HTML.

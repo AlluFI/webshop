@@ -4,6 +4,7 @@ import { ORDER_STATUSES } from "@volt/shared";
 import { api, userErrorMessage } from "../api";
 import { useAuth } from "../auth";
 import { money } from "../product";
+import { PageMeta } from "../seo";
 
 type OrderRow = {
   id: string;
@@ -64,6 +65,10 @@ export function OrdersPage() {
 
   return (
     <section>
+      <PageMeta
+        title="Orders — Volt & Co"
+        description="View your Volt & Co order history, filter by status and date, and open a confirmation with delivery estimates."
+      />
       <p className="kicker">Account</p>
       <h1>Orders</h1>
       {error && <p className="banner error">{error}</p>}

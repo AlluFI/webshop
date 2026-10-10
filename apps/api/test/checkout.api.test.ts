@@ -79,6 +79,7 @@ describeLive("checkout API", () => {
       .send({ ...address, label: "Home", isDefault: true });
     expect(created.status).toBe(201);
     const stored = await prisma.address.findFirstOrThrow({ where: { id: created.body.id } });
+    expect(stored.cityEnc.startsWith("v1:")).toBe(true);
     expect(stored.cityEnc).not.toContain("Helsinki");
     expect(decrypt(stored.cityEnc)).toBe("Helsinki");
 

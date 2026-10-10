@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOrderPaidEmail, formatMoney, humanStatus } from "./order-email.js";
+import { buildOrderPaidEmail, buildOrderShippedEmail, formatMoney, humanStatus } from "./order-email.js";
 
 const sample = {
   orderId: "af7f062c-35bd-4d80-a438-528a2c703c0f",
@@ -56,5 +56,55 @@ describe("order confirmation email", () => {
   it("humanizes payment status labels", () => {
     expect(humanStatus("PAYMENT_FAILED")).toBe("Payment Failed");
     expect(humanStatus("SUCCEEDED")).toBe("Succeeded");
+  });
+
+  it("includes the decline reason and cart link when payment failed", () => {
+    const mail = buildOrderPaidEmail({
+      ...sample,
+      status: "PAYMENT_FAILED",
+      paymentStatus: "FAILED",
+      failureReason: "Your card has insufficient funds.",
+      cartUrl: "http://localhost:8088/cart",
+    });
+    expect(mail.subject).toMatch(/did not go through/i);
+    expect(mail.text).toContain("insufficient funds");
+    expect(mail.text).toContain("http://localhost:8088/cart");
+    expect(mail.html).toContain("Payment Failed");
+    expect(mail.html).toContain("Return to cart");
+    expect(mail.html).toContain("Framework Laptop 13");
+    expect(mail.html).not.toContain("<test>");
+  });
+});
+
+describe("order shipped email", () => {
+  it("includes tracking, ETA, store order link, and Finnish carrier pages", () => {
+    const mail = buildOrderShippedEmail({
+      ...sample,
+      status: "SHIPPED",
+      carrier: "posti",
+      carrierName: "Posti",
+      trackingCode: "JJFI66012700410158170/32109367922",
+      trackingUrl: "https://www.posti.fi/en/tracking/JJFI66012700410158170/32109367922",
+      carrierPages: [
+        { name: "Posti", url: "https://www.posti.fi/en/tracking/JJFI66012700410158170/32109367922" },
+        { name: "PostNord", url: "https://www.postnord.fi/en/our-tools/track-and-trace" },
+        { name: "Budbee", url: "https://tracking.budbee.com/" },
+      ],
+      estimatedDeliveryLabel: "17–19 Sep",
+      estimatedDeliveryFrom: "2026-09-17",
+      estimatedDeliveryTo: "2026-09-19",
+    });
+    expect(mail.subject).toMatch(/on the way/i);
+    expect(mail.text).toContain("JJFI66012700410158170/32109367922");
+    expect(mail.text).toContain("https://www.posti.fi/en/tracking/JJFI66012700410158170/32109367922");
+    expect(mail.text).toContain("17–19 Sep");
+    expect(mail.text).toContain(sample.orderUrl);
+    expect(mail.text).toContain("Posti");
+    expect(mail.text).toContain("PostNord");
+    expect(mail.text).toContain("Budbee");
+    expect(mail.html).toContain("Track with Posti");
+    expect(mail.html).toContain("View your order at Volt");
+    expect(mail.html).toContain("https://www.posti.fi/en/tracking/JJFI66012700410158170/32109367922");
+    expect(mail.html).not.toContain("<test>");
   });
 });

@@ -161,7 +161,7 @@ export function AddToCartButton({
   }
 
   return (
-    <div>
+    <div className="add-to-cart">
       <button className={compact ? "ghost" : "primary"} type="button" disabled={pending} onClick={() => void add()}>
         {pending ? "Adding…" : "Add to cart"}
       </button>

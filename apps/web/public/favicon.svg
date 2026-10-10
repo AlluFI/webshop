@@ -1,4 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#1f3d34"/>
-  <path d="M8 12h16l-8 12z" fill="#e6c36a"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Volt &amp; Co">
+  <rect width="32" height="32" rx="7" fill="#1f3d34"/>
+  <path
+    fill="#e6c36a"
+    d="M7.05 7.9h5.35c.4 0 .66.14.8.52L16 20.15l2.8-11.73c.14-.38.4-.52.8-.52h5.35c.55 0 .86.5.66 1.02L17.58 25.1c-.24.64-.7 1-1.34 1h-.48c-.64 0-1.1-.36-1.34-1L6.39 8.92c-.2-.52.11-1.02.66-1.02z"
+  />
+  <path
+    fill="#f7efc8"
+    opacity=".28"
+    d="M8.7 9.15h3.15L16 22.2 9.95 9.7c-.16-.32.02-.55.35-.55z"
+  />
 </svg>

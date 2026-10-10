@@ -4,11 +4,13 @@ import { Link } from "react-router-dom";
 import { api, userErrorMessage } from "../api";
 import { useCart } from "../cart";
 import { ProductCard, money, type Product } from "../product";
+import { PageMeta } from "../seo";
 
 export function CartPage() {
   const { cart, ready, error, refresh, updateItem, removeItem } = useCart();
   const [related, setRelated] = useState<Product[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -38,16 +40,31 @@ export function CartPage() {
   async function onQuantity(itemId: string, quantity: number) {
     try {
       await updateItem(itemId, quantity);
+      setActionError("");
     } catch (err) {
-      window.alert(userErrorMessage(err, "Could not update quantity"));
+      setActionError(userErrorMessage(err, "Could not update quantity"));
+    }
+  }
+
+  async function onRemove(itemId: string) {
+    try {
+      await removeItem(itemId);
+      setActionError("");
+    } catch (err) {
+      setActionError(userErrorMessage(err, "Could not remove this item"));
     }
   }
 
   return (
     <section>
+      <PageMeta
+        title="Cart — Volt & Co"
+        description="Review items in your Volt & Co cart, update quantities, and continue to checkout. Totals exclude shipping until you choose a method."
+      />
       <p className="kicker">Your bag</p>
       <h1>Cart</h1>
       {error && <p className="banner error">{error}</p>}
+      {actionError && <p className="banner error">{actionError}</p>}
       {cart.warnings.map((warning) => (
         <p key={warning.productId} className="banner error">
           {warning.message}
@@ -82,7 +99,7 @@ export function CartPage() {
                       onChange={(event) => void onQuantity(item.id, Number(event.target.value))}
                     />
                   </label>
-                  <button className="link" type="button" onClick={() => void removeItem(item.id)}>
+                  <button className="link" type="button" onClick={() => void onRemove(item.id)}>
                     Remove
                   </button>
                 </div>

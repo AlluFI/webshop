@@ -1,6 +1,5 @@
 import {
   CHECKOUT_COUNTRIES,
-  FREE_STANDARD_THRESHOLD,
   checkoutQuoteSchema,
   checkoutValidateSchema,
   type AddressInput,
@@ -8,9 +7,10 @@ import {
 } from "@volt/shared";
 import { prisma } from "../prisma.js";
 import { HttpError } from "../http-error.js";
-import { orderTotal, shippingCost, taxAmount } from "../lib/cart-math.js";
+import { orderTotal, taxAmount } from "../lib/cart-math.js";
 import { cartService, type CartContext } from "./cart.service.js";
 import { addressService } from "./address.service.js";
+import { shippingService } from "./shipping.service.js";
 
 function countryName(code: string) {
   return CHECKOUT_COUNTRIES.find((country) => country.code === code)?.name ?? code;
@@ -28,29 +28,24 @@ async function resolveAddress(userId: string | undefined, input: {
   return null;
 }
 
-function quoteFromCart(
+async function quoteFromCart(
   cart: Awaited<ReturnType<typeof cartService.get>>["dto"],
   method: ShippingMethod,
 ) {
   if (cart.items.length === 0) {
     throw new HttpError(400, "Your cart is empty.", { cart: "Add an item before checkout." });
   }
-  const shipping = shippingCost(method, cart.subtotal);
+  const quoted = await shippingService.quote(method, cart.subtotal);
   const tax = taxAmount(cart.subtotal);
   return {
     items: cart.items,
     itemCount: cart.itemCount,
     subtotal: cart.subtotal,
     shippingMethod: method,
-    shippingCost: shipping,
-    shippingLabel:
-      method === "express"
-        ? "Express (1–2 business days)"
-        : shipping === 0
-          ? `Standard (free over €${FREE_STANDARD_THRESHOLD})`
-          : "Standard (3–5 business days)",
+    shippingCost: quoted.cost,
+    shippingLabel: quoted.label,
     tax,
-    total: orderTotal(cart.subtotal, shipping, tax),
+    total: orderTotal(cart.subtotal, quoted.cost, tax),
     warnings: cart.warnings,
   };
 }
@@ -76,7 +71,7 @@ export const checkoutService = {
   async quote(ctx: CartContext, input: unknown) {
     const dto = checkoutQuoteSchema.parse(input);
     const cart = await cartService.get(ctx);
-    const summary = quoteFromCart(cart.dto, dto.shippingMethod);
+    const summary = await quoteFromCart(cart.dto, dto.shippingMethod);
     const address = await resolveAddress(ctx.userId, dto);
     return {
       ...summary,
@@ -93,7 +88,7 @@ export const checkoutService = {
   async validate(ctx: CartContext, input: unknown) {
     const dto = checkoutValidateSchema.parse(input);
     const cart = await cartService.get(ctx);
-    const summary = quoteFromCart(cart.dto, dto.shippingMethod);
+    const summary = await quoteFromCart(cart.dto, dto.shippingMethod);
     let address = await resolveAddress(ctx.userId, dto);
     if (!address) {
       throw new HttpError(400, "Shipping address is required", {

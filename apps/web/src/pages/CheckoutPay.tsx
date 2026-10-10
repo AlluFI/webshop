@@ -68,7 +68,7 @@ function PayForm({
       } catch (err) {
         setError(
           err instanceof ApiError && err.isNetwork
-            ? "Payment may have gone through, but we could not confirm it. Opening your order…"
+            ? "Payment may have gone through, but it could not be confirmed. Opening the order…"
             : userErrorMessage(err, "Payment may have succeeded. Opening your order to check."),
         );
       }
@@ -83,9 +83,10 @@ function PayForm({
   return (
     <div>
       {error && <p className="banner error">{error}</p>}
+      {/* Stripe.js validates number, expiry, and CVC inside this iframe. */}
       <PaymentElement options={{ layout: "tabs" }} />
       <p className="muted" style={{ marginTop: 12 }}>
-        Card number, expiry, and CVC are collected by Stripe.js. We never see the raw card.
+        Card number, expiry, and CVC are collected by Stripe.js. The raw card is never received by this shop.
       </p>
       <button className="primary" type="button" onClick={() => void onPay()} disabled={!stripe || busy} style={{ marginTop: 12 }}>
         {busy ? "Paying…" : `Pay ${money(total)}`}

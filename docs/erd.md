@@ -140,13 +140,45 @@ erDiagram
   }
 ```
 
-## Part 3 — planned
+## Part 3 — implemented
 
-Reviews, votes, and admin audit logs still wait for Part 3.
+Reviews are purchased-only (`PAID` / `PROCESSING` / `SHIPPED` / `DELIVERED`). Helpful votes are unique per user. Product `averageRating` / `reviewCount` are recalculated from published reviews. Staff actions write an encrypted audit row. Shipping options are editable in admin.
 
 ```mermaid
 erDiagram
   Product ||--o{ Review : receives
   User ||--o{ Review : writes
   Review ||--o{ ReviewVote : scoredBy
+  User ||--o{ ReviewVote : casts
+  User ||--o{ AuditLog : records
+  User }o--|| Role : has
+
+  Review {
+    uuid id PK
+    uuid productId FK
+    uuid userId FK
+    int stars
+    string body
+    int helpfulCount
+    string status
+  }
+  ReviewVote {
+    uuid id PK
+    uuid reviewId FK
+    uuid userId FK
+  }
+  AuditLog {
+    uuid id PK
+    uuid actorId FK
+    string action
+    string entity
+    string metaEnc
+  }
+  ShippingOption {
+    uuid id PK
+    string code UK
+    decimal price
+    int minDays
+    int maxDays
+  }
 ```

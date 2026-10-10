@@ -33,9 +33,16 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_ERLANG_COOKIE: voltco-dev-cookie
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -128,6 +135,27 @@ services:
     ports:
       - "8088:80"
 
+  tls:
+    build:
+      context: ./nginx
+    depends_on:
+      - web
+    ports:
+      - "8443:443"
+
+  k6:
+    image: grafana/k6:latest
+    profiles: ["load"]
+    volumes:
+      - ./load-tests:/scripts
+    environment:
+      BASE_URL: http://web:80
+    command: ["run", "/scripts/shop.js"]
+    depends_on:
+      - web
+      - api
+
 volumes:
   postgres_data:
   uploads_data:
+  rabbitmq_data:

@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import ReCAPTCHA from "react-google-recaptcha";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { loginSchema, registerSchema, resetPasswordSchema } from "@volt/shared";
+import { loginSchema, registerSchema, resetPasswordSchema, isStaffRole } from "@volt/shared";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
+import { PageMeta } from "../seo";
 
 const siteKey =
   import.meta.env.VITE_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
@@ -103,6 +104,10 @@ export function RegisterPage() {
 
   return (
     <div className="auth-card">
+      <PageMeta
+        title="Register — Volt & Co"
+        description="Create a Volt & Co account to save addresses, track orders, and leave reviews on products you bought."
+      />
       <h1>Create an account</h1>
       {done && <p className="banner ok">{done} Open Mailpit at localhost:8025 if you are on Docker.</p>}
       {error && <p className="banner error">{error}</p>}
@@ -176,8 +181,8 @@ export function LoginPage() {
         return;
       }
       if (result.accessToken) {
-        await setSession(result.accessToken);
-        navigate("/account");
+        const profile = await setSession(result.accessToken);
+        navigate(isStaffRole(profile.role) ? "/admin" : "/account");
       }
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
@@ -196,8 +201,8 @@ export function LoginPage() {
           backupCode: String(form.get("backupCode") || "") || undefined,
         }),
       });
-      await setSession(result.accessToken);
-      navigate("/account");
+      const profile = await setSession(result.accessToken);
+      navigate(isStaffRole(profile.role) ? "/admin" : "/account");
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
     }
@@ -206,6 +211,10 @@ export function LoginPage() {
   if (mfaToken) {
     return (
       <div className="auth-card">
+        <PageMeta
+          title="Two-factor — Volt & Co"
+          description="Enter your authenticator code to finish signing in to a Volt & Co staff or customer account."
+        />
         <h1>Two-factor code</h1>
         {error && <p className="banner error">{error}</p>}
         <form onSubmit={(event) => void onMfa(event)}>
@@ -227,6 +236,10 @@ export function LoginPage() {
 
   return (
     <div className="auth-card">
+      <PageMeta
+        title="Sign in — Volt & Co"
+        description="Sign in to Volt & Co to manage orders, addresses, and reviews. Staff accounts require two-factor authentication."
+      />
       <h1>Sign in</h1>
       {error && <p className="banner error">{error}</p>}
       <form onSubmit={(event) => void onSubmit(event)}>
@@ -270,6 +283,7 @@ export function VerifyPage() {
   }, [params]);
   return (
     <div className="auth-card">
+      <PageMeta title="Verify email — Volt & Co" description="Confirm your Volt & Co email address so you can sign in and place orders." />
       <h1>Verify email</h1>
       <p>{message}</p>
       <Link to="/login">Sign in</Link>
@@ -297,6 +311,10 @@ export function ForgotPage() {
   }
   return (
     <div className="auth-card">
+      <PageMeta
+        title="Reset password — Volt & Co"
+        description="Request a Volt & Co password reset link. We email it to Mailpit in this sandbox environment."
+      />
       <h1>Reset password</h1>
       {message && <p className="banner ok">{message}</p>}
       {error && <p className="banner error">{error}</p>}
@@ -340,6 +358,7 @@ export function ResetPage() {
   }
   return (
     <div className="auth-card">
+      <PageMeta title="New password — Volt & Co" description="Choose a new password for your Volt & Co account using the reset link from email." />
       <h1>Choose a new password</h1>
       {message && <p className="banner ok">{message}</p>}
       {error && <p className="banner error">{error}</p>}

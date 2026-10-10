@@ -27,7 +27,7 @@ function mapProduct(product: {
   featured: boolean;
   category: { id: string; name: string; slug: string };
   brand: { id: string; name: string; slug: string };
-  images: { path: string; altText: string; sortOrder: number }[];
+  images: { path: string; thumbPath: string | null; altText: string; sortOrder: number }[];
   attributes: { name: string; value: string }[];
 }) {
   return {
@@ -43,6 +43,7 @@ function mapProduct(product: {
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((image) => ({
         url: `/api/v1/files/${image.path}`,
+        thumbUrl: `/api/v1/files/${image.thumbPath || image.path}`,
         altText: image.altText,
       })),
     weightKg: money(product.weightKg),
@@ -190,7 +191,13 @@ export const catalogService = {
       include,
     });
     if (!product) throw new HttpError(404, "Product not found");
-    return mapProduct(product);
+    const related = await this.recommend({
+      excludeIds: [product.id],
+      categoryIds: [product.categoryId],
+      brandIds: [product.brandId],
+      take: 4,
+    });
+    return { ...mapProduct(product), related };
   },
 
   async recommend(options: { excludeIds: string[]; categoryIds: string[]; brandIds: string[]; take?: number }) {

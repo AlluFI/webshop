@@ -1,3 +1,5 @@
+// Payment outcomes: tests call the handler in-process (QUEUE_INLINE);
+// Docker publishes to RabbitMQ and apps/worker consumes.
 import amqp from "amqplib";
 import {
   PAYMENT_STATUS_DLQ,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decrypt, encrypt, encryptJson, decryptJson } from "./crypto.js";
+import { decrypt, encrypt, encryptJson, decryptJson, revealSecret } from "./crypto.js";
 
 describe("at-rest encryption", () => {
   it("round-trips plaintext with AES-256-GCM", () => {
@@ -20,6 +20,8 @@ describe("at-rest encryption", () => {
 
   it("rejects tampered ciphertext", () => {
     const cipher = encrypt("secret-address");
+    expect(revealSecret(cipher)).toBe("secret-address");
+    expect(revealSecret("legacy-plain-totp")).toBe("legacy-plain-totp");
     const broken = `${cipher.slice(0, -2)}aa`;
     expect(() => decrypt(broken)).toThrow();
   });

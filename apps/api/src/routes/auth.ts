@@ -6,6 +6,7 @@ import { asyncHandler, validate } from "../middleware/error-handler.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { authService } from "../services/auth.service.js";
 import { googleAuthUrl, googleCallback, googleConfigured } from "../services/oauth.service.js";
+import { authRateLimit } from "../lib/rate-limit.js";
 
 export const authRouter = Router();
 
@@ -45,6 +46,7 @@ function bearer(req: { headers: { authorization?: string } }) {
 
 authRouter.post(
   "/register",
+  authRateLimit,
   asyncHandler(async (req, res) => {
     const result = await authService.register(req.body);
     res.status(201).json(result);
@@ -60,6 +62,7 @@ authRouter.post(
 
 authRouter.post(
   "/login",
+  authRateLimit,
   asyncHandler(async (req, res) => {
     const result = await authService.login(req.body);
     if ("refreshToken" in result) {
@@ -116,6 +119,14 @@ authRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     res.json(await authService.me((req as AuthedRequest).user.id));
+  }),
+);
+
+authRouter.patch(
+  "/me",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    res.json(await authService.updateProfile((req as AuthedRequest).user.id, req.body));
   }),
 );
 

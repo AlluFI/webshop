@@ -1,10 +1,12 @@
 import { Prisma } from "@prisma/client";
 import type { PaymentStatusMessage } from "@volt/shared";
+import { carrierName, carrierTrackingUrl, SHIPPING_CARRIER_META } from "@volt/shared";
 import { prisma } from "../prisma.js";
 import { config } from "../config.js";
 import { encryptJson, decrypt, decryptJson } from "../lib/crypto.js";
 import { mail } from "../mail.js";
-import type { OrderEmailShipping } from "../lib/order-email.js";
+import type { OrderEmailShipping, OrderShippedEmailDetails } from "../lib/order-email.js";
+import { shippingService } from "./shipping.service.js";
 
 export type PaymentMeta = {
   guestAccessHash: string;
@@ -205,6 +207,95 @@ export async function handlePaymentStatus(message: PaymentStatusMessage) {
     await restoreCartFromOrder(tx, payment.order, meta.cartId);
   });
 
-  await mail.sendPaymentFailed(decrypt(payment.order.contactEmailEnc), message.orderId, reason);
+  const origin = storeOrigin();
+  await mail.sendPaymentFailed({
+    orderId: payment.orderId,
+    orderUrl: `${origin}/orders/${payment.orderId}`,
+    cartUrl: `${origin}/cart`,
+    status: "PAYMENT_FAILED",
+    paymentStatus: "FAILED",
+    placedAt: payment.order.createdAt,
+    customerName: decrypt(payment.order.contactNameEnc),
+    email: decrypt(payment.order.contactEmailEnc),
+    phone: payment.order.contactPhoneEnc ? decrypt(payment.order.contactPhoneEnc) : "",
+    items: payment.order.items.map((item) => ({
+      name: item.productName,
+      quantity: item.quantity,
+      unitPrice: moneyNumber(item.unitPrice),
+      lineTotal: moneyNumber(item.lineTotal),
+      thumbnailUrl: item.thumbnailPath ? `${origin}/api/v1/files/${item.thumbnailPath}` : null,
+      productUrl: `${origin}/products/${item.product.slug}`,
+    })),
+    subtotal: moneyNumber(payment.order.subtotal),
+    shippingCost: moneyNumber(payment.order.shippingCost),
+    shippingMethod: payment.order.shippingMethod,
+    tax: moneyNumber(payment.order.tax),
+    total: moneyNumber(payment.order.total),
+    currency: payment.order.currency,
+    shipping: shippingForEmail(payment.order.shippingAddressEnc),
+    failureReason: reason,
+  });
   return { status: "PAYMENT_FAILED" as const };
+}
+
+export async function sendOrderShippedMail(orderId: string) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      items: { include: { product: { select: { slug: true } } } },
+    },
+  });
+  if (!order?.trackingCarrier || !order.trackingCode) return;
+  const carrier = order.trackingCarrier;
+  const trackingCode = order.trackingCode;
+
+  const origin = storeOrigin();
+  const options = await shippingService.list(true);
+  const option = options.find((row) => row.code === order.shippingMethod);
+  const eta =
+    order.estimatedDeliveryFrom && order.estimatedDeliveryTo
+      ? shippingService.window(order.estimatedDeliveryFrom, order.estimatedDeliveryTo)
+      : option
+        ? shippingService.estimate(option, order.shippedAt ?? new Date())
+        : { from: "", to: "", label: "Soon" };
+
+  const details: OrderShippedEmailDetails = {
+    orderId: order.id,
+    orderUrl: `${origin}/orders/${order.id}`,
+    status: "SHIPPED",
+    paymentStatus: "SUCCEEDED",
+    placedAt: order.createdAt,
+    customerName: decrypt(order.contactNameEnc),
+    email: decrypt(order.contactEmailEnc),
+    phone: order.contactPhoneEnc ? decrypt(order.contactPhoneEnc) : "",
+    items: order.items.map((item) => ({
+      name: item.productName,
+      quantity: item.quantity,
+      unitPrice: moneyNumber(item.unitPrice),
+      lineTotal: moneyNumber(item.lineTotal),
+      thumbnailUrl: item.thumbnailPath ? `${origin}/api/v1/files/${item.thumbnailPath}` : null,
+      productUrl: `${origin}/products/${item.product.slug}`,
+    })),
+    subtotal: moneyNumber(order.subtotal),
+    shippingCost: moneyNumber(order.shippingCost),
+    shippingMethod: order.shippingMethod,
+    tax: moneyNumber(order.tax),
+    total: moneyNumber(order.total),
+    currency: order.currency,
+    shipping: shippingForEmail(order.shippingAddressEnc),
+    carrier,
+    carrierName: carrierName(carrier),
+    trackingCode,
+    trackingUrl: carrierTrackingUrl(carrier, trackingCode),
+    carrierPages: Object.values(SHIPPING_CARRIER_META).map((meta) => ({
+      name: meta.name,
+      url:
+        meta.name === carrierName(carrier) ? carrierTrackingUrl(carrier, trackingCode) : meta.searchUrl,
+    })),
+    estimatedDeliveryLabel: eta.label,
+    estimatedDeliveryFrom: eta.from,
+    estimatedDeliveryTo: eta.to,
+  };
+
+  await mail.sendOrderShipped(details);
 }

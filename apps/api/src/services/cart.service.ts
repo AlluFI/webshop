@@ -38,7 +38,7 @@ function toDto(cart: CartRecord, warnings: { productId: string; message: string 
       name: item.product.name,
       slug: item.product.slug,
       price,
-      thumbnail: image ? `/api/v1/files/${image.path}` : null,
+      thumbnail: image ? `/api/v1/files/${image.thumbPath || image.path}` : null,
       thumbnailAlt: image?.altText || item.product.name,
       quantity: item.quantity,
       stockQuantity: item.product.stockQuantity,
@@ -94,6 +94,7 @@ async function createGuestCart() {
   const raw = randomToken();
   const cart = await prisma.cart.create({
     data: {
+      // Cookie holds `raw`; the database only stores the hash.
       guestToken: sha256Hex(raw),
       expiresAt: new Date(Date.now() + GUEST_TTL_MS),
     },

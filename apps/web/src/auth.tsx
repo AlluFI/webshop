@@ -21,7 +21,7 @@ type AuthContextValue = {
   accessToken: string | null;
   user: User | null;
   ready: boolean;
-  setSession: (accessToken: string) => Promise<void>;
+  setSession: (accessToken: string) => Promise<User>;
   refreshSession: () => Promise<boolean>;
   reloadUser: () => Promise<void>;
   logout: () => Promise<void>;
@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const profile = await api<User>("/auth/me", { token });
     setUser(profile);
     setAccessToken(token);
+    return profile;
   }, []);
 
   const refreshSession = useCallback(async () => {
@@ -57,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setSession = useCallback(
     async (token: string) => {
-      await loadMe(token);
+      return loadMe(token);
     },
     [loadMe],
   );
