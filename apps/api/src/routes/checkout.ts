@@ -7,6 +7,7 @@ import {
 } from "@volt/shared";
 import { asyncHandler, validate } from "../middleware/error-handler.js";
 import { optionalAuth, requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import { forbidStaffShopping } from "../middleware/rbac.js";
 import { applyCartCookie, readCartCookie } from "../lib/cart-cookie.js";
 import { checkoutService } from "../services/checkout.service.js";
 import { orderService } from "../services/order.service.js";
@@ -35,6 +36,7 @@ checkoutRouter.get("/config", (_req, res) => {
 checkoutRouter.get(
   "/prefill",
   requireAuth,
+  forbidStaffShopping,
   asyncHandler(async (req, res) => {
     res.json(await checkoutService.prefill((req as AuthedRequest).user.id));
   }),
@@ -43,6 +45,7 @@ checkoutRouter.get(
 checkoutRouter.post(
   "/quote",
   optionalAuth,
+  forbidStaffShopping,
   validate(checkoutQuoteSchema),
   asyncHandler(async (req, res) => {
     const result = await checkoutService.quote(ctx(req as AuthedRequest), req.body);
@@ -55,6 +58,7 @@ checkoutRouter.post(
 checkoutRouter.post(
   "/validate",
   optionalAuth,
+  forbidStaffShopping,
   validate(checkoutValidateSchema),
   asyncHandler(async (req, res) => {
     const result = await checkoutService.validate(ctx(req as AuthedRequest), req.body);
@@ -65,8 +69,21 @@ checkoutRouter.post(
 );
 
 checkoutRouter.post(
+  "/abandon",
+  optionalAuth,
+  forbidStaffShopping,
+  asyncHandler(async (req, res) => {
+    const result = await orderService.abandonOpenCheckout(ctx(req as AuthedRequest));
+    applyCartCookie(res, result.cookie);
+    const { cookie: _cookie, ...body } = result;
+    res.json(body);
+  }),
+);
+
+checkoutRouter.post(
   "/place",
   optionalAuth,
+  forbidStaffShopping,
   validate(checkoutPlaceSchema),
   asyncHandler(async (req, res) => {
     const simulateTimeout =

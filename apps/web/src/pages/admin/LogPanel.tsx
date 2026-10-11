@@ -60,7 +60,7 @@ export function LogPanel({ token }: { token: string }) {
           </select>
         </label>
       </div>
-      <p className="muted">Staff edits to products, categories, orders, reviews, and shipping.</p>
+      <p className="muted">Staff edits to products, categories, orders, reviews, shipping, and users.</p>
       <div className="admin-table-wrap">
         <table className="admin-table">
           <thead>

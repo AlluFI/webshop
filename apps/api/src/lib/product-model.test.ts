@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { productSchema } from "@volt/shared";
+import { ean13FromIndex, formatLocatorCode, formatOrderReference, formatOrderStatus, locatorFromIndex, normalizeBarcode, productSchema, suggestedRestockQty } from "@volt/shared";
 
 describe("product data model", () => {
   const valid = {
@@ -35,5 +35,43 @@ describe("product data model", () => {
     expect(
       productSchema.safeParse({ ...valid, weightKg: -1 }).success,
     ).toBe(false);
+  });
+
+  it("prints warehouse locator codes as station|block|shelf|place", () => {
+    expect(formatLocatorCode(1, 2, 2, 1)).toBe("01|02|2|1");
+    expect(formatLocatorCode(12, 3, 10, 4)).toBe("12|03|10|4");
+    expect(locatorFromIndex(0)).toEqual({
+      locatorStation: 1,
+      locatorBlock: 1,
+      locatorShelf: 1,
+      locatorPlace: 1,
+    });
+    expect(locatorFromIndex(5)).toEqual({
+      locatorStation: 1,
+      locatorBlock: 1,
+      locatorShelf: 2,
+      locatorPlace: 2,
+    });
+  });
+
+  it("suggests a restock quantity only when warehouse stock is low", () => {
+    expect(suggestedRestockQty(24)).toBe(0);
+    expect(suggestedRestockQty(4)).toBe(16);
+    expect(suggestedRestockQty(16)).toBe(0);
+  });
+
+  it("normalizes barcodes and builds a valid EAN-13", () => {
+    expect(normalizeBarcode("640 000 000 001 9")).toBe("6400000000019");
+    expect(ean13FromIndex(0)).toHaveLength(13);
+    expect(ean13FromIndex(0)).toMatch(/^640000/);
+  });
+
+  it("prints the same uppercase VC- order number from a UUID", () => {
+    expect(formatOrderReference("23aaa1b2-a575-482f-94c0-22c71db1631b")).toBe("VC-23AAA1B2");
+  });
+
+  it("labels warehouse and courier statuses for staff", () => {
+    expect(formatOrderStatus("SHIPPING")).toBe("Shipping");
+    expect(formatOrderStatus("WITH_COURIER")).toBe("With the courier");
   });
 });

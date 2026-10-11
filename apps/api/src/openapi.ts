@@ -1178,7 +1178,7 @@ export const openApiDocument: OpenAPIV3.Document = {
           },
         },
         responses: {
-          "200": { description: "Subtotal, shipping, tax, total" },
+          "200": { description: "Subtotal, shipping, included VAT, total" },
           "400": { $ref: "#/components/responses/ValidationError" },
         },
       },
@@ -1266,6 +1266,13 @@ export const openApiDocument: OpenAPIV3.Document = {
         },
       },
     },
+    "/api/v1/checkout/abandon": {
+      post: {
+        tags: ["Checkout"],
+        summary: "Cancel an unpaid checkout and keep the cart so the shopper can go back",
+        responses: { "200": { description: "Cart after abandoning a pending payment" } },
+      },
+    },
     "/api/v1/webhooks/stripe": {
       post: {
         tags: ["Checkout"],
@@ -1292,7 +1299,8 @@ export const openApiDocument: OpenAPIV3.Document = {
                 "PAYMENT_FAILED",
                 "PAID",
                 "PROCESSING",
-                "SHIPPED",
+                "SHIPPING",
+                "WITH_COURIER",
                 "DELIVERED",
                 "CANCELLED",
                 "REFUNDED",
@@ -1412,11 +1420,42 @@ export const openApiDocument: OpenAPIV3.Document = {
         summary: "Staff change log for products, categories, orders, reviews, and shipping",
         security: [{ bearerAuth: [] }],
         parameters: [
-          { name: "entity", in: "query", schema: { type: "string", enum: ["product", "category", "order", "review", "shipping"] } },
+          { name: "entity", in: "query", schema: { type: "string", enum: ["product", "category", "order", "review", "shipping", "wholesaler", "purchase_order"] } },
           { name: "page", in: "query", schema: { type: "integer", default: 1 } },
           { name: "pageSize", in: "query", schema: { type: "integer", default: 30 } },
         ],
         responses: { "200": { description: "Audit entries with old → new values" } },
+      },
+    },
+    "/api/v1/admin/sales": {
+      get: {
+        tags: ["Admin"],
+        summary: "Sales report by product, category, or all, with calendar time frames",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "range",
+            in: "query",
+            schema: {
+              type: "string",
+              enum: [
+                "last_7_days",
+                "last_30_days",
+                "last_12_months",
+                "this_week",
+                "last_week",
+                "this_month",
+                "last_month",
+                "this_year",
+                "last_year",
+              ],
+            },
+          },
+          { name: "group", in: "query", schema: { type: "string", enum: ["day", "week", "month", "year"] } },
+          { name: "productId", in: "query", schema: { type: "string", format: "uuid" } },
+          { name: "category", in: "query", schema: { type: "string" } },
+        ],
+        responses: { "200": { description: "Revenue series, VAT, and margin" }, "403": { description: "Forbidden" } },
       },
     },
     "/api/v1/admin/products": {
@@ -1452,7 +1491,7 @@ export const openApiDocument: OpenAPIV3.Document = {
     "/api/v1/admin/orders/{id}/refund": {
       post: {
         tags: ["Admin"],
-        summary: "Refund a paid, processing, shipped, or delivered order. Staff-only reasons: customer_requested, shop_error.",
+        summary: "Refund a paid through delivered order. Staff-only reasons: customer_requested, shop_error.",
         security: [{ bearerAuth: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
         requestBody: {
@@ -1480,7 +1519,7 @@ export const openApiDocument: OpenAPIV3.Document = {
     "/api/v1/admin/orders/{id}/status": {
       post: {
         tags: ["Admin"],
-        summary: "Update order status. SHIPPED requires carrier (posti, postnord, budbee) and tracking code, then emails the customer.",
+        summary: "Update order status. WITH_COURIER requires carrier (posti, postnord, budbee) and tracking code, then emails the customer.",
         security: [{ bearerAuth: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
         responses: {
@@ -1492,9 +1531,18 @@ export const openApiDocument: OpenAPIV3.Document = {
     "/api/v1/admin/users": {
       get: {
         tags: ["Admin"],
-        summary: "List users",
+        summary: "List users, optionally filtered by one role or all staff (role=staff)",
         security: [{ bearerAuth: [] }],
         responses: { "200": { description: "Users" } },
+      },
+      post: {
+        tags: ["Admin"],
+        summary: "Create a staff employee with a password and 2FA already enabled",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          "201": { description: "Created employee plus one-time authenticator secret and backup codes" },
+          "409": { description: "Email already exists" },
+        },
       },
     },
     "/api/v1/admin/reviews": {
@@ -1503,6 +1551,32 @@ export const openApiDocument: OpenAPIV3.Document = {
         summary: "Moderate reviews",
         security: [{ bearerAuth: [] }],
         responses: { "200": { description: "Reviews" } },
+      },
+    },
+    "/api/v1/admin/wholesalers": {
+      get: {
+        tags: ["Admin"],
+        summary: "List wholesalers and the products they supply",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Wholesalers" } },
+      },
+      post: {
+        tags: ["Admin"],
+        summary: "Create a wholesaler",
+        security: [{ bearerAuth: [] }],
+        responses: { "201": { description: "Created" } },
+      },
+    },
+    "/api/v1/admin/wholesalers/{id}/orders": {
+      post: {
+        tags: ["Admin"],
+        summary: "Email a warehouse restock purchase order to the wholesaler (Mailpit in local)",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "201": { description: "Purchase order emailed" },
+          "400": { description: "No lines or product not supplied by this wholesaler" },
+        },
       },
     },
   },

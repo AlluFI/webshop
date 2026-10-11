@@ -71,6 +71,7 @@ describeLive("Stripe checkout", () => {
           stripePaymentIntentId: {
             in: [
               "pi_test_success",
+              "pi_test_abandon",
               "pi_test_fail",
               "pi_test_sync_fail",
               "pi_test_sync_pending",
@@ -119,6 +120,8 @@ describeLive("Stripe checkout", () => {
     const orderId = placed.body.order.id as string;
     const stockHeld = (await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQuantity;
     expect(stockHeld).toBe(stockBefore - 1);
+    const stillInCart = await agent.get("/api/v1/cart");
+    expect(stillInCart.body.items.some((item: { productId: string }) => item.productId === productId)).toBe(true);
 
     const payload = JSON.stringify({
       id: "evt_success",
@@ -150,6 +153,35 @@ describeLive("Stripe checkout", () => {
     expect(stored.shippingAddressEnc).not.toContain("Helsinki");
     const stockPaid = (await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQuantity;
     expect(stockPaid).toBe(stockBefore - 1);
+    const emptied = await agent.get("/api/v1/cart");
+    expect(emptied.body.items).toHaveLength(0);
+  });
+
+  it("keeps the cart when leaving checkout before paying", async () => {
+    create.mockResolvedValueOnce({
+      id: "pi_test_abandon",
+      client_secret: "pi_test_abandon_secret",
+      status: "requires_payment_method",
+    });
+    const stockBefore = (await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQuantity;
+    const agent = request.agent(app);
+    await agent.post("/api/v1/cart/items").send({ productId, quantity: 1 });
+    const placed = await agent.post("/api/v1/checkout/place").send({
+      ...checkoutBody,
+      email: "back@volt.test",
+    });
+    expect(placed.status).toBe(201);
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQuantity).toBe(
+      stockBefore - 1,
+    );
+
+    const abandoned = await agent.post("/api/v1/checkout/abandon");
+    expect(abandoned.status).toBe(200);
+    expect(abandoned.body.abandoned).toBe(true);
+    expect(abandoned.body.cart.items.some((item: { productId: string }) => item.productId === productId)).toBe(true);
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQuantity).toBe(stockBefore);
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: placed.body.order.id } });
+    expect(order.status).toBe("CANCELLED");
   });
 
   it("restores stock when Stripe reports a declined card", async () => {
@@ -170,8 +202,8 @@ describeLive("Stripe checkout", () => {
     expect((await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQuantity).toBe(
       stockBefore - 1,
     );
-    const emptied = await agent.get("/api/v1/cart");
-    expect(emptied.body.items).toHaveLength(0);
+    const heldCart = await agent.get("/api/v1/cart");
+    expect(heldCart.body.items.some((item: { productId: string }) => item.productId === productId)).toBe(true);
 
     const payload = JSON.stringify({
       id: "evt_fail",

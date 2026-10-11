@@ -14,6 +14,10 @@ erDiagram
   Category ||--o{ Product : contains
   Category ||--o{ Category : parent
   Brand ||--o{ Product : makes
+  Wholesaler ||--o{ Product : supplies
+  Wholesaler ||--o{ PurchaseOrder : receives
+  PurchaseOrder ||--o{ PurchaseOrderItem : lists
+  Product ||--o{ PurchaseOrderItem : restocked
   Product ||--o{ ProductImage : has
   Product ||--o{ ProductAttribute : has
 
@@ -49,10 +53,28 @@ erDiagram
     uuid id PK
     string slug UK
   }
+  Wholesaler {
+    uuid id PK
+    string slug UK
+    string email UK
+  }
+  PurchaseOrder {
+    uuid id PK
+    string reference UK
+    uuid wholesalerId FK
+  }
+  PurchaseOrderItem {
+    uuid id PK
+    uuid purchaseOrderId FK
+    uuid productId FK
+    int quantity
+  }
   Product {
     uuid id PK
     string slug UK
     decimal price
+    decimal wholesalePrice
+    decimal vatRate
     int stockQuantity
     uuid categoryId FK
     uuid brandId FK
@@ -142,7 +164,7 @@ erDiagram
 
 ## Part 3 — implemented
 
-Reviews are purchased-only (`PAID` / `PROCESSING` / `SHIPPED` / `DELIVERED`). Helpful votes are unique per user. Product `averageRating` / `reviewCount` are recalculated from published reviews. Staff actions write an encrypted audit row. Shipping options are editable in admin.
+Reviews are purchased-only (`PAID` / `PROCESSING` / `SHIPPING` / `WITH_COURIER` / `DELIVERED`). Helpful votes are unique per user. Product `averageRating` / `reviewCount` are recalculated from published reviews. Staff actions write an encrypted audit row. Shipping options are editable in admin.
 
 ```mermaid
 erDiagram

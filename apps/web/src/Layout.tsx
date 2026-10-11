@@ -12,8 +12,9 @@ type Suggest = {
 };
 
 export function Layout() {
-  const { user, logout } = useAuth();
+  const { user, logout, ready } = useAuth();
   const { cart } = useCart();
+  const staff = Boolean(user && isStaffRole(user.role));
   const [q, setQ] = useState("");
   const [suggest, setSuggest] = useState<Suggest | null>(null);
   const [bagOpen, setBagOpen] = useState(false);
@@ -87,59 +88,61 @@ export function Layout() {
           </form>
           <nav className="nav" aria-label="Account">
             <NavLink to="/catalog">Catalog</NavLink>
-            <div className="bag-wrap" ref={bag}>
-              <button className="link bag-toggle" type="button" onClick={() => setBagOpen((open) => !open)}>
-                Cart{cart.itemCount > 0 ? ` (${cart.itemCount})` : ""}
-              </button>
-              {bagOpen && (
-                <div className="quick-cart" role="dialog" aria-label="Cart preview">
-                  {cart.items.length === 0 ? (
-                    <p className="muted">Your bag is empty.</p>
-                  ) : (
-                    <ul>
-                      {cart.items.slice(0, 4).map((item) => (
-                        <li key={item.id}>
-                          {item.thumbnail && <img src={item.thumbnail} alt="" />}
-                          <span>
-                            {item.name}
-                            <br />
-                            <span className="muted">
-                              ×{item.quantity} · {money(item.lineTotal)}
+            {ready && !staff && (
+              <div className="bag-wrap" ref={bag}>
+                <button className="link bag-toggle" type="button" onClick={() => setBagOpen((open) => !open)}>
+                  Cart{cart.itemCount > 0 ? ` (${cart.itemCount})` : ""}
+                </button>
+                {bagOpen && (
+                  <div className="quick-cart" role="dialog" aria-label="Cart preview">
+                    {cart.items.length === 0 ? (
+                      <p className="muted">Your bag is empty.</p>
+                    ) : (
+                      <ul>
+                        {cart.items.slice(0, 4).map((item) => (
+                          <li key={item.id}>
+                            {item.thumbnail && <img src={item.thumbnail} alt="" />}
+                            <span>
+                              {item.name}
+                              <br />
+                              <span className="muted">
+                                ×{item.quantity} · {money(item.lineTotal)}
+                              </span>
                             </span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <p className="price">Subtotal {money(cart.subtotal)}</p>
-                  <div className="actions">
-                    <Link className="button" to="/cart" onClick={() => setBagOpen(false)}>
-                      View cart
-                    </Link>
-                    {cart.items.length > 0 && (
-                      <Link className="ghost" to="/checkout" onClick={() => setBagOpen(false)}>
-                        Checkout
-                      </Link>
+                          </li>
+                        ))}
+                      </ul>
                     )}
+                    <p className="price">Subtotal {money(cart.subtotal)}</p>
+                    <div className="actions">
+                      <Link className="button" to="/cart" onClick={() => setBagOpen(false)}>
+                        View cart
+                      </Link>
+                      {cart.items.length > 0 && (
+                        <Link className="ghost" to="/checkout" onClick={() => setBagOpen(false)}>
+                          Checkout
+                        </Link>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-            {user ? (
+                )}
+              </div>
+            )}
+            {ready && user ? (
               <>
-                <NavLink to="/orders">Orders</NavLink>
-                {isStaffRole(user.role) && <NavLink to="/admin">Admin</NavLink>}
+                {!staff && <NavLink to="/orders">Orders</NavLink>}
+                {staff && <NavLink to="/admin">Admin</NavLink>}
                 <NavLink to="/account">{user.displayName || user.email}</NavLink>
                 <button className="link" type="button" onClick={() => void logout()}>
                   Sign out
                 </button>
               </>
-            ) : (
+            ) : ready ? (
               <>
                 <NavLink to="/login">Sign in</NavLink>
                 <NavLink to="/register">Create account</NavLink>
               </>
-            )}
+            ) : null}
           </nav>
         </div>
       </header>

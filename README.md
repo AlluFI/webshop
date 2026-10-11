@@ -12,6 +12,7 @@ B2C electronics shop: accounts, a PostgreSQL catalog, faceted search, reviews, a
 - **Payments:** Stripe test mode + Payment Element (card data is never sent to the API)
 - **Queue:** RabbitMQ + `apps/worker` (payment status → email + inventory)
 - **Load:** k6 (`load-tests/shop.js`) — report in [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
+- **Staff Admin:** tab-by-tab guide and roles in [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - **Monorepo:** pnpm workspaces (`apps/api`, `apps/web`, `apps/worker`, `packages/shared`)
 
 ## Entity relationship diagram
@@ -45,7 +46,7 @@ Refresh tokens are **not** stored in Postgres. Each login creates a Redis family
 
 Guest carts use an httpOnly `cart_token` cookie. The raw token never goes in the database — only its SHA-256. Signing in merges that cart into the user cart and clamps quantities to stock. Shipping addresses are encrypted at rest with AES-256-GCM (`DATA_ENCRYPTION_KEY`).
 
-Staff roles (`admin`, `support`, `sales`) **must** have TOTP enabled. Role assignment is refused until 2FA is on. Reviews are **purchased-only** and sort by helpfulness.
+Staff roles (`admin`, `support`, `sales`, `warehouse`) **must** have TOTP enabled. Role assignment is refused until 2FA is on. Reviews are **purchased-only** and sort by helpfulness.
 
 ## Setup (Docker starts the stack; Stripe test keys are needed to demo checkout)
 
@@ -94,6 +95,7 @@ docker volume rm i-love-shopping3_rabbitmq_data 2>/dev/null || true
 | `admin@volt.test` | `Shopping123` | Full admin. **TOTP required** — add secret `DEMOADMIN2FASECRETKEYAA` in Google Authenticator / Authy |
 | `support@volt.test` | `Shopping123` | Orders, refunds, review moderation (same TOTP secret) |
 | `sales@volt.test` | `Shopping123` | Catalog and shipping (same TOTP secret) |
+| `warehouse@volt.test` | `Shopping123` | Products, orders, and picking only (same TOTP secret) |
 
 Registering a new user sends a link to Mailpit.
 
@@ -162,12 +164,22 @@ pnpm dev:web   # http://localhost:5173
 3. Open a product: full-size photo plus thumbnail, metric **and** imperial weight/dimensions, stock, attributes, **reviews** (sorted by helpful votes), related products. Catalog images are Unsplash/Pexels lifestyle shots, with derived 400px thumbs and ~1200px full sizes. Credits: [CREDITS.md](apps/api/prisma/seed-images/CREDITS.md).
 4. Sign in as `customer@volt.test` and review the seeded Sony WH-1000XM5 (already purchased). Vote a review helpful; the average on the product updates.
 5. Open **Cart**. Change quantities (live totals), hit a stock limit, refresh as a guest — the bag stays. Sign in: the guest bag merges into your account cart.
-6. **Checkout** is one page: contact, shipping and billing addresses (Finnish postcodes, US ZIP, and other offline checks), shipping options from the database, live summary, then Stripe Payment Element. Confirmation shows a `VC-…` reference, order ID, and estimated delivery window.
+6. **Checkout** is one page: contact, shipping and billing addresses (Finnish postcodes, US ZIP, and other offline checks), shipping options from the database, live summary (retail prices include 25.5% Finnish VAT, shown as its own row), then Stripe Payment Element. Confirmation shows a `VC-…` reference, order ID, VAT line, and estimated delivery window.
 7. **Account** (signed-in): edit display name, recent orders, 2FA, saved addresses. **Orders** lists the full history with status/date filters.
-8. **Admin** (`admin@volt.test` + TOTP): product create/edit/delete and image upload, category CRUD, bulk CSV/JSON, order status and refunds (any paid-through-delivered order, with a reason), user roles (2FA required before promotion), review hide/publish, shipping prices/days/active.
+8. **Admin** (`admin@volt.test` + TOTP): product create/edit/delete and image upload, warehouse locator codes (`01|02|2|1`), barcodes (EAN-13) and **Receive stock** scan-in, retail / wholesale / VAT / margin on each product, wholesaler on each product, **wholesalers** tab (list suppliers and email a restock purchase order to Mailpit), category CRUD, bulk CSV/JSON, **sales** (filter by product or category, last week/month/12 months and calendar week/month/year), **picking** (paid orders oldest first; Process → tick lines or optional barcode scan → confirm pick → Shipping → With the courier), order status and refunds (any paid-through-delivered order, with a reason), **users** (add employees with a password and 2FA already on, or promote a customer after they enable 2FA), review hide/publish, shipping prices/days/active. To try a live Posti link, paste the sample tracking number below into **Courier**.
 9. **About**, **Contact** (CAPTCHA → Mailpit), **FAQ**, **Terms**, and a **404** catch-all.
 10. Create an account (CAPTCHA required), confirm via Mailpit, sign in. Access tokens never go to `localStorage`. Enable 2FA on **Account** before an admin can assign a staff role.
 11. Explore endpoints at **http://localhost:3000/api/v1/docs**. Burst login/contact traffic returns **429** (Redis token bucket; skipped in automated `NODE_ENV=test` except unit tests).
+
+### Posti tracking (reviewer sample)
+
+Same value as the Admin **Courier** field placeholder. Paste it when handing an order to Posti; the shop builds a working Posti tracking URL.
+
+```
+JJFI66012700410158170/32109367922
+```
+
+Opens: https://www.posti.fi/en/tracking/JJFI66012700410158170/32109367922
 
 ## Bonus features (beyond the Part 3 mandatory list)
 
@@ -176,9 +188,9 @@ These are extras a reviewer can click without extra setup. They are **not** requ
 | Bonus | Where to see it | What it does |
 | --- | --- | --- |
 | Staff **change log** | Admin → **log** (`admin@volt.test`) | Encrypted audit rows for product, category, order, review, user-role, and shipping edits |
-| **Shipped** email + tracking | Admin → ship an order; Mailpit + order page | HTML mail with carrier link, ETA, and a tracking modal on the order |
-| Finland carrier URLs | Ship with Posti / PostNord / Budbee | Posti uses `/en/tracking/{code}/{id}`; other carriers open their official pages |
-| Staff **roles** | `admin` / `support` / `sales` demo accounts | RBAC: catalog vs orders/refunds vs reviews vs shipping; 2FA required before promotion |
+| **Shipped** email + tracking | Admin → hand an order to the courier; Mailpit + order page | HTML mail with carrier link, ETA, and a tracking modal on the order |
+| Finland carrier URLs | Ship with Posti / PostNord / Budbee | Posti uses `/en/tracking/{code}/{id}`; sample code `JJFI66012700410158170/32109367922` (same as the Courier placeholder). Other carriers open their official pages |
+| Staff **roles** | `admin` / `support` / `sales` / `warehouse` demo accounts | RBAC: catalog vs orders/refunds vs reviews vs shipping vs warehouse floor; 2FA required before promotion |
 | **FAQ** and **Terms** | Header/footer | Extra content pages (About / Contact / 404 are mandatory; these two are extra) |
 | Separate **billing** address | Checkout | Optional billing block when “same as shipping” is unchecked |
 | Human **`VC-…` references** | Confirmation and order email | Short storefront reference next to the UUID |

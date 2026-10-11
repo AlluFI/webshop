@@ -2,6 +2,7 @@ import {
   EXPRESS_SHIPPING,
   FREE_STANDARD_THRESHOLD,
   STANDARD_SHIPPING,
+  vatFromInclusive,
 } from "@volt/shared";
 
 export { EXPRESS_SHIPPING, FREE_STANDARD_THRESHOLD, STANDARD_SHIPPING };
@@ -28,13 +29,13 @@ export function shippingCost(method: "standard" | "express", subtotal: number) {
   return STANDARD_SHIPPING;
 }
 
-/** Catalog prices already include VAT; a tax line is still kept on the order snapshot. */
-export function taxAmount(_subtotal: number) {
-  return 0;
+/** Retail prices include VAT. This extracts the included VAT for the confirmation line. */
+export function taxAmount(subtotal: number, shipping = 0) {
+  return vatFromInclusive(subtotal + shipping);
 }
 
-export function orderTotal(subtotal: number, shipping: number, tax: number) {
-  return roundMoney(subtotal + shipping + tax);
+export function orderTotal(subtotal: number, shipping: number, _tax = 0) {
+  return roundMoney(subtotal + shipping);
 }
 
 export function clampQuantity(desired: number, stock: number) {

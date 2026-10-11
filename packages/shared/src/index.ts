@@ -1,5 +1,6 @@
 export * from "./auth.js";
 export * from "./product.js";
+export * from "./pricing.js";
 export * from "./cart.js";
 export * from "./checkout.js";
 export * from "./roles.js";

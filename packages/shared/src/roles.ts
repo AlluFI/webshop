@@ -1,6 +1,6 @@
 export const CUSTOMER_ROLE = "customer";
-export const STAFF_ROLES = ["admin", "support", "sales"] as const;
-export const ALL_ROLES = ["customer", "admin", "support", "sales"] as const;
+export const STAFF_ROLES = ["admin", "support", "sales", "warehouse"] as const;
+export const ALL_ROLES = ["customer", "admin", "support", "sales", "warehouse"] as const;
 
 export type StaffRole = (typeof STAFF_ROLES)[number];
 export type AppRole = (typeof ALL_ROLES)[number];
@@ -10,8 +10,11 @@ export function isStaffRole(role: string): role is StaffRole {
 }
 
 export const ADMIN_PERMISSIONS = {
+  products: ["admin", "sales", "warehouse"],
   catalog: ["admin", "sales"],
-  orders: ["admin", "support", "sales"],
+  orders: ["admin", "support", "sales", "warehouse"],
+  picking: ["admin", "support", "sales", "warehouse"],
+  sales: ["admin", "support", "sales"],
   refunds: ["admin", "support"],
   users: ["admin"],
   reviews: ["admin", "support"],

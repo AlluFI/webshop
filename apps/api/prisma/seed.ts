@@ -3,7 +3,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import * as argon2 from "argon2";
-import { DEMO_ADMIN_TOTP_SECRET, EXPRESS_SHIPPING, FREE_STANDARD_THRESHOLD, STANDARD_SHIPPING } from "@volt/shared";
+import {
+  DEMO_ADMIN_TOTP_SECRET,
+  ean13FromIndex,
+  EXPRESS_SHIPPING,
+  FINLAND_VAT_RATE,
+  formatLocatorCode,
+  FREE_STANDARD_THRESHOLD,
+  locatorFromIndex,
+  netFromInclusive,
+  roundMoney,
+  STANDARD_SHIPPING,
+} from "@volt/shared";
 import { encrypt, encryptJson, encryptOptional } from "../src/lib/crypto.js";
 import { writeDerivedImages } from "../src/lib/images.js";
 
@@ -17,6 +28,10 @@ function kgToLb(kg: number) {
 
 function cmToIn(cm: number) {
   return Number((cm / 2.54).toFixed(2));
+}
+
+function wholesaleOf(retail: number) {
+  return roundMoney(netFromInclusive(retail) * 0.68);
 }
 
 function wrapLabel(label: string, maxChars: number): string[] {
@@ -391,32 +406,211 @@ const products: SeedProduct[] = [
   },
 ];
 
+const WHOLESALERS = [
+  {
+    name: "ElectroNordic Oy",
+    slug: "electronordic",
+    email: "orders@electronordic.test",
+    contactName: "Matti Korhonen",
+    phone: "+358 9 123 4500",
+    address: "Hermannin rantatie 12, 00580 Helsinki",
+    notes: "Audio, wearables, and phone restocks. Lead time 3–5 days.",
+    categories: ["audio", "wearables", "phones"],
+  },
+  {
+    name: "Baltic IT Wholesale",
+    slug: "baltic-it",
+    email: "sales@balticit.test",
+    contactName: "Eva Lindström",
+    phone: "+358 9 555 2100",
+    address: "Tammasaarenkatu 3, 00180 Helsinki",
+    notes: "Computers and desk accessories. MOQ 4 on most SKUs.",
+    categories: ["computers", "accessories"],
+  },
+  {
+    name: "Nordic Lighting Supply",
+    slug: "nordic-lighting",
+    email: "hello@nordiclighting.test",
+    contactName: "Sofia Berg",
+    phone: "+358 2 410 880",
+    address: "Linnankatu 18, 20100 Turku",
+    notes: "Smart home and lighting only.",
+    categories: ["smart-home"],
+  },
+] as const;
+
+function wholesaleSkuFromSlug(slug: string) {
+  return `VN-${slug.replaceAll("-", " ").toUpperCase().replaceAll(" ", "-")}`;
+}
+
+async function ensureWholesalers() {
+  const map = new Map<string, { id: string; categories: readonly string[] }>();
+  for (const row of WHOLESALERS) {
+    const saved = await prisma.wholesaler.upsert({
+      where: { slug: row.slug },
+      update: {
+        name: row.name,
+        email: row.email,
+        contactName: row.contactName,
+        phone: row.phone,
+        address: row.address,
+        notes: row.notes,
+      },
+      create: {
+        name: row.name,
+        slug: row.slug,
+        email: row.email,
+        contactName: row.contactName,
+        phone: row.phone,
+        address: row.address,
+        notes: row.notes,
+      },
+    });
+    map.set(row.slug, { id: saved.id, categories: row.categories });
+  }
+  return map;
+}
+
+function wholesalerIdForCategory(
+  category: string,
+  wholesalers: Map<string, { id: string; categories: readonly string[] }>,
+) {
+  for (const row of wholesalers.values()) {
+    if (row.categories.includes(category)) return row.id;
+  }
+  return [...wholesalers.values()][0]?.id ?? null;
+}
+
+async function assignMissingBarcodes() {
+  const missing = await prisma.product.findMany({
+    where: { barcode: null },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  const taken = new Set(
+    (await prisma.product.findMany({ where: { barcode: { not: null } }, select: { barcode: true } })).map(
+      (row) => row.barcode,
+    ),
+  );
+  let index = 0;
+  for (const product of missing) {
+    let barcode = ean13FromIndex(index);
+    while (taken.has(barcode)) {
+      index += 1;
+      barcode = ean13FromIndex(index);
+    }
+    await prisma.product.update({ where: { id: product.id }, data: { barcode } });
+    taken.add(barcode);
+    index += 1;
+  }
+}
+
+async function assignMissingWholesalePrices() {
+  const products = await prisma.product.findMany({ where: { wholesalePrice: null } });
+  for (const product of products) {
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { wholesalePrice: wholesaleOf(Number(product.price)), vatRate: FINLAND_VAT_RATE },
+    });
+  }
+}
+
+async function assignProductWholesalers(
+  wholesalers: Map<string, { id: string; categories: readonly string[] }>,
+) {
+  const products = await prisma.product.findMany({
+    where: { wholesalerId: null },
+    include: { category: { select: { slug: true } } },
+  });
+  for (const product of products) {
+    const wholesalerId = wholesalerIdForCategory(product.category.slug, wholesalers);
+    if (!wholesalerId) continue;
+    await prisma.product.update({
+      where: { id: product.id },
+      data: {
+        wholesalerId,
+        wholesaleSku: product.wholesaleSku || wholesaleSkuFromSlug(product.slug),
+      },
+    });
+  }
+}
+
+async function ensureRoles() {
+  const names = ["customer", "admin", "support", "sales", "warehouse"] as const;
+  const records = new Map<string, { id: string; name: string }>();
+  for (const name of names) {
+    const row = await prisma.role.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+    records.set(name, row);
+  }
+  return records;
+}
+
+async function ensureStaffUser(email: string, name: string, roleId: string) {
+  const passwordHash = await argon2.hash("Shopping123");
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: {
+      passwordHash,
+      emailVerifiedAt: new Date(),
+      displayName: name,
+      totpEnabled: true,
+      roleId,
+    },
+    create: {
+      email,
+      displayName: name,
+      passwordHash,
+      emailVerifiedAt: new Date(),
+      totpEnabled: true,
+      roleId,
+    },
+  });
+  const totpCipher = encrypt(DEMO_ADMIN_TOTP_SECRET);
+  await prisma.totpSecret.upsert({
+    where: { userId: user.id },
+    update: { secret: totpCipher, confirmedAt: new Date(), backupCodes: [] },
+    create: {
+      userId: user.id,
+      secret: totpCipher,
+      confirmedAt: new Date(),
+      backupCodes: [],
+    },
+  });
+  return user;
+}
+
+async function ensureMissingStaffUser(email: string, name: string, roleId: string) {
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) return existing;
+  return ensureStaffUser(email, name, roleId);
+}
+
 async function main() {
   mkdirSync(uploadDir, { recursive: true });
 
+  const roleRecords = await ensureRoles();
+  const customerRole = roleRecords.get("customer")!;
+  const adminRole = roleRecords.get("admin")!;
+  const supportRole = roleRecords.get("support")!;
+  const salesRole = roleRecords.get("sales")!;
+  const warehouseRole = roleRecords.get("warehouse")!;
+
+  const wholesalers = await ensureWholesalers();
   const existing = await prisma.product.count();
   if (existing > 0) {
+    await assignProductWholesalers(wholesalers);
+    await assignMissingBarcodes();
+    await assignMissingWholesalePrices();
+    await ensureMissingStaffUser("warehouse@volt.test", "Volt Warehouse", warehouseRole.id);
     console.log(
-      `Catalog already has ${existing} products; skipping seed so demo addresses and 2FA stay intact.`,
+      `Catalog already has ${existing} products; attached missing wholesalers, barcodes, wholesale prices, and warehouse staff and left demo addresses and 2FA intact.`,
     );
     return;
   }
-
-  const roles = ["customer", "admin", "support", "sales"];
-  const roleRecords = [];
-  for (const name of roles) {
-    roleRecords.push(
-      await prisma.role.upsert({
-        where: { name },
-        update: {},
-        create: { name },
-      }),
-    );
-  }
-  const customerRole = roleRecords.find((r) => r.name === "customer")!;
-  const adminRole = roleRecords.find((r) => r.name === "admin")!;
-  const supportRole = roleRecords.find((r) => r.name === "support")!;
-  const salesRole = roleRecords.find((r) => r.name === "sales")!;
 
   const categories = [
     { name: "Audio", slug: "audio", description: "Headphones, earbuds, and speakers" },
@@ -459,15 +653,18 @@ async function main() {
     brandMap.set(row.slug, row.id);
   }
 
-  for (const product of products) {
+  for (const [index, product] of products.entries()) {
     const imageName = placeProductImage(product.slug, product.name, product.color);
     const derived = await writeDerivedImages(uploadDir, imageName);
+    const locator = locatorFromIndex(index);
     const row = await prisma.product.upsert({
       where: { slug: product.slug },
       update: {
         name: product.name,
         description: product.description,
         price: product.price,
+        wholesalePrice: wholesaleOf(product.price),
+        vatRate: FINLAND_VAT_RATE,
         stockQuantity: product.stock,
         categoryId: categoryMap.get(product.category)!,
         brandId: brandMap.get(product.brand)!,
@@ -482,12 +679,18 @@ async function main() {
         averageRating: 0,
         reviewCount: 0,
         featured: Boolean(product.featured),
+        wholesalerId: wholesalerIdForCategory(product.category, wholesalers),
+        wholesaleSku: wholesaleSkuFromSlug(product.slug),
+        barcode: ean13FromIndex(index),
+        ...locator,
       },
       create: {
         name: product.name,
         slug: product.slug,
         description: product.description,
         price: product.price,
+        wholesalePrice: wholesaleOf(product.price),
+        vatRate: FINLAND_VAT_RATE,
         stockQuantity: product.stock,
         categoryId: categoryMap.get(product.category)!,
         brandId: brandMap.get(product.brand)!,
@@ -502,6 +705,10 @@ async function main() {
         averageRating: 0,
         reviewCount: 0,
         featured: Boolean(product.featured),
+        wholesalerId: wholesalerIdForCategory(product.category, wholesalers),
+        wholesaleSku: wholesaleSkuFromSlug(product.slug),
+        barcode: ean13FromIndex(index),
+        ...locator,
       },
     });
     await prisma.productImage.deleteMany({ where: { productId: row.id } });
@@ -560,42 +767,10 @@ async function main() {
     },
   });
 
-  const passwordHash = await argon2.hash("Shopping123");
-  async function staffUser(email: string, name: string, roleId: string) {
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: {
-        passwordHash,
-        emailVerifiedAt: new Date(),
-        displayName: name,
-        totpEnabled: true,
-        roleId,
-      },
-      create: {
-        email,
-        displayName: name,
-        passwordHash,
-        emailVerifiedAt: new Date(),
-        totpEnabled: true,
-        roleId,
-      },
-    });
-    const totpCipher = encrypt(DEMO_ADMIN_TOTP_SECRET);
-    await prisma.totpSecret.upsert({
-      where: { userId: user.id },
-      update: { secret: totpCipher, confirmedAt: new Date(), backupCodes: [] },
-      create: {
-        userId: user.id,
-        secret: totpCipher,
-        confirmedAt: new Date(),
-        backupCodes: [],
-      },
-    });
-    return user;
-  }
-  await staffUser("admin@volt.test", "Volt Admin", adminRole.id);
-  await staffUser("support@volt.test", "Volt Support", supportRole.id);
-  await staffUser("sales@volt.test", "Volt Sales", salesRole.id);
+  await ensureStaffUser("admin@volt.test", "Volt Admin", adminRole.id);
+  await ensureStaffUser("support@volt.test", "Volt Support", supportRole.id);
+  await ensureStaffUser("sales@volt.test", "Volt Sales", salesRole.id);
+  await ensureStaffUser("warehouse@volt.test", "Volt Warehouse", warehouseRole.id);
 
   await prisma.shippingOption.upsert({
     where: { code: "standard" },
@@ -679,6 +854,12 @@ async function main() {
             quantity: 1,
             unitPrice: headphones.price,
             lineTotal: headphones.price,
+            locatorCode: formatLocatorCode(
+              headphones.locatorStation,
+              headphones.locatorBlock,
+              headphones.locatorShelf,
+              headphones.locatorPlace,
+            ),
           },
         },
         events: {
@@ -698,6 +879,7 @@ async function main() {
     });
   }
 
+  const passwordHash = await argon2.hash("Shopping123");
   const reviewers = [
     { email: "riku@volt.test", name: "Riku", stars: 5, product: headphones, body: "Best commute headphones I have owned. ANC is quiet enough for the tram." },
     { email: "aisha@volt.test", name: "Aisha", stars: 4, product: headphones, body: "Comfortable for long calls. The app takes a minute to learn but the sound is excellent." },
@@ -726,7 +908,7 @@ async function main() {
     await prisma.order.create({
       data: {
         userId: user.id,
-        status: "PAID",
+        status: "DELIVERED",
         subtotal: reviewer.product.price,
         shippingCost: 0,
         tax: 0,
@@ -748,9 +930,20 @@ async function main() {
             quantity: 1,
             unitPrice: reviewer.product.price,
             lineTotal: reviewer.product.price,
+            locatorCode: formatLocatorCode(
+              reviewer.product.locatorStation,
+              reviewer.product.locatorBlock,
+              reviewer.product.locatorShelf,
+              reviewer.product.locatorPlace,
+            ),
           },
         },
-        events: { create: { status: "PAID", note: "Seeded reviewer purchase" } },
+        events: {
+          create: [
+            { status: "PAID", note: "Seeded reviewer purchase" },
+            { status: "DELIVERED", note: "Delivered" },
+          ],
+        },
       },
     });
     await prisma.review.upsert({

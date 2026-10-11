@@ -86,7 +86,7 @@ export async function restoreCartFromOrder(
     if (row) {
       await tx.cartItem.update({
         where: { id: row.id },
-        data: { quantity: row.quantity + item.quantity },
+        data: { quantity: Math.max(row.quantity, item.quantity) },
       });
     } else {
       await tx.cartItem.create({
@@ -94,6 +94,20 @@ export async function restoreCartFromOrder(
       });
     }
   }
+}
+
+export async function clearCartForOrder(
+  tx: Prisma.TransactionClient,
+  order: { userId: string | null },
+  cartId: string | undefined,
+) {
+  let id = cartId;
+  if (order.userId) {
+    const existing = await tx.cart.findUnique({ where: { userId: order.userId } });
+    id = existing?.id ?? id;
+  }
+  if (!id) return;
+  await tx.cartItem.deleteMany({ where: { cartId: id } });
 }
 
 export async function handlePaymentStatus(message: PaymentStatusMessage) {
@@ -116,22 +130,26 @@ export async function handlePaymentStatus(message: PaymentStatusMessage) {
     if (payment.order.status === "CANCELLED" || payment.order.status === "REFUNDED") {
       return { ignored: true as const };
     }
-    await prisma.$transaction([
-      prisma.payment.update({
+    const paidMeta: PaymentMeta = payment.metadataEnc
+      ? decryptJson<PaymentMeta>(payment.metadataEnc)
+      : { guestAccessHash: "" };
+    await prisma.$transaction(async (tx) => {
+      await tx.payment.update({
         where: { id: payment.id },
         data: {
           status: "SUCCEEDED",
           stripePaymentIntentId: message.paymentIntentId ?? payment.stripePaymentIntentId,
         },
-      }),
-      prisma.order.update({
+      });
+      await tx.order.update({
         where: { id: payment.orderId },
         data: { status: "PAID" },
-      }),
-      prisma.orderStatusEvent.create({
+      });
+      await tx.orderStatusEvent.create({
         data: { orderId: payment.orderId, status: "PAID", note: "Stripe confirmed the payment." },
-      }),
-    ]);
+      });
+      await clearCartForOrder(tx, payment.order, paidMeta.cartId);
+    });
     const origin = storeOrigin();
     await mail.sendOrderPaid({
       orderId: payment.orderId,
@@ -262,7 +280,7 @@ export async function sendOrderShippedMail(orderId: string) {
   const details: OrderShippedEmailDetails = {
     orderId: order.id,
     orderUrl: `${origin}/orders/${order.id}`,
-    status: "SHIPPED",
+    status: "WITH_COURIER",
     paymentStatus: "SUCCEEDED",
     placedAt: order.createdAt,
     customerName: decrypt(order.contactNameEnc),

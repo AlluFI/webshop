@@ -6,6 +6,8 @@ import {
   CHECKOUT_COUNTRIES,
   checkoutPlaceSchema,
   customerRefundRequestSchema,
+  formatLocatorCode,
+  formatOrderReference,
   formatRefundNote,
   orderListQuerySchema,
   staffRefundRequestSchema,
@@ -13,6 +15,8 @@ import {
   storeDayEnd,
   storeDayStart,
   stripeRefundReason,
+  vatFromInclusive,
+  vatIncludedLabel,
   type AddressInput,
   type PaymentStatusMessage,
 } from "@volt/shared";
@@ -30,6 +34,7 @@ import { shippingService } from "./shipping.service.js";
 import {
   handlePaymentStatus,
   releaseReservations,
+  restoreCartFromOrder,
   type PaymentMeta,
 } from "./order-fulfillment.js";
 
@@ -140,15 +145,19 @@ async function publicOrder(order: NonNullable<Awaited<ReturnType<typeof loadOrde
           url: carrierTrackingUrl(order.trackingCarrier, order.trackingCode),
         }
       : null;
+  const subtotal = moneyNumber(order.subtotal);
+  const shippingCost = moneyNumber(order.shippingCost);
+  const storedTax = moneyNumber(order.tax);
   return {
     id: order.id,
-    reference: `VC-${order.id.replaceAll("-", "").slice(0, 8).toUpperCase()}`,
+    reference: formatOrderReference(order.id),
     status,
     paymentStatus: (order.payment?.status ?? "REQUIRES_PAYMENT") as PaymentStatus,
     currency: order.currency,
-    subtotal: moneyNumber(order.subtotal),
-    shippingCost: moneyNumber(order.shippingCost),
-    tax: moneyNumber(order.tax),
+    subtotal,
+    shippingCost,
+    tax: storedTax > 0 ? storedTax : vatFromInclusive(subtotal + shippingCost),
+    taxLabel: vatIncludedLabel(),
     total: moneyNumber(order.total),
     shippingMethod: order.shippingMethod,
     estimatedDelivery,
@@ -170,6 +179,7 @@ async function publicOrder(order: NonNullable<Awaited<ReturnType<typeof loadOrde
       unitPrice: moneyNumber(item.unitPrice),
       lineTotal: moneyNumber(item.lineTotal),
       thumbnail: item.thumbnailPath ? `/api/v1/files/${item.thumbnailPath}` : null,
+      locatorCode: item.locatorCode || null,
     })),
     events: order.events.map((event) => ({
       id: event.id,
@@ -244,6 +254,63 @@ function intentToMessage(intent: {
   return null;
 }
 
+async function findPendingCheckout(ctx: CartContext, cartId: string | null) {
+  if (ctx.userId) {
+    return prisma.order.findFirst({
+      where: { userId: ctx.userId, status: "PENDING_PAYMENT" },
+      include: { payment: true, items: true },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+  if (!cartId) return null;
+  const candidates = await prisma.order.findMany({
+    where: { userId: null, status: "PENDING_PAYMENT" },
+    include: { payment: true, items: true },
+    orderBy: { createdAt: "desc" },
+    take: 25,
+  });
+  for (const order of candidates) {
+    try {
+      if (readMeta(order.payment?.metadataEnc ?? null).cartId === cartId) return order;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function closePendingCheckout(
+  order: {
+    id: string;
+    userId: string | null;
+    items: { productId: string; quantity: number }[];
+    payment: { stripePaymentIntentId: string | null; metadataEnc: string | null } | null;
+  },
+  note: string,
+) {
+  if (order.payment?.stripePaymentIntentId && stripeConfigured()) {
+    await requireStripe()
+      .paymentIntents.cancel(order.payment.stripePaymentIntentId)
+      .catch(() => undefined);
+  }
+  const meta = readMeta(order.payment?.metadataEnc ?? null);
+  await prisma.$transaction(async (tx) => {
+    await releaseReservations(tx, order.id);
+    await tx.payment.update({
+      where: { orderId: order.id },
+      data: { status: "CANCELLED" },
+    });
+    await tx.order.update({
+      where: { id: order.id },
+      data: { status: "CANCELLED" },
+    });
+    await tx.orderStatusEvent.create({
+      data: { orderId: order.id, status: "CANCELLED", note },
+    });
+    await restoreCartFromOrder(tx, order, meta.cartId);
+  });
+}
+
 export const orderService = {
   config() {
     return {
@@ -265,6 +332,10 @@ export const orderService = {
     const cart = await cartService.get(ctx, { skipStockSync: true });
     if (cart.dto.items.length === 0) {
       throw new HttpError(400, "Your cart is empty.", { cart: "Add an item before checkout." });
+    }
+    const alreadyOpen = await findPendingCheckout(ctx, cart.dto.id);
+    if (alreadyOpen) {
+      await closePendingCheckout(alreadyOpen, "Replaced by a new checkout attempt.");
     }
 
     let address: AddressInput | undefined = dto.address;
@@ -289,7 +360,7 @@ export const orderService = {
 
     const quoted = await shippingService.quote(dto.shippingMethod, cart.dto.subtotal);
     const shipping = quoted.cost;
-    const tax = taxAmount(cart.dto.subtotal);
+    const tax = taxAmount(cart.dto.subtotal, shipping);
     const total = orderTotal(cart.dto.subtotal, shipping, tax);
     const guestAccess = randomToken();
     const snapshot: ShippingSnapshot = {
@@ -351,6 +422,13 @@ export const orderService = {
                 unitPrice: product.price,
                 lineTotal: new Prisma.Decimal(item.lineTotal),
                 thumbnailPath: product.images[0]?.thumbPath || product.images[0]?.path || null,
+                locatorCode: formatLocatorCode(
+                  product.locatorStation,
+                  product.locatorBlock,
+                  product.locatorShelf,
+                  product.locatorPlace,
+                ),
+                barcode: product.barcode,
               };
             }),
           },
@@ -382,10 +460,6 @@ export const orderService = {
           where: { id: item.productId },
           data: { stockQuantity: { decrement: item.quantity } },
         });
-      }
-
-      if (cartId) {
-        await tx.cartItem.deleteMany({ where: { cartId } });
       }
 
       return order;
@@ -469,6 +543,7 @@ export const orderService = {
       pageSize: query.pageSize,
       items: rows.map((order) => ({
         id: order.id,
+        reference: formatOrderReference(order.id),
         status: order.status,
         paymentStatus: order.payment?.status ?? "REQUIRES_PAYMENT",
         total: moneyNumber(order.total),
@@ -540,6 +615,17 @@ export const orderService = {
     return { queued: message.outcome };
   },
 
+  async abandonOpenCheckout(ctx: CartContext) {
+    const cart = await cartService.get(ctx, { skipStockSync: true });
+    const pending = await findPendingCheckout(ctx, cart.dto.id);
+    if (!pending) {
+      return { abandoned: false as const, cookie: cart.cookie, cart: cart.dto };
+    }
+    await closePendingCheckout(pending, "Left checkout before payment. Cart kept.");
+    const next = await cartService.get(ctx);
+    return { abandoned: true as const, cookie: next.cookie, cart: next.dto };
+  },
+
   async cancel(ctx: CartContext, orderId: string, orderToken?: string, asStaff = false) {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -551,25 +637,7 @@ export const orderService = {
     if (order.status !== "PENDING_PAYMENT") {
       throw new HttpError(409, "Only unprocessed orders can be cancelled.");
     }
-    if (order.payment?.stripePaymentIntentId) {
-      await requireStripe()
-        .paymentIntents.cancel(order.payment.stripePaymentIntentId)
-        .catch(() => undefined);
-    }
-    await prisma.$transaction(async (tx) => {
-      await releaseReservations(tx, orderId);
-      await tx.payment.update({
-        where: { orderId },
-        data: { status: "CANCELLED" },
-      });
-      await tx.order.update({
-        where: { id: orderId },
-        data: { status: "CANCELLED" },
-      });
-      await tx.orderStatusEvent.create({
-        data: { orderId, status: "CANCELLED", note: "Cancelled before payment completed." },
-      });
-    });
+    await closePendingCheckout(order, "Cancelled before payment completed.");
     const loaded = await loadOrder(orderId);
     if (!loaded) throw new HttpError(404, "Order not found");
     return await publicOrder(loaded);
@@ -597,7 +665,7 @@ export const orderService = {
       throw new HttpError(
         409,
         asStaff
-          ? "Only paid, processing, shipped, or delivered orders can be refunded."
+          ? "Only paid through delivered orders can be refunded."
           : "This order can no longer be refunded from your account. Contact support.",
       );
     }

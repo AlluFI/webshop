@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, Link } from "react-router-dom";
-import { CHECKOUT_COUNTRIES, addressSchema, formatStoreDate, isStaffRole, type AddressInput } from "@volt/shared";
+import { CHECKOUT_COUNTRIES, addressSchema, formatOrderReference, formatOrderStatus, formatStoreDate, isStaffRole, type AddressInput } from "@volt/shared";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
 import { PageMeta } from "../seo";
@@ -110,7 +110,7 @@ export function AccountPage() {
           Save profile
         </button>
       </form>
-      <RecentOrders token={accessToken} />
+      {!isStaffRole(user.role) && <RecentOrders token={accessToken} />}
       <p>
         Two-factor authentication:{" "}
         <strong>{user.totpEnabled ? "Active" : "Off"}</strong>
@@ -191,10 +191,10 @@ function RecentOrders({ token }: { token: string }) {
           {items.map((item) => (
             <li key={item.id}>
               <span>
-                <Link to={`/orders/${item.id}`}>{item.summary || item.id.slice(0, 8)}</Link>
+                <Link to={`/orders/${item.id}`}>{item.summary || formatOrderReference(item.id)}</Link>
                 <br />
                 <span className="muted">
-                  {item.status} · {formatStoreDate(item.createdAt)}
+                  {formatOrderStatus(item.status)} · {formatStoreDate(item.createdAt)}
                 </span>
               </span>
               <span>{money(item.total)}</span>

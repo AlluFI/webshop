@@ -23,6 +23,7 @@ type Quote = {
   shippingCost: number;
   shippingLabel: string;
   tax: number;
+  taxLabel?: string;
   total: number;
 };
 
@@ -65,6 +66,7 @@ export function CheckoutPage() {
     subtotal: number;
     shippingCost: number;
     tax: number;
+    taxLabel?: string;
   } | null>(null);
   const [stripeReady, setStripeReady] = useState<boolean | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -189,6 +191,7 @@ export function CheckoutPage() {
         subtotal: quote?.subtotal ?? cart.subtotal,
         shippingCost: quote?.shippingCost ?? 0,
         tax: quote?.tax ?? 0,
+        taxLabel: quote?.taxLabel,
       });
       await refresh().catch(() => undefined);
     } catch (err) {
@@ -529,7 +532,10 @@ export function CheckoutPage() {
                     : STANDARD_SHIPPING),
             )}
           </p>
-          <p>Tax {money(payment?.tax ?? quote?.tax ?? 0)}</p>
+          <p>
+            {payment?.taxLabel ?? quote?.taxLabel ?? "VAT 25.5% (included)"}{" "}
+            {money(payment?.tax ?? quote?.tax ?? 0)}
+          </p>
           <p className="price" style={{ fontSize: "1.3rem" }}>
             Total{" "}
             {money(

@@ -1,6 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   addStoreDays,
+  formatOrderReference,
+  formatOrderStatus,
+  formatStoreDateTime,
   ORDER_STATUSES,
   SHIPPING_CARRIERS,
   SHIPPING_CARRIER_META,
@@ -20,10 +23,12 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
   const [items, setItems] = useState<
     {
       id: string;
+      reference?: string;
       status: string;
       total: number;
       summary: string;
       createdAt: string;
+      paidAt?: string | null;
       shippingMethod?: string;
       trackingCarrier?: string | null;
       trackingCode?: string | null;
@@ -64,7 +69,7 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
   }
 
   async function setStatus(id: string, status: string) {
-    if (status === "SHIPPED") {
+    if (status === "WITH_COURIER") {
       const row = items.find((item) => item.id === id);
       if (row) openShip(row);
       return;
@@ -91,7 +96,7 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
         method: "POST",
         token,
         body: JSON.stringify({
-          status: "SHIPPED",
+          status: "WITH_COURIER",
           carrier: form.carrier,
           trackingCode: form.trackingCode,
           estimatedDeliveryFrom: form.estimatedDeliveryFrom,
@@ -133,7 +138,7 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
       </div>
       <Modal
         open={Boolean(refundOrder)}
-        title={refundOrder ? `Refund ${refundOrder.id.slice(0, 8)}` : "Refund order"}
+        title={refundOrder ? `Refund ${refundOrder.reference || formatOrderReference(refundOrder.id)}` : "Refund order"}
         onClose={() => {
           if (!refundBusy) {
             setRefundOrder(null);
@@ -158,7 +163,7 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
       </Modal>
       <Modal
         open={Boolean(shipOrder)}
-        title={shipOrder?.status === "SHIPPED" ? "Update tracking" : "Ship order"}
+        title={shipOrder?.status === "WITH_COURIER" ? "Update tracking" : "Hand to courier"}
         onClose={() => setShipOrder(null)}
       >
         {error && <p className="banner error">{error}</p>}
@@ -223,7 +228,7 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
           </p>
           <div className="actions">
             <button className="primary" type="submit">
-              {shipOrder?.status === "SHIPPED" ? "Save tracking" : "Mark shipped"}
+              {shipOrder?.status === "WITH_COURIER" ? "Save tracking" : "Hand to courier"}
             </button>
             <button className="ghost" type="button" onClick={() => setShipOrder(null)}>
               Cancel
@@ -236,6 +241,7 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
           <thead>
             <tr>
               <th scope="col">Order</th>
+              <th scope="col">Paid</th>
               <th scope="col">Status</th>
               <th scope="col">Total</th>
               <th scope="col">Summary</th>
@@ -246,8 +252,9 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
           <tbody>
             {items.map((item) => (
               <tr key={item.id}>
-                <td>{item.id.slice(0, 8)}</td>
-                <td>{item.status}</td>
+                <td className="locator-code">{item.reference || formatOrderReference(item.id)}</td>
+                <td>{item.paidAt ? formatStoreDateTime(item.paidAt) : "—"}</td>
+                <td>{formatOrderStatus(item.status)}</td>
                 <td className="num">{money(item.total)}</td>
                 <td>{item.summary}</td>
                 <td>
@@ -260,13 +267,13 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
                     <select value={item.status} onChange={(e) => void setStatus(item.id, e.target.value)}>
                       {ORDER_STATUSES.map((status) => (
                         <option key={status} value={status}>
-                          {status}
+                          {formatOrderStatus(status)}
                         </option>
                       ))}
                     </select>
-                    {["PAID", "PROCESSING", "SHIPPED"].includes(item.status) && (
+                    {["SHIPPING", "WITH_COURIER"].includes(item.status) && (
                       <button className="link" type="button" onClick={() => openShip(item)}>
-                        {item.status === "SHIPPED" ? "Tracking" : "Ship"}
+                        {item.status === "WITH_COURIER" ? "Tracking" : "Courier"}
                       </button>
                     )}
                     {canRefund &&

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { vatFromInclusive } from "@volt/shared";
 import {
   cartSubtotal,
   clampQuantity,
   lineTotal,
   orderTotal,
   shippingCost,
+  taxAmount,
   toCents,
 } from "./cart-math.js";
 
@@ -22,8 +24,10 @@ describe("cart and order totals", () => {
     expect(shippingCost("express", 400)).toBe(18);
   });
 
-  it("sums subtotal, shipping, and tax", () => {
-    expect(orderTotal(40, 8, 0)).toBe(48);
+  it("keeps VAT inside the retail total and extracts it for the confirmation line", () => {
+    expect(orderTotal(40, 8, 9.75)).toBe(48);
+    expect(taxAmount(40, 8)).toBe(vatFromInclusive(48));
+    expect(taxAmount(40, 8)).toBe(9.75);
   });
 
   it("clamps quantities to available stock", () => {

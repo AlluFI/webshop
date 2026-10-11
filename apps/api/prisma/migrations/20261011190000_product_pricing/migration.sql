@@ -1,0 +1,2 @@
+ALTER TABLE "products" ADD COLUMN "wholesalePrice" DECIMAL(10,2);
+ALTER TABLE "products" ADD COLUMN "vatRate" DECIMAL(5,2) NOT NULL DEFAULT 25.5;

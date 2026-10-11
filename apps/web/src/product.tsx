@@ -8,11 +8,36 @@ export type Product = {
   slug: string;
   description: string;
   price: number;
+  wholesalePrice?: number | null;
+  vatRate?: number;
+  pricing?: {
+    retail: number;
+    wholesale: number | null;
+    vatRate: number;
+    net: number;
+    vat: number;
+    margin: number | null;
+    marginPct: number | null;
+  };
   stockQuantity: number;
   category: { name: string; slug: string };
   brand: { name: string; slug: string };
   images: { url: string; thumbUrl?: string; altText: string }[];
   featured?: boolean;
+  barcode?: string | null;
+  locator?: {
+    station: number;
+    block: number;
+    shelf: number;
+    place: number;
+    code: string;
+  };
+  wholesaler?: {
+    id: string;
+    name: string;
+    email: string;
+    sku: string | null;
+  } | null;
   weightKg: number;
   weightLb: number;
   dimensions: {

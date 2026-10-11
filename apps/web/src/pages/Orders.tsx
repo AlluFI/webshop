@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { ORDER_STATUSES, formatStoreDateTime } from "@volt/shared";
+import { ORDER_STATUSES, formatOrderReference, formatOrderStatus, formatStoreDateTime } from "@volt/shared";
 import { api, userErrorMessage } from "../api";
 import { useAuth } from "../auth";
 import { money } from "../product";
@@ -8,6 +8,7 @@ import { PageMeta } from "../seo";
 
 type OrderRow = {
   id: string;
+  reference?: string;
   status: string;
   paymentStatus: string;
   total: number;
@@ -79,7 +80,7 @@ export function OrdersPage() {
             <option value="">Any</option>
             {ORDER_STATUSES.map((value) => (
               <option key={value} value={value}>
-                {value.replaceAll("_", " ")}
+                {formatOrderStatus(value)}
               </option>
             ))}
           </select>
@@ -108,13 +109,13 @@ export function OrdersPage() {
               {order.thumbnail ? <img src={order.thumbnail} alt="" /> : <div />}
               <div>
                 <Link to={`/orders/${order.id}`}>
-                  <strong>Order {order.id.slice(0, 8)}</strong>
+                  <strong>Order {order.reference || formatOrderReference(order.id)}</strong>
                 </Link>
                 <p className="muted">
                   {formatStoreDateTime(order.createdAt)} · {order.summary}
                 </p>
                 <p>
-                  {order.status.replaceAll("_", " ")} · {order.itemCount}{" "}
+                  {formatOrderStatus(order.status)} · {order.itemCount}{" "}
                   {order.itemCount === 1 ? "item" : "items"}
                 </p>
               </div>

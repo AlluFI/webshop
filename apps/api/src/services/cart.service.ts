@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { addCartItemSchema, updateCartItemSchema } from "@volt/shared";
 import { prisma } from "../prisma.js";
 import { HttpError } from "../http-error.js";
+import { decryptJson } from "../lib/crypto.js";
 import { randomToken, sha256Hex } from "../lib/hash.js";
 import { cartSubtotal, clampQuantity, lineTotal } from "../lib/cart-math.js";
 import type { CartCookieAction } from "../lib/cart-cookie.js";
@@ -128,10 +129,45 @@ async function mergeGuestIntoUser(guest: CartRecord, userCart: CartRecord) {
   await prisma.cart.delete({ where: { id: guest.id } });
 }
 
+async function heldStockForCart(cart: CartRecord) {
+  const held = new Map<string, number>();
+  const orders = await prisma.order.findMany({
+    where: {
+      status: "PENDING_PAYMENT",
+      ...(cart.userId ? { userId: cart.userId } : { userId: null }),
+    },
+    include: {
+      reservations: { where: { releasedAt: null } },
+      payment: { select: { metadataEnc: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 15,
+  });
+  for (const order of orders) {
+    if (!cart.userId) {
+      let checkoutCartId: string | undefined;
+      if (order.payment?.metadataEnc) {
+        try {
+          checkoutCartId = decryptJson<{ cartId?: string }>(order.payment.metadataEnc).cartId;
+        } catch {
+          checkoutCartId = undefined;
+        }
+      }
+      if (checkoutCartId !== cart.id) continue;
+    }
+    for (const reservation of order.reservations) {
+      held.set(reservation.productId, (held.get(reservation.productId) ?? 0) + reservation.quantity);
+    }
+  }
+  return held;
+}
+
 async function syncStock(cart: CartRecord) {
   const warnings: { productId: string; message: string }[] = [];
+  const held = await heldStockForCart(cart);
   for (const item of cart.items) {
-    const next = clampQuantity(item.quantity, item.product.stockQuantity);
+    const available = item.product.stockQuantity + (held.get(item.productId) ?? 0);
+    const next = clampQuantity(item.quantity, available);
     if (next === item.quantity) continue;
     if (next <= 0) {
       await prisma.cartItem.delete({ where: { id: item.id } });

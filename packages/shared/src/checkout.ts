@@ -134,13 +134,41 @@ export const ORDER_STATUSES = [
   "PAYMENT_FAILED",
   "PAID",
   "PROCESSING",
-  "SHIPPED",
+  "SHIPPING",
+  "WITH_COURIER",
   "DELIVERED",
   "CANCELLED",
   "REFUNDED",
 ] as const;
 
-export const STAFF_REFUNDABLE_STATUSES = ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] as const;
+export const STAFF_REFUNDABLE_STATUSES = [
+  "PAID",
+  "PROCESSING",
+  "SHIPPING",
+  "WITH_COURIER",
+  "DELIVERED",
+] as const;
+
+export const ORDER_STATUS_LABELS: Record<(typeof ORDER_STATUSES)[number], string> = {
+  PENDING_PAYMENT: "Pending payment",
+  PAYMENT_FAILED: "Payment failed",
+  PAID: "Paid",
+  PROCESSING: "Processing",
+  SHIPPING: "Shipping",
+  WITH_COURIER: "With the courier",
+  DELIVERED: "Delivered",
+  CANCELLED: "Cancelled",
+  REFUNDED: "Refunded",
+};
+
+export function formatOrderStatus(status: string) {
+  return ORDER_STATUS_LABELS[status as (typeof ORDER_STATUSES)[number]] ?? status.replaceAll("_", " ");
+}
+
+/** Staff and customer order number: VC- plus the first 8 hex chars of the UUID, uppercased. */
+export function formatOrderReference(orderId: string) {
+  return `VC-${orderId.replaceAll("-", "").slice(0, 8).toUpperCase()}`;
+}
 
 export const CUSTOMER_REFUND_REASONS = [
   { code: "changed_mind", label: "Changed my mind" },

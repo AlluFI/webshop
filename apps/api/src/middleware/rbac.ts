@@ -7,6 +7,15 @@ import {
 import { HttpError } from "../http-error.js";
 import { requireAuth, type AuthedRequest } from "./auth.js";
 
+export function forbidStaffShopping(req: Request, _res: Response, next: NextFunction) {
+  const role = (req as AuthedRequest).user?.role;
+  if (role && isStaffRole(role)) {
+    next(new HttpError(403, "Staff accounts cannot shop from the storefront."));
+    return;
+  }
+  next();
+}
+
 export function requireStaff(req: Request, res: Response, next: NextFunction) {
   requireAuth(req, res, (err?: unknown) => {
     if (err) {

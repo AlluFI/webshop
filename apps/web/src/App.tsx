@@ -24,6 +24,7 @@ import { FaqPage } from "./pages/Faq";
 import { TermsPage } from "./pages/Terms";
 import { NotFoundPage } from "./pages/NotFound";
 import { AdminPage } from "./pages/Admin";
+import { CustomerShopGate } from "./CustomerShopGate";
 
 export default function App() {
   return (
@@ -35,10 +36,38 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/catalog" element={<CatalogPage />} />
             <Route path="/products/:slug" element={<ProductPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/checkout" element={<CheckoutPage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/orders/:id" element={<OrderConfirmationPage />} />
+            <Route
+              path="/cart"
+              element={
+                <CustomerShopGate>
+                  <CartPage />
+                </CustomerShopGate>
+              }
+            />
+            <Route
+              path="/checkout"
+              element={
+                <CustomerShopGate>
+                  <CheckoutPage />
+                </CustomerShopGate>
+              }
+            />
+            <Route
+              path="/orders"
+              element={
+                <CustomerShopGate>
+                  <OrdersPage />
+                </CustomerShopGate>
+              }
+            />
+            <Route
+              path="/orders/:id"
+              element={
+                <CustomerShopGate>
+                  <OrderConfirmationPage />
+                </CustomerShopGate>
+              }
+            />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/verify-email" element={<VerifyPage />} />

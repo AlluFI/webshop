@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { config } from "./config.js";
 import { buildOrderPaidEmail, buildOrderShippedEmail, type OrderEmailDetails, type OrderShippedEmailDetails } from "./lib/order-email.js";
+import { buildRestockEmail, type RestockEmailDetails } from "./lib/restock-email.js";
 
 const transporter = nodemailer.createTransport({
   host: config.mailHost,
@@ -49,6 +50,11 @@ export const mail = {
   async sendPaymentFailed(details: OrderEmailDetails) {
     const built = buildOrderPaidEmail(details);
     await send(details.email, built.subject, built.text, built.html);
+  },
+
+  async sendRestockOrder(details: RestockEmailDetails) {
+    const built = buildRestockEmail(details);
+    await send(details.wholesalerEmail, built.subject, built.text, built.html);
   },
 
   async sendContact(input: { name: string; email: string; subject: string; message: string }) {

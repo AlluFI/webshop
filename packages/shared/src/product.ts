@@ -2,6 +2,55 @@ import { z } from "zod";
 
 const dimension = z.coerce.number().positive("Must be a positive number");
 
+/** Station and block print as 01, 02; shelf and place stay unpadded: 01|02|2|1 */
+export const locatorPartSchema = z.coerce.number().int().min(1).max(99);
+
+export function padLocatorPair(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+export function formatLocatorCode(
+  station: number,
+  block: number,
+  shelf: number,
+  place: number,
+) {
+  return `${padLocatorPair(station)}|${padLocatorPair(block)}|${shelf}|${place}`;
+}
+
+export function normalizeBarcode(value: string) {
+  return value.replace(/[\s-]/g, "").toUpperCase();
+}
+
+export const barcodeSchema = z.preprocess(
+  (value) => (value === "" || value == null ? null : normalizeBarcode(String(value))),
+  z
+    .string()
+    .regex(/^[A-Z0-9]{8,32}$/, "Use 8–32 letters or digits (EAN-13, UPC, or warehouse code)")
+    .nullable(),
+);
+
+export function ean13CheckDigit(body12: string) {
+  const digits = body12.split("").map(Number);
+  const sum = digits.reduce((total, digit, index) => total + digit * (index % 2 === 0 ? 1 : 3), 0);
+  return String((10 - (sum % 10)) % 10);
+}
+
+/** Finland GS1 prefix 640, unique per catalog index. */
+export function ean13FromIndex(index: number) {
+  const body = `640000${String(index + 1).padStart(6, "0")}`;
+  return `${body}${ean13CheckDigit(body)}`;
+}
+
+export function locatorFromIndex(index: number) {
+  return {
+    locatorStation: Math.floor(index / 64) + 1,
+    locatorBlock: (Math.floor(index / 16) % 4) + 1,
+    locatorShelf: (Math.floor(index / 4) % 4) + 1,
+    locatorPlace: (index % 4) + 1,
+  };
+}
+
 export const productDimensionsSchema = z.object({
   weightKg: dimension,
   weightLb: dimension,

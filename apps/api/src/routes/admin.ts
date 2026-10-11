@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { staffRefundRequestSchema } from "@volt/shared";
+import { pickOrderSchema, receiveStockSchema, restockOrderSchema, staffRefundRequestSchema } from "@volt/shared";
 import { HttpError } from "../http-error.js";
 import { config } from "../config.js";
 import { saveUpload } from "../lib/images.js";
@@ -8,7 +8,7 @@ import { asyncHandler, validate } from "../middleware/error-handler.js";
 import { requirePermission, requireStaff } from "../middleware/rbac.js";
 import { type AuthedRequest } from "../middleware/auth.js";
 import { adminService } from "../services/admin.service.js";
-import { catalogService } from "../services/catalog.service.js";
+import { salesService } from "../services/sales.service.js";
 import { reviewService } from "../services/review.service.js";
 import { shippingService } from "../services/shipping.service.js";
 
@@ -38,24 +38,34 @@ adminRouter.get(
 
 adminRouter.get(
   "/products",
-  requirePermission("catalog"),
+  requirePermission("products"),
   asyncHandler(async (req, res) => {
-    res.json(await catalogService.list({ ...req.query, pageSize: req.query.pageSize || "24" }));
+    res.json(await adminService.listAdminProducts({ ...req.query, pageSize: req.query.pageSize || "24" }));
   }),
 );
 
 adminRouter.post(
   "/products",
-  requirePermission("catalog"),
+  requirePermission("products"),
   asyncHandler(async (req, res) => {
     const user = (req as AuthedRequest).user;
     res.status(201).json(await adminService.createProduct(user.id, req.body));
   }),
 );
 
+adminRouter.post(
+  "/products/receive",
+  requirePermission("products"),
+  validate(receiveStockSchema),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.json(await adminService.receiveStock(user.id, req.body));
+  }),
+);
+
 adminRouter.patch(
   "/products/:id",
-  requirePermission("catalog"),
+  requirePermission("products"),
   asyncHandler(async (req, res) => {
     const user = (req as AuthedRequest).user;
     res.json(await adminService.updateProduct(user.id, String(req.params.id), req.body));
@@ -64,7 +74,7 @@ adminRouter.patch(
 
 adminRouter.delete(
   "/products/:id",
-  requirePermission("catalog"),
+  requirePermission("products"),
   asyncHandler(async (req, res) => {
     const user = (req as AuthedRequest).user;
     res.json(await adminService.deleteProduct(user.id, String(req.params.id)));
@@ -73,7 +83,7 @@ adminRouter.delete(
 
 adminRouter.post(
   "/products/:id/images",
-  requirePermission("catalog"),
+  requirePermission("products"),
   upload.single("file"),
   asyncHandler(async (req, res) => {
     const user = (req as AuthedRequest).user;
@@ -144,10 +154,45 @@ adminRouter.delete(
 );
 
 adminRouter.get(
+  "/sales",
+  requirePermission("sales"),
+  asyncHandler(async (req, res) => {
+    res.json(await salesService.report(req.query));
+  }),
+);
+
+adminRouter.get(
   "/orders",
   requirePermission("orders"),
   asyncHandler(async (req, res) => {
     res.json(await adminService.listOrders(req.query));
+  }),
+);
+
+adminRouter.get(
+  "/orders/picking",
+  requirePermission("picking"),
+  asyncHandler(async (_req, res) => {
+    res.json(await adminService.listPicking());
+  }),
+);
+
+adminRouter.post(
+  "/orders/:id/process",
+  requirePermission("picking"),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.json(await adminService.startProcess(user.id, String(req.params.id)));
+  }),
+);
+
+adminRouter.post(
+  "/orders/:id/pick",
+  requirePermission("picking"),
+  validate(pickOrderSchema),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.json(await adminService.completePick(user.id, String(req.params.id), req.body));
   }),
 );
 
@@ -183,6 +228,15 @@ adminRouter.get(
   requirePermission("users"),
   asyncHandler(async (req, res) => {
     res.json(await adminService.listUsers(req.query));
+  }),
+);
+
+adminRouter.post(
+  "/users",
+  requirePermission("users"),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.status(201).json(await adminService.createEmployee(user.id, req.body));
   }),
 );
 
@@ -229,6 +283,50 @@ adminRouter.patch(
     const user = (req as AuthedRequest).user;
     const row = await adminService.updateShipping(user.id, String(req.params.id), req.body);
     res.json(row);
+  }),
+);
+
+adminRouter.get(
+  "/wholesalers",
+  requirePermission("products"),
+  asyncHandler(async (_req, res) => {
+    res.json(await adminService.listWholesalers());
+  }),
+);
+
+adminRouter.post(
+  "/wholesalers",
+  requirePermission("catalog"),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.status(201).json(await adminService.createWholesaler(user.id, req.body));
+  }),
+);
+
+adminRouter.get(
+  "/wholesalers/:id",
+  requirePermission("catalog"),
+  asyncHandler(async (req, res) => {
+    res.json(await adminService.getWholesaler(String(req.params.id)));
+  }),
+);
+
+adminRouter.patch(
+  "/wholesalers/:id",
+  requirePermission("catalog"),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.json(await adminService.updateWholesaler(user.id, String(req.params.id), req.body));
+  }),
+);
+
+adminRouter.post(
+  "/wholesalers/:id/orders",
+  requirePermission("catalog"),
+  validate(restockOrderSchema),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.status(201).json(await adminService.createRestockOrder(user.id, String(req.params.id), req.body));
   }),
 );
 

@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { catalogQuerySchema, suggestQuerySchema } from "@volt/shared";
+import { catalogQuerySchema, formatLocatorCode, suggestQuerySchema } from "@volt/shared";
 import { prisma } from "../prisma.js";
 import { redis } from "../redis.js";
 import { HttpError } from "../http-error.js";
@@ -78,6 +78,10 @@ function mapProduct(product: {
   averageRating: number;
   reviewCount: number;
   featured: boolean;
+  locatorStation: number;
+  locatorBlock: number;
+  locatorShelf: number;
+  locatorPlace: number;
   category: { id: string; name: string; slug: string };
   brand: { id: string; name: string; slug: string };
   images: { path: string; thumbPath: string | null; altText: string; sortOrder: number }[];
@@ -116,6 +120,18 @@ function mapProduct(product: {
     averageRating: product.averageRating,
     reviewCount: product.reviewCount,
     featured: product.featured,
+    locator: {
+      station: product.locatorStation,
+      block: product.locatorBlock,
+      shelf: product.locatorShelf,
+      place: product.locatorPlace,
+      code: formatLocatorCode(
+        product.locatorStation,
+        product.locatorBlock,
+        product.locatorShelf,
+        product.locatorPlace,
+      ),
+    },
     attributes: product.attributes,
   };
 }

@@ -1,13 +1,17 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { FINLAND_VAT_RATE, formatLocatorCode, normalizeBarcode, productPricing } from "@volt/shared";
 import { api, ApiError } from "../../api";
 import { money, type Product } from "../../product";
+import { BarcodeScanField } from "./BarcodeScanField";
 import { Modal } from "./Modal";
 
 const emptyProduct = {
   name: "",
   description: "",
   price: "99",
+  wholesalePrice: "",
+  vatRate: String(FINLAND_VAT_RATE),
   stockQuantity: "10",
   category: "accessories",
   brand: "volt",
@@ -16,19 +20,41 @@ const emptyProduct = {
   widthCm: "10",
   heightCm: "4",
   featured: false,
+  locatorStation: "1",
+  locatorBlock: "1",
+  locatorShelf: "1",
+  locatorPlace: "1",
+  wholesalerId: "",
+  wholesaleSku: "",
+  barcode: "",
 };
 
 
 export function ProductsPanel({ token }: { token: string }) {
   const [items, setItems] = useState<Product[]>([]);
+  const [wholesalers, setWholesalers] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [receiveOpen, setReceiveOpen] = useState(false);
+  const [receiveNote, setReceiveNote] = useState("");
+  const [pendingReceive, setPendingReceive] = useState<{
+    barcode: string;
+    name: string;
+    stockQuantity: number | null;
+  } | null>(null);
+  const [receiveQty, setReceiveQty] = useState("1");
   const [form, setForm] = useState(emptyProduct);
 
   async function load() {
-    const data = await api<{ items: Product[] }>("/admin/products?pageSize=24", { token });
+    const [data, suppliers] = await Promise.all([
+      api<{ items: Product[] }>("/admin/products?pageSize=24", { token }),
+      api<{ items: { id: string; name: string }[] }>("/admin/wholesalers", { token }).catch(() => ({
+        items: [] as { id: string; name: string }[],
+      })),
+    ]);
     setItems(data.items);
+    setWholesalers(suppliers.items);
   }
 
   useEffect(() => {
@@ -55,6 +81,8 @@ export function ProductsPanel({ token }: { token: string }) {
       name: item.name,
       description: item.description,
       price: String(item.price),
+      wholesalePrice: item.wholesalePrice == null ? "" : String(item.wholesalePrice),
+      vatRate: String(item.vatRate ?? FINLAND_VAT_RATE),
       stockQuantity: String(item.stockQuantity),
       category: item.category.slug,
       brand: item.brand.slug,
@@ -63,6 +91,13 @@ export function ProductsPanel({ token }: { token: string }) {
       widthCm: String(item.dimensions.metric.widthCm),
       heightCm: String(item.dimensions.metric.heightCm),
       featured: Boolean(item.featured),
+      locatorStation: String(item.locator?.station ?? 1),
+      locatorBlock: String(item.locator?.block ?? 1),
+      locatorShelf: String(item.locator?.shelf ?? 1),
+      locatorPlace: String(item.locator?.place ?? 1),
+      wholesalerId: item.wholesaler?.id ?? "",
+      wholesaleSku: item.wholesaler?.sku ?? "",
+      barcode: item.barcode ?? "",
     });
     setOpen(true);
   }
@@ -73,11 +108,20 @@ export function ProductsPanel({ token }: { token: string }) {
     const body = JSON.stringify({
       ...form,
       price: Number(form.price),
+      wholesalePrice: form.wholesalePrice === "" ? null : Number(form.wholesalePrice),
+      vatRate: Number(form.vatRate || FINLAND_VAT_RATE),
       stockQuantity: Number(form.stockQuantity),
       weightKg: Number(form.weightKg),
       lengthCm: Number(form.lengthCm),
       widthCm: Number(form.widthCm),
       heightCm: Number(form.heightCm),
+      locatorStation: Number(form.locatorStation),
+      locatorBlock: Number(form.locatorBlock),
+      locatorShelf: Number(form.locatorShelf),
+      locatorPlace: Number(form.locatorPlace),
+      wholesalerId: form.wholesalerId || null,
+      wholesaleSku: form.wholesaleSku || null,
+      barcode: form.barcode || null,
     });
     try {
       if (editingId) {
@@ -113,14 +157,71 @@ export function ProductsPanel({ token }: { token: string }) {
     await load();
   }
 
+  function closeReceive() {
+    setReceiveOpen(false);
+    setPendingReceive(null);
+    setReceiveQty("1");
+  }
+
+  function onScannedBarcode(barcode: string) {
+    setError("");
+    setReceiveNote("");
+    const match = items.find((item) => item.barcode && normalizeBarcode(item.barcode) === barcode);
+    setPendingReceive({
+      barcode,
+      name: match?.name ?? "",
+      stockQuantity: match?.stockQuantity ?? null,
+    });
+    setReceiveQty("1");
+  }
+
+  async function confirmReceive(event: FormEvent) {
+    event.preventDefault();
+    if (!pendingReceive) return;
+    const quantity = Number(receiveQty);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 9999) {
+      setError("Enter how many pieces arrived (1–9999).");
+      return;
+    }
+    setError("");
+    setReceiveNote("");
+    try {
+      const row = await api<{ name: string; quantity: number; stockQuantity: number; barcode: string }>(
+        "/admin/products/receive",
+        { method: "POST", token, body: JSON.stringify({ barcode: pendingReceive.barcode, quantity }) },
+      );
+      setReceiveNote(`Received ${row.quantity} × ${row.name}. Stock is now ${row.stockQuantity}.`);
+      setPendingReceive(null);
+      setReceiveQty("1");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not receive that barcode");
+    }
+  }
+
   return (
     <div>
       {error && !open && <p className="banner error">{error}</p>}
       <div className="toolbar">
         <h2>Products</h2>
-        <button className="primary" type="button" onClick={openCreate}>
-          Add product
-        </button>
+        <div className="toolbar-actions">
+          <button
+            className="ghost"
+            type="button"
+            onClick={() => {
+              setError("");
+              setReceiveNote("");
+              setPendingReceive(null);
+              setReceiveQty("1");
+              setReceiveOpen(true);
+            }}
+          >
+            Receive stock
+          </button>
+          <button className="primary" type="button" onClick={openCreate}>
+            Add product
+          </button>
+        </div>
       </div>
       <Modal open={open} title={editingId ? "Edit product" : "New product"} onClose={closeForm}>
         {error && <p className="banner error">{error}</p>}
@@ -144,8 +245,22 @@ export function ProductsPanel({ token }: { token: string }) {
           </label>
           <div className="dims">
             <label className="field">
-              <span>Price</span>
+              <span>Retail price (incl. VAT)</span>
               <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+            </label>
+            <label className="field">
+              <span>Wholesale price</span>
+              <input
+                value={form.wholesalePrice}
+                onChange={(e) => setForm({ ...form, wholesalePrice: e.target.value })}
+                placeholder="Net cost"
+              />
+            </label>
+          </div>
+          <div className="dims">
+            <label className="field">
+              <span>VAT %</span>
+              <input value={form.vatRate} onChange={(e) => setForm({ ...form, vatRate: e.target.value })} />
             </label>
             <label className="field">
               <span>Stock</span>
@@ -155,6 +270,21 @@ export function ProductsPanel({ token }: { token: string }) {
               />
             </label>
           </div>
+          {(() => {
+            const preview = productPricing(
+              Number(form.price) || 0,
+              form.wholesalePrice === "" ? null : Number(form.wholesalePrice),
+              Number(form.vatRate) || FINLAND_VAT_RATE,
+            );
+            return (
+              <p className="muted">
+                Net {money(preview.net)} · {`VAT ${preview.vatRate}%`} {money(preview.vat)}
+                {preview.margin == null
+                  ? " · Margin —"
+                  : ` · Margin ${money(preview.margin)}${preview.marginPct == null ? "" : ` (${preview.marginPct}%)`}`}
+              </p>
+            );
+          })()}
           <div className="dims">
             <label className="field">
               <span>Category slug</span>
@@ -173,6 +303,82 @@ export function ProductsPanel({ token }: { token: string }) {
             />
             Featured
           </label>
+          <div className="dims dims-4">
+            <label className="field">
+              <span>Station</span>
+              <input
+                inputMode="numeric"
+                value={form.locatorStation}
+                onChange={(e) => setForm({ ...form, locatorStation: e.target.value })}
+              />
+            </label>
+            <label className="field">
+              <span>Block</span>
+              <input
+                inputMode="numeric"
+                value={form.locatorBlock}
+                onChange={(e) => setForm({ ...form, locatorBlock: e.target.value })}
+              />
+            </label>
+            <label className="field">
+              <span>Shelf</span>
+              <input
+                inputMode="numeric"
+                value={form.locatorShelf}
+                onChange={(e) => setForm({ ...form, locatorShelf: e.target.value })}
+              />
+            </label>
+            <label className="field">
+              <span>Place</span>
+              <input
+                inputMode="numeric"
+                value={form.locatorPlace}
+                onChange={(e) => setForm({ ...form, locatorPlace: e.target.value })}
+              />
+            </label>
+          </div>
+          <p className="muted">
+            Locator code{" "}
+            <span className="locator-code">
+              {formatLocatorCode(
+                Number(form.locatorStation) || 1,
+                Number(form.locatorBlock) || 1,
+                Number(form.locatorShelf) || 1,
+                Number(form.locatorPlace) || 1,
+              )}
+            </span>
+          </p>
+          <div className="dims">
+            <label className="field">
+              <span>Wholesaler</span>
+              <select
+                value={form.wholesalerId}
+                onChange={(e) => setForm({ ...form, wholesalerId: e.target.value })}
+              >
+                <option value="">None</option>
+                {wholesalers.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Wholesale SKU</span>
+              <input
+                value={form.wholesaleSku}
+                onChange={(e) => setForm({ ...form, wholesaleSku: e.target.value })}
+              />
+            </label>
+          </div>
+          <label className="field">
+            <span>Barcode</span>
+            <input
+              value={form.barcode}
+              onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+              placeholder="EAN-13 / UPC / warehouse code"
+            />
+          </label>
           <div className="actions">
             <button className="primary" type="submit">
               {editingId ? "Save changes" : "Create"}
@@ -183,14 +389,69 @@ export function ProductsPanel({ token }: { token: string }) {
           </div>
         </form>
       </Modal>
+      <Modal open={receiveOpen} title="Receive stock" onClose={closeReceive}>
+        {error && <p className="banner error">{error}</p>}
+        {receiveNote && <p className="banner">{receiveNote}</p>}
+        <p className="muted">
+          Scan or type a barcode once. Then enter how many pieces arrived — you do not need to scan each unit.
+        </p>
+        <BarcodeScanField onScan={onScannedBarcode} label="Delivery barcode" />
+        {pendingReceive && (
+          <form className="receive-confirm" onSubmit={(event) => void confirmReceive(event)}>
+            <p>
+              <strong>{pendingReceive.name || "Matched barcode"}</strong>
+              <span className="locator-code"> {pendingReceive.barcode}</span>
+            </p>
+            <p className="muted">
+              {pendingReceive.stockQuantity == null
+                ? "Enter the number of pieces in this delivery."
+                : `Current stock ${pendingReceive.stockQuantity}. Enter the number of pieces in this delivery.`}
+            </p>
+            <label className="field">
+              <span>Pieces received</span>
+              <input
+                autoFocus
+                inputMode="numeric"
+                value={receiveQty}
+                onChange={(event) => setReceiveQty(event.target.value)}
+              />
+            </label>
+            <div className="actions">
+              <button className="primary" type="submit">
+                Add to stock
+              </button>
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => {
+                  setPendingReceive(null);
+                  setReceiveQty("1");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+        <div className="actions">
+          <button className="ghost" type="button" onClick={closeReceive}>
+            Close
+          </button>
+        </div>
+      </Modal>
       <div className="admin-table-wrap">
         <table className="admin-table">
           <thead>
             <tr>
               <th scope="col">Product</th>
-              <th scope="col">Price</th>
+              <th scope="col">Retail</th>
+              <th scope="col">Wholesale</th>
+              <th scope="col">Margin</th>
               <th scope="col">Stock</th>
               <th scope="col">Category</th>
+              <th scope="col">Locator</th>
+              <th scope="col">Barcode</th>
+              <th scope="col">Wholesaler</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
@@ -201,8 +462,15 @@ export function ProductsPanel({ token }: { token: string }) {
                   <Link to={`/products/${item.slug}`}>{item.name}</Link>
                 </td>
                 <td className="num">{money(item.price)}</td>
+                <td className="num">{item.wholesalePrice == null ? "—" : money(item.wholesalePrice)}</td>
+                <td className="num">
+                  {item.pricing?.margin == null ? "—" : money(item.pricing.margin)}
+                </td>
                 <td className="num">{item.stockQuantity}</td>
                 <td>{item.category.name}</td>
+                <td className="locator-code">{item.locator?.code ?? "—"}</td>
+                <td className="locator-code">{item.barcode ?? "—"}</td>
+                <td>{item.wholesaler?.name ?? "—"}</td>
                 <td>
                   <div className="row-actions">
                     <button className="link" type="button" onClick={() => startEdit(item)}>

@@ -53,6 +53,8 @@ describeLive("checkout API", () => {
     expect(quote.status).toBe(200);
     expect(quote.body.items).toHaveLength(1);
     expect(quote.body.subtotal).toBeGreaterThan(0);
+    expect(quote.body.tax).toBeGreaterThan(0);
+    expect(quote.body.taxLabel).toMatch(/VAT 25\.5%/);
     expect(quote.body.total).toBe(quote.body.subtotal + quote.body.shippingCost);
     expect(quote.body.address.city).toBe("Helsinki");
   });

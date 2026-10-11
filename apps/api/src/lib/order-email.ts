@@ -1,4 +1,10 @@
-import { formatStoreDateLong, FREE_STANDARD_THRESHOLD, STORE_CURRENCY } from "@volt/shared";
+import {
+  formatOrderReference,
+  formatStoreDateLong,
+  FREE_STANDARD_THRESHOLD,
+  STORE_CURRENCY,
+  vatIncludedLabel,
+} from "@volt/shared";
 
 export type OrderEmailItem = {
   name: string;
@@ -90,7 +96,7 @@ function formatPlacedAt(date: Date) {
 }
 
 function shortId(orderId: string) {
-  return orderId.slice(0, 8);
+  return formatOrderReference(orderId);
 }
 
 function shippingLines(shipping: OrderEmailShipping) {
@@ -140,7 +146,7 @@ export function buildOrderPaidEmail(details: OrderEmailDetails) {
     "",
     introText,
     "",
-    `Order: ${details.orderId}`,
+    `Order: ${ref}`,
     `Placed: ${placed}`,
     `Status: ${status}`,
     `Payment: ${payment}`,
@@ -150,7 +156,7 @@ export function buildOrderPaidEmail(details: OrderEmailDetails) {
     "",
     `Subtotal: ${money(details.subtotal)}`,
     `Shipping: ${money(details.shippingCost)} — ${shipLabel}`,
-    `Tax: ${money(details.tax)}`,
+    `${vatIncludedLabel()}: ${money(details.tax)}`,
     `Total: ${money(details.total)}`,
     "",
     ship.length ? ["Ship to", ...ship.map((line) => line)].join("\n") : "",
@@ -214,7 +220,6 @@ export function buildOrderPaidEmail(details: OrderEmailDetails) {
                   <td style="padding:14px 16px;width:50%;vertical-align:top;">
                     <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:${MUTED};">Order</div>
                     <div style="margin-top:4px;font-weight:600;">${escapeHtml(ref)}</div>
-                    <div style="margin-top:2px;font-size:13px;color:${MUTED};word-break:break-all;">${escapeHtml(details.orderId)}</div>
                   </td>
                   <td style="padding:14px 16px;width:50%;vertical-align:top;">
                     <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:${MUTED};">Status</div>
@@ -234,7 +239,7 @@ export function buildOrderPaidEmail(details: OrderEmailDetails) {
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 22px;">
                 <tr><td style="padding:6px 0;color:${MUTED};">Subtotal</td><td style="padding:6px 0;text-align:right;">${escapeHtml(money(details.subtotal))}</td></tr>
                 <tr><td style="padding:6px 0;color:${MUTED};">Shipping — ${escapeHtml(shipLabel)}</td><td style="padding:6px 0;text-align:right;">${escapeHtml(money(details.shippingCost))}</td></tr>
-                <tr><td style="padding:6px 0;color:${MUTED};">Tax</td><td style="padding:6px 0;text-align:right;">${escapeHtml(money(details.tax))}</td></tr>
+                <tr><td style="padding:6px 0;color:${MUTED};">${escapeHtml(vatIncludedLabel())}</td><td style="padding:6px 0;text-align:right;">${escapeHtml(money(details.tax))}</td></tr>
                 <tr><td style="padding:10px 0 0;border-top:1px solid ${LINE};font-weight:700;font-size:18px;">Total</td><td style="padding:10px 0 0;border-top:1px solid ${LINE};text-align:right;font-weight:700;font-size:18px;">${escapeHtml(money(details.total))}</td></tr>
               </table>
               <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:${FOREST};font-weight:600;">Ship to</p>

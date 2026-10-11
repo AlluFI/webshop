@@ -7,7 +7,7 @@ import {
 import { prisma } from "../prisma.js";
 import { HttpError } from "../http-error.js";
 
-const PURCHASED_STATUSES = ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] as const;
+const PURCHASED_STATUSES = ["PAID", "PROCESSING", "SHIPPING", "WITH_COURIER", "DELIVERED"] as const;
 
 function displayName(user: { displayName: string | null; email: string }) {
   if (user.displayName?.trim()) return user.displayName.trim();

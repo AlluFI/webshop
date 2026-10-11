@@ -2,6 +2,7 @@ import {
   CHECKOUT_COUNTRIES,
   checkoutQuoteSchema,
   checkoutValidateSchema,
+  vatIncludedLabel,
   type AddressInput,
   type ShippingMethod,
 } from "@volt/shared";
@@ -36,7 +37,7 @@ async function quoteFromCart(
     throw new HttpError(400, "Your cart is empty.", { cart: "Add an item before checkout." });
   }
   const quoted = await shippingService.quote(method, cart.subtotal);
-  const tax = taxAmount(cart.subtotal);
+  const tax = taxAmount(cart.subtotal, quoted.cost);
   return {
     items: cart.items,
     itemCount: cart.itemCount,
@@ -45,6 +46,7 @@ async function quoteFromCart(
     shippingCost: quoted.cost,
     shippingLabel: quoted.label,
     tax,
+    taxLabel: vatIncludedLabel(),
     total: orderTotal(cart.subtotal, quoted.cost, tax),
     warnings: cart.warnings,
   };

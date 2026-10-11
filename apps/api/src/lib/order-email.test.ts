@@ -23,7 +23,7 @@ const sample = {
   subtotal: 1299,
   shippingCost: 0,
   shippingMethod: "standard",
-  tax: 0,
+  tax: 263.94,
   total: 1299,
   shipping: {
     recipientName: "Aleksi",
@@ -37,14 +37,17 @@ const sample = {
 describe("order confirmation email", () => {
   it("includes products, totals, status, and shipping in text and html", () => {
     const mail = buildOrderPaidEmail(sample);
-    expect(mail.subject).toContain("af7f062c");
+    expect(mail.subject).toContain("VC-AF7F062C");
     expect(mail.subject).toMatch(/confirmed/i);
     expect(mail.text).toContain("Framework Laptop 13");
     expect(mail.text).toContain(formatMoney(1299));
+    expect(mail.text).toContain("VAT 25.5% (included)");
+    expect(mail.text).toContain(formatMoney(263.94));
     expect(mail.text).toContain("Status: Paid");
     expect(mail.text).toContain("Mannerheimintie 12");
     expect(mail.text).toContain(sample.orderUrl);
     expect(mail.html).toContain("Framework Laptop 13");
+    expect(mail.html).toContain("VAT 25.5% (included)");
     expect(mail.html).toContain("Paid");
     expect(mail.html).toContain("Helsinki");
     expect(mail.html).toContain("View your order");
@@ -80,7 +83,7 @@ describe("order shipped email", () => {
   it("includes tracking, ETA, store order link, and Finnish carrier pages", () => {
     const mail = buildOrderShippedEmail({
       ...sample,
-      status: "SHIPPED",
+      status: "WITH_COURIER",
       carrier: "posti",
       carrierName: "Posti",
       trackingCode: "JJFI66012700410158170/32109367922",

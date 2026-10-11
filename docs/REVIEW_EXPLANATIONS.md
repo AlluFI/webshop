@@ -181,7 +181,7 @@ We do not pretend CAPTCHA or Google’s redirect can be fully trusted from unit 
 **Payments**
 
 - Stripe is mocked at the SDK in `payment.api.test.ts`. Routes and Postgres are real.
-- Place order → stock decrements immediately, cart empties, status `PENDING_PAYMENT`, client secret returned. A **signed** `payment_intent.succeeded` webhook (or the inline queue in tests) marks the order `PAID`. Shipping ciphertext still has no plaintext city.
+- Place order → stock decrements immediately, status `PENDING_PAYMENT`, client secret returned. The cart stays filled so the browser back button still shows the bag. A **signed** `payment_intent.succeeded` webhook (or the inline queue in tests) marks the order `PAID` and then clears the cart. Opening **Cart** while payment is still pending cancels that unpaid checkout and puts stock back. Shipping ciphertext still has no plaintext city.
 - `payment_intent.payment_failed` **or** `POST /checkout/orders/:id/sync` on a declined PaymentIntent restores stock **and** puts the lines back in the cart. Pay calls `/sync` on a card decline so Stripe CLI is not required for the Mailpit failure email.
 - `X-Volt-Simulate: stripe-timeout` on place returns **504** and does **not** decrement stock (gateway never created an intent).
 - Two agents checkout the last unit in `Promise.all`: statuses are `[201, 409]`, remaining stock is 0.

@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, userErrorMessage, readOrderToken } from "../api";
 import { useAuth } from "../auth";
 import { useCart } from "../cart";
-import { formatStoreDateTime } from "@volt/shared";
+import { formatOrderReference, formatOrderStatus, formatStoreDateTime } from "@volt/shared";
 import { money } from "../product";
 import { RefundForm } from "../RefundForm";
 import { PageMeta } from "../seo";
@@ -14,6 +14,10 @@ type Order = {
   status: string;
   paymentStatus: string;
   total: number;
+  subtotal?: number;
+  shippingCost?: number;
+  tax?: number;
+  taxLabel?: string;
   shippingMethod: string;
   estimatedDelivery?: { from: string; to: string; label: string } | null;
   tracking?: { carrier: string; carrierName: string; code: string; url: string } | null;
@@ -167,7 +171,7 @@ export function OrderConfirmationPage() {
         title="Order confirmation — Volt & Co"
         description="Your Volt & Co order summary, reference number, estimated delivery, and shipping details after checkout."
       />
-      <p className="kicker">Order {order.reference || order.id.slice(0, 8)}</p>
+      <p className="kicker">Order {order.reference || formatOrderReference(order.id)}</p>
       <h1>{title}</h1>
       {error && !refundOpen && <p className="banner error">{error}</p>}
       {paid && <p className="banner ok">A confirmation email is on the way (check Mailpit).</p>}
@@ -181,7 +185,7 @@ export function OrderConfirmationPage() {
         <p className="banner ok">
           Nothing was charged on this attempt.
           {order.replacedByOrderId
-            ? ` You later paid for these items in order ${order.replacedByOrderId.slice(0, 8)}.`
+            ? ` You later paid for these items in order ${formatOrderReference(order.replacedByOrderId)}.`
             : " A later order already covers these items."}
         </p>
       )}
@@ -189,13 +193,10 @@ export function OrderConfirmationPage() {
       {refunded && <p className="banner ok">Stripe issued a sandbox refund and stock was restored.</p>}
       <div className="panel">
         <p>
-          Order ID: <strong>{order.id}</strong>
+          Order: <strong>{order.reference || formatOrderReference(order.id)}</strong>
         </p>
         <p>
-          Reference: <strong>{order.reference || order.id.slice(0, 8)}</strong>
-        </p>
-        <p>
-          Status: <strong>{order.status.replaceAll("_", " ")}</strong>
+          Status: <strong>{formatOrderStatus(order.status)}</strong>
         </p>
         <p>Payment: {order.paymentStatus.replaceAll("_", " ")}</p>
         <p>
@@ -233,6 +234,17 @@ export function OrderConfirmationPage() {
             </li>
           ))}
         </ul>
+        {order.subtotal != null && (
+          <p>Subtotal {money(order.subtotal)}</p>
+        )}
+        {order.shippingCost != null && (
+          <p>Shipping {money(order.shippingCost)}</p>
+        )}
+        {order.tax != null && (
+          <p>
+            {order.taxLabel || "VAT 25.5% (included)"} {money(order.tax)}
+          </p>
+        )}
         <p className="price">Total {money(order.total)}</p>
         <div className="actions">
           {order.canCancel && (
@@ -267,7 +279,7 @@ export function OrderConfirmationPage() {
       <ol className="muted" style={{ marginTop: 8 }}>
         {order.events.map((event) => (
           <li key={event.id}>
-            {formatStoreDateTime(event.createdAt)} — {event.status.replaceAll("_", " ")}
+            {formatStoreDateTime(event.createdAt)} — {formatOrderStatus(event.status)}
             {event.note ? ` · ${event.note}` : ""}
           </li>
         ))}

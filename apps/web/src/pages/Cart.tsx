@@ -2,19 +2,23 @@ import { useEffect, useState } from "react";
 import { FREE_STANDARD_THRESHOLD } from "@volt/shared";
 import { Link } from "react-router-dom";
 import { api, userErrorMessage } from "../api";
+import { useAuth } from "../auth";
 import { useCart } from "../cart";
 import { ProductCard, money, type Product } from "../product";
 import { PageMeta } from "../seo";
 
 export function CartPage() {
   const { cart, ready, error, refresh, updateItem, removeItem } = useCart();
+  const { accessToken } = useAuth();
   const [related, setRelated] = useState<Product[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    void refresh()
+    void api("/checkout/abandon", { method: "POST", token: accessToken })
+      .catch(() => undefined)
+      .then(() => refresh())
       .catch(() => undefined)
       .finally(() => {
         if (!cancelled) setHydrated(true);
@@ -22,7 +26,7 @@ export function CartPage() {
     return () => {
       cancelled = true;
     };
-  }, [refresh]);
+  }, [refresh, accessToken]);
 
   useEffect(() => {
     if (!ready || !hydrated) return;

@@ -13,7 +13,7 @@ export function FaqPage() {
       <h2>Can I return a paid order?</h2>
       <p>
         Yes — while the order is still <strong>Paid</strong>, open it, choose a reason, and request a
-        sandbox refund. Stock is restored. After staff moves it to processing or shipped, only support
+        sandbox refund. Stock is restored. After staff moves it to processing or shipping, only support
         can refund.
       </p>
       <h2>Why do I need 2FA for admin?</h2>

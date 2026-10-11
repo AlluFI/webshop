@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   addressSchema,
+  adminCreateEmployeeSchema,
+  adminUserListQuerySchema,
   checkoutValidateSchema,
   customerRefundRequestSchema,
   loginSchema,
@@ -95,5 +97,24 @@ describe("user input validation", () => {
     );
     expect(staffRefundRequestSchema.parse({ reason: "shop_error" }).reason).toBe("shop_error");
     expect(customerRefundRequestSchema.safeParse({ reason: "shop_error" }).success).toBe(false);
+  });
+
+  it("creates staff employees and rejects customer or weak passwords", () => {
+    const parsed = adminCreateEmployeeSchema.parse({
+      email: "Hire@Volt.test",
+      password: "Shopping123",
+      displayName: "New Hire",
+      role: "warehouse",
+    });
+    expect(parsed.email).toBe("hire@volt.test");
+    expect(adminCreateEmployeeSchema.safeParse({ ...parsed, role: "customer" }).success).toBe(false);
+    expect(adminCreateEmployeeSchema.safeParse({ ...parsed, password: "short" }).success).toBe(false);
+  });
+
+  it("filters users by one role or all employees", () => {
+    expect(adminUserListQuerySchema.parse({ role: "warehouse" }).role).toBe("warehouse");
+    expect(adminUserListQuerySchema.parse({ role: "staff" }).role).toBe("staff");
+    expect(adminUserListQuerySchema.parse({ role: "" }).role).toBeUndefined();
+    expect(adminUserListQuerySchema.safeParse({ role: "manager" }).success).toBe(false);
   });
 });
