@@ -7,3 +7,4 @@ export * from "./review.js";
 export * from "./contact.js";
 export * from "./admin.js";
 export * from "./shipping.js";
+export * from "./time.js";

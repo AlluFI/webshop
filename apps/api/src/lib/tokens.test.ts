@@ -42,8 +42,9 @@ const refresh = "unit-test-refresh-secret-32chars";
 
 describe("refresh token rotation", () => {
   it("issues a new refresh token and rejects the previous one", async () => {
+    const redis = new MemoryRedis();
     const service = new TokenService(
-      new MemoryRedis() as unknown as RefreshStore,
+      redis as unknown as RefreshStore,
       access,
       refresh,
       900,
@@ -52,6 +53,9 @@ describe("refresh token rotation", () => {
     const first = await service.createSession("u1", "a@volt.test", "customer");
     const rotated = await service.rotate(first.refreshToken, "a@volt.test", "customer");
     expect(rotated.refreshToken).not.toBe(first.refreshToken);
+    const stored = [...redis.data.values()].find((value) => value.startsWith("v1:"));
+    expect(stored).toBeTruthy();
+    expect(stored).not.toContain(first.refreshToken);
     await expect(
       service.rotate(first.refreshToken, "a@volt.test", "customer"),
     ).rejects.toMatchObject({ status: 401, message: "Refresh token reuse detected" });

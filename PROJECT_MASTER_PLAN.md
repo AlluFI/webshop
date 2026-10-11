@@ -19,8 +19,6 @@ Living source of truth for the three-part B2C e-commerce platform. Tick checkbox
 
 Experience work is in this repo (`./scripts/start.sh` → http://localhost:8088 / https://localhost:8443). Do not push Part 3 commits back to `i-love-shopping2`.
 
-Copied from Part 2 freeze. Implement experience here (`./scripts/start.sh` → http://localhost:8088). Do not push Part 3 commits back to `i-love-shopping2`.
-
 ---
 
 ## 1. How to use this document
@@ -706,17 +704,17 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 - [x] Self-signed TLS configured
 - [x] Sensitive data encrypted at rest (credentials, PII, addresses, orders, session tokens)
 - [x] Token-bucket rate limiting
-- [ ] You can explain CIA (confidentiality, integrity, availability)
+- [x] You can explain CIA (confidentiality, integrity, availability)
 - [x] SEO: titles under 60 chars, H2–H6 hierarchy, logical URLs, descriptive alts
 - [x] Meaningful images have descriptive alt text
 - [x] Text readable at 200% zoom
-- [ ] You can explain semantic HTML for accessibility
-- [ ] You can explain testing approach
+- [x] You can explain semantic HTML for accessibility
+- [x] You can explain testing approach
 - [x] Automated unit, API, user-flow, and security tests
-- [ ] You can explain and demo those tests
-- [ ] Load report: max concurrent users before responses exceed 5 seconds
-- [ ] Load report: transaction throughput
-- [ ] Bottlenecks identified with proposed solutions
+- [x] You can explain and demo those tests
+- [x] Load report: max concurrent users before responses exceed 5 seconds
+- [x] Load report: transaction throughput
+- [x] Bottlenecks identified with proposed solutions
 
 ### Extra
 
@@ -731,14 +729,14 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 
 | Objective | Target | Measured |
 | --- | --- | --- |
-| 90% of requests | within 2s | |
-| Concurrent users without degradation | at least 50 | |
-| Peak throughput | at least 10 TPS | |
-| Successful transactions | 98% under high traffic | |
-| Error rate | under 5% | |
-| Max users before p95 > 5s | (find it) | |
-| CPU/memory > 90% load | (find it) | |
-| Bottlenecks | listed + fixes | |
+| 90% of requests | within 2s | **p90 = 59 ms** (Compose, 2026-09-14) |
+| Concurrent users without degradation | at least 50 | 50 browse + 15 search + 10 auth; p95 = 103 ms |
+| Peak throughput | at least 10 TPS | **112 HTTP req/s** |
+| Successful transactions | 98% under high traffic | **100%** (9049/9049) |
+| Error rate | under 5% | **0%** |
+| Max users before p95 > 5s | (find it) | Not reached at 64 VUs |
+| CPU/memory > 90% load | (find it) | Not reached (API ~3% CPU / 111 MiB) |
+| Bottlenecks | listed + fixes | Facets, Argon2, image origin — see `docs/PERFORMANCE.md` |
 
 Scenarios (at least 3, k6): browse catalog; search + add to cart; checkout; register/login.
 
@@ -761,7 +759,7 @@ Scenarios (at least 3, k6): browse catalog; search + add to cart; checkout; regi
 | Unit | Vitest | Part 1: JWT, validation, product model. Part 2: cart math, totals. Part 3: keep + reviews |
 | API integration | Supertest | All endpoints and DB persistence |
 | Security | Supertest | Injection, malformed JSON, authz; Part 3 rate limit |
-| Critical flows | Playwright or API-level flows | Part 2: register + checkout guest/user |
+| Critical flows | Playwright or API-level flows | Part 2: register + checkout guest/user. Part 3: `e2e/storefront.smoke.spec.ts` |
 | Manual | Checklist above | CAPTCHA, OAuth, 2FA, TLS, Stripe CLI |
 | Load | k6 | Part 3 only |
 

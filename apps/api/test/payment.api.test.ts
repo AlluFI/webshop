@@ -66,7 +66,19 @@ describeLive("Stripe checkout", () => {
       });
     }
     await prisma.order.deleteMany({
-      where: { payment: { stripePaymentIntentId: { in: ["pi_test_success", "pi_test_fail", "pi_test_user"] } } },
+      where: {
+        payment: {
+          stripePaymentIntentId: {
+            in: [
+              "pi_test_success",
+              "pi_test_fail",
+              "pi_test_sync_fail",
+              "pi_test_sync_pending",
+              "pi_test_user",
+            ],
+          },
+        },
+      },
     }).catch(() => undefined);
   });
 
@@ -194,6 +206,64 @@ describeLive("Stripe checkout", () => {
         (item: { productId: string; quantity: number }) => item.productId === productId && item.quantity >= 1,
       ),
     ).toBe(true);
+  });
+
+  it("marks the order failed when /sync sees a declined PaymentIntent", async () => {
+    create.mockResolvedValueOnce({
+      id: "pi_test_sync_fail",
+      client_secret: "pi_test_sync_fail_secret",
+      status: "requires_payment_method",
+    });
+    retrieve.mockResolvedValueOnce({
+      id: "pi_test_sync_fail",
+      status: "requires_payment_method",
+      metadata: {},
+      last_payment_error: { message: "Your card has insufficient funds." },
+    });
+    const agent = request.agent(app);
+    await agent.post("/api/v1/cart/items").send({ productId, quantity: 1 });
+    const placed = await agent.post("/api/v1/checkout/place").send({
+      ...checkoutBody,
+      email: "sync-fail@volt.test",
+    });
+    expect(placed.status).toBe(201);
+    const orderId = placed.body.order.id as string;
+    const token = placed.body.orderAccessToken as string;
+    const synced = await agent
+      .post(`/api/v1/checkout/orders/${orderId}/sync`)
+      .set("x-order-token", token);
+    expect(synced.status).toBe(200);
+    expect(synced.body.status).toBe("PAYMENT_FAILED");
+    expect(synced.body.paymentStatus).toBe("FAILED");
+  });
+
+  it("does not fail an unpaid order when /sync sees no payment error yet", async () => {
+    create.mockResolvedValueOnce({
+      id: "pi_test_sync_pending",
+      client_secret: "pi_test_sync_pending_secret",
+      status: "requires_payment_method",
+    });
+    retrieve.mockResolvedValueOnce({
+      id: "pi_test_sync_pending",
+      status: "requires_payment_method",
+      metadata: {},
+      last_payment_error: null,
+    });
+    const agent = request.agent(app);
+    await agent.post("/api/v1/cart/items").send({ productId, quantity: 1 });
+    const placed = await agent.post("/api/v1/checkout/place").send({
+      ...checkoutBody,
+      email: "sync-pending@volt.test",
+    });
+    expect(placed.status).toBe(201);
+    const orderId = placed.body.order.id as string;
+    const token = placed.body.orderAccessToken as string;
+    const synced = await agent
+      .post(`/api/v1/checkout/orders/${orderId}/sync`)
+      .set("x-order-token", token);
+    expect(synced.status).toBe(200);
+    expect(synced.body.status).toBe("PENDING_PAYMENT");
+    await prisma.order.delete({ where: { id: orderId } }).catch(() => undefined);
   });
 
   it("lets only one of two concurrent checkouts take the last unit", async () => {

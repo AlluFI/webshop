@@ -5,7 +5,14 @@ import {
   carrierTrackingUrl,
   CHECKOUT_COUNTRIES,
   checkoutPlaceSchema,
+  customerRefundRequestSchema,
+  formatRefundNote,
   orderListQuerySchema,
+  staffRefundRequestSchema,
+  STAFF_REFUNDABLE_STATUSES,
+  storeDayEnd,
+  storeDayStart,
+  stripeRefundReason,
   type AddressInput,
   type PaymentStatusMessage,
 } from "@volt/shared";
@@ -190,7 +197,7 @@ function canRead(
 function parseDay(value: string | undefined, end: boolean) {
   if (!value) return undefined;
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return new Date(`${value}T${end ? "23:59:59.999" : "00:00:00.000"}Z`);
+    return end ? storeDayEnd(value) : storeDayStart(value);
   }
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
@@ -215,15 +222,23 @@ function intentToMessage(intent: {
     return { v: 1, orderId, paymentIntentId: intent.id, outcome: "processing" };
   }
   if (intent.status === "requires_action") return null;
-  if (intent.status === "requires_payment_method" || intent.status === "canceled") {
+  if (intent.status === "canceled") {
     return {
       v: 1,
       orderId,
       paymentIntentId: intent.id,
-      outcome: intent.status === "canceled" ? "canceled" : "failed",
-      reason:
-        intent.last_payment_error?.message ||
-        (intent.status === "canceled" ? "Payment was cancelled." : "The card was declined."),
+      outcome: "canceled",
+      reason: intent.last_payment_error?.message || "Payment was cancelled.",
+    };
+  }
+  // Initial PI status is also requires_payment_method — only fail after Stripe records an error.
+  if (intent.status === "requires_payment_method" && intent.last_payment_error) {
+    return {
+      v: 1,
+      orderId,
+      paymentIntentId: intent.id,
+      outcome: "failed",
+      reason: intent.last_payment_error.message || "The card was declined.",
     };
   }
   return null;
@@ -560,7 +575,14 @@ export const orderService = {
     return await publicOrder(loaded);
   },
 
-  async refund(ctx: CartContext, orderId: string, orderToken?: string, asStaff = false) {
+  async refund(
+    ctx: CartContext,
+    orderId: string,
+    orderToken?: string,
+    asStaff = false,
+    input: unknown = {},
+  ) {
+    const dto = (asStaff ? staffRefundRequestSchema : customerRefundRequestSchema).parse(input);
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: { payment: true, items: true },
@@ -568,13 +590,30 @@ export const orderService = {
     if (!order || (!asStaff && !canRead(order, ctx, orderToken))) {
       throw new HttpError(404, "Order not found");
     }
-    if (order.status !== "PAID") {
-      throw new HttpError(409, "Only paid orders can be refunded.");
+    const refundable = asStaff
+      ? (STAFF_REFUNDABLE_STATUSES as readonly string[]).includes(order.status)
+      : order.status === "PAID";
+    if (!refundable) {
+      throw new HttpError(
+        409,
+        asStaff
+          ? "Only paid, processing, shipped, or delivered orders can be refunded."
+          : "This order can no longer be refunded from your account. Contact support.",
+      );
     }
     const intentId = order.payment?.stripePaymentIntentId;
     if (!intentId) throw new HttpError(409, "This order has no payment to refund.");
+    const note = formatRefundNote(dto.reason, dto.note, asStaff ? "staff" : "customer");
     try {
-      await requireStripe().refunds.create({ payment_intent: intentId });
+      await requireStripe().refunds.create({
+        payment_intent: intentId,
+        reason: stripeRefundReason(dto.reason),
+        metadata: {
+          shop_reason: dto.reason,
+          shop_note: dto.note?.trim() || "",
+          actor: asStaff ? "staff" : "customer",
+        },
+      });
     } catch {
       throw new HttpError(502, "Stripe could not refund this payment.", {
         payment: "Try again in a moment, or refund from the Stripe Dashboard.",
@@ -591,7 +630,7 @@ export const orderService = {
         data: { status: "REFUNDED" },
       });
       await tx.orderStatusEvent.create({
-        data: { orderId, status: "REFUNDED", note: "Refunded via Stripe sandbox." },
+        data: { orderId, status: "REFUNDED", note },
       });
     });
     const loaded = await loadOrder(orderId);
@@ -605,7 +644,7 @@ export const orderService = {
     return await publicOrder(loaded);
   },
 
-  async adminRefund(orderId: string) {
-    return this.refund({ userId: undefined }, orderId, undefined, true);
+  async adminRefund(orderId: string, input: unknown = {}) {
+    return this.refund({ userId: undefined }, orderId, undefined, true, input);
   },
 };

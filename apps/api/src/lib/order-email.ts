@@ -1,4 +1,4 @@
-import { FREE_STANDARD_THRESHOLD, STORE_CURRENCY } from "@volt/shared";
+import { formatStoreDateLong, FREE_STANDARD_THRESHOLD, STORE_CURRENCY } from "@volt/shared";
 
 export type OrderEmailItem = {
   name: string;
@@ -86,10 +86,7 @@ function escapeHtml(value: string) {
 }
 
 function formatPlacedAt(date: Date) {
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "full",
-    timeStyle: "short",
-  }).format(date);
+  return formatStoreDateLong(date);
 }
 
 function shortId(orderId: string) {

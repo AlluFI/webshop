@@ -38,11 +38,11 @@ export function AboutPage() {
       </ul>
       <h2>Social</h2>
       <p>
-        <a href="https://github.com" rel="noreferrer">GitHub</a>
+        <a href="https://github.com/volt-and-co" rel="noreferrer">github.com/volt-and-co</a>
         {" · "}
         <a href="mailto:hello@volt.test">hello@volt.test</a>
         {" · "}
-        <a href="https://www.instagram.com" rel="noreferrer">Instagram</a>
+        <a href="https://www.instagram.com/voltandco" rel="noreferrer">instagram.com/voltandco</a>
       </p>
     </article>
   );

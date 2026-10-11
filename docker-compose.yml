@@ -42,7 +42,9 @@ services:
       - "5672:5672"
       - "15672:15672"
     volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      # Persist queues only. Mounting all of /var/lib/rabbitmq puts .erlang.cookie
+      # on the volume as root (400) and RabbitMQ then fails with eacces.
+      - rabbitmq_data:/var/lib/rabbitmq/mnesia
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -50,7 +52,7 @@ services:
       retries: 10
 
   api:
-    image: i-love-shopping2-api
+    image: i-love-shopping3-api
     pull_policy: build
     build:
       context: .
@@ -93,7 +95,7 @@ services:
       - "3000:3000"
 
   worker:
-    image: i-love-shopping2-api
+    image: i-love-shopping3-api
     build:
       context: .
       dockerfile: docker/api.Dockerfile
@@ -130,6 +132,8 @@ services:
       args:
         VITE_API_BASE: /api/v1
         VITE_RECAPTCHA_SITE_KEY: ${VITE_RECAPTCHA_SITE_KEY:-6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI}
+    volumes:
+      - uploads_data:/data/uploads:ro
     depends_on:
       - api
     ports:
@@ -150,6 +154,7 @@ services:
       - ./load-tests:/scripts
     environment:
       BASE_URL: http://web:80
+      K6_PROFILE: ${K6_PROFILE:-review}
     command: ["run", "/scripts/shop.js"]
     depends_on:
       - web

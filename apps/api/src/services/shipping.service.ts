@@ -1,9 +1,12 @@
 import { Prisma } from "@prisma/client";
 import {
+  addStoreDays,
   EXPRESS_SHIPPING,
+  formatStoreDayMonth,
   FREE_STANDARD_THRESHOLD,
   STANDARD_SHIPPING,
   adminShippingSchema,
+  storeCalendarDate,
 } from "@volt/shared";
 import { prisma } from "../prisma.js";
 import { HttpError } from "../http-error.js";
@@ -36,9 +39,9 @@ const FALLBACK = [
 
 function formatWindow(start: Date, end: Date) {
   return {
-    from: start.toISOString().slice(0, 10),
-    to: end.toISOString().slice(0, 10),
-    label: `${start.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}–${end.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`,
+    from: storeCalendarDate(start),
+    to: storeCalendarDate(end),
+    label: `${formatStoreDayMonth(start)}–${formatStoreDayMonth(end)}`,
   };
 }
 
@@ -107,11 +110,7 @@ export const shippingService = {
   },
 
   estimate(option: { minDays: number; maxDays: number }, from = new Date()) {
-    const start = new Date(from);
-    start.setUTCDate(start.getUTCDate() + option.minDays);
-    const end = new Date(from);
-    end.setUTCDate(end.getUTCDate() + option.maxDays);
-    return formatWindow(start, end);
+    return formatWindow(addStoreDays(from, option.minDays), addStoreDays(from, option.maxDays));
   },
 
   window(start: Date, end: Date) {

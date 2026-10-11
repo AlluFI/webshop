@@ -1,9 +1,10 @@
 import { Router } from "express";
 import multer from "multer";
+import { staffRefundRequestSchema } from "@volt/shared";
 import { HttpError } from "../http-error.js";
 import { config } from "../config.js";
 import { saveUpload } from "../lib/images.js";
-import { asyncHandler } from "../middleware/error-handler.js";
+import { asyncHandler, validate } from "../middleware/error-handler.js";
 import { requirePermission, requireStaff } from "../middleware/rbac.js";
 import { type AuthedRequest } from "../middleware/auth.js";
 import { adminService } from "../services/admin.service.js";
@@ -170,9 +171,10 @@ adminRouter.post(
 adminRouter.post(
   "/orders/:id/refund",
   requirePermission("refunds"),
+  validate(staffRefundRequestSchema),
   asyncHandler(async (req, res) => {
     const user = (req as AuthedRequest).user;
-    res.json(await adminService.refund(user.id, String(req.params.id)));
+    res.json(await adminService.refund(user.id, String(req.params.id), req.body));
   }),
 );
 

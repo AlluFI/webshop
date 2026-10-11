@@ -150,6 +150,9 @@ describeLive("admin API", () => {
       });
     expect(bulk.status).toBe(200);
     expect(bulk.body.created).toBe(1);
+    const created = await request(app).get(`/api/v1/products/${bulk.body.slugs[0]}`);
+    expect(created.status).toBe(200);
+    expect(created.body.images.length).toBeGreaterThan(0);
 
     const category = await request(app)
       .post("/api/v1/admin/categories")

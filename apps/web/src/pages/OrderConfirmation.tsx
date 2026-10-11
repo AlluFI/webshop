@@ -3,7 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { api, userErrorMessage, readOrderToken } from "../api";
 import { useAuth } from "../auth";
 import { useCart } from "../cart";
+import { formatStoreDateTime } from "@volt/shared";
 import { money } from "../product";
+import { RefundForm } from "../RefundForm";
 import { PageMeta } from "../seo";
 
 type Order = {
@@ -43,6 +45,7 @@ export function OrderConfirmationPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [refundOpen, setRefundOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,12 +90,12 @@ export function OrderConfirmationPage() {
     };
   }, [id, accessToken, refresh]);
 
-  async function act(path: "cancel" | "refund") {
+  async function cancelOrder() {
     if (!order) return;
-    setBusy(path);
+    setBusy("cancel");
     setError("");
     try {
-      const next = await api<Order>(`/orders/${order.id}/${path}`, {
+      const next = await api<Order>(`/orders/${order.id}/cancel`, {
         method: "POST",
         token: accessToken,
         orderToken: readOrderToken(order.id),
@@ -100,6 +103,26 @@ export function OrderConfirmationPage() {
       setOrder(next);
     } catch (err) {
       setError(userErrorMessage(err, "Could not update the order"));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function refundOrder(body: { reason: string; note?: string }) {
+    if (!order) return;
+    setBusy("refund");
+    setError("");
+    try {
+      const next = await api<Order>(`/orders/${order.id}/refund`, {
+        method: "POST",
+        token: accessToken,
+        orderToken: readOrderToken(order.id),
+        body: JSON.stringify(body),
+      });
+      setOrder(next);
+      setRefundOpen(false);
+    } catch (err) {
+      setError(userErrorMessage(err, "Could not refund this order"));
     } finally {
       setBusy("");
     }
@@ -146,11 +169,12 @@ export function OrderConfirmationPage() {
       />
       <p className="kicker">Order {order.reference || order.id.slice(0, 8)}</p>
       <h1>{title}</h1>
-      {error && <p className="banner error">{error}</p>}
+      {error && !refundOpen && <p className="banner error">{error}</p>}
       {paid && <p className="banner ok">A confirmation email is on the way (check Mailpit).</p>}
       {failed && canRetry && (
         <p className="banner error">
-          Nothing was charged. Your items are back in the cart so you can try another card.
+          Nothing was charged. Your items are back in the cart so you can try another card. A
+          failure email is on the way (check Mailpit).
         </p>
       )}
       {failed && !canRetry && (
@@ -212,16 +236,30 @@ export function OrderConfirmationPage() {
         <p className="price">Total {money(order.total)}</p>
         <div className="actions">
           {order.canCancel && (
-            <button className="ghost" type="button" disabled={Boolean(busy)} onClick={() => void act("cancel")}>
+            <button className="ghost" type="button" disabled={Boolean(busy)} onClick={() => void cancelOrder()}>
               {busy === "cancel" ? "Cancelling…" : "Cancel order"}
             </button>
           )}
-          {order.canRefund && (
-            <button className="ghost" type="button" disabled={Boolean(busy)} onClick={() => void act("refund")}>
-              {busy === "refund" ? "Refunding…" : "Request refund"}
+          {order.canRefund && !refundOpen && (
+            <button className="ghost" type="button" disabled={Boolean(busy)} onClick={() => setRefundOpen(true)}>
+              Request refund
             </button>
           )}
         </div>
+        {order.canRefund && refundOpen && (
+          <div className="panel" style={{ marginTop: 16 }}>
+            <h2 className="kicker">Refund this order</h2>
+            <RefundForm
+              busy={busy === "refund"}
+              error={error}
+              onCancel={() => {
+                setRefundOpen(false);
+                setError("");
+              }}
+              onSubmit={(body) => void refundOrder(body)}
+            />
+          </div>
+        )}
       </div>
       <h2 className="kicker" style={{ marginTop: 24 }}>
         Status updates
@@ -229,7 +267,7 @@ export function OrderConfirmationPage() {
       <ol className="muted" style={{ marginTop: 8 }}>
         {order.events.map((event) => (
           <li key={event.id}>
-            {new Date(event.createdAt).toLocaleString()} — {event.status.replaceAll("_", " ")}
+            {formatStoreDateTime(event.createdAt)} — {event.status.replaceAll("_", " ")}
             {event.note ? ` · ${event.note}` : ""}
           </li>
         ))}

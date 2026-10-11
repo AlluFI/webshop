@@ -1,4 +1,4 @@
-// AES-256-GCM for PII at rest (addresses, order contact, payment metadata).
+// AES-256-GCM for PII at rest (addresses, order contact, payment metadata, refresh JTIs).
 // Format: v1:<iv>:<tag>:<ciphertext> (base64url). Key is SHA-256(DATA_ENCRYPTION_KEY).
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 

@@ -40,7 +40,13 @@ export function ProductCard({ product }: { product: Product }) {
   return (
     <article className="card">
       <Link className="card-media" to={href}>
-        <img src={image?.thumbUrl || image?.url} alt={image?.altText || product.name} />
+        {image?.thumbUrl || image?.url ? (
+          <img src={image.thumbUrl || image.url} alt={image.altText || product.name} />
+        ) : (
+          <span className="photo-fallback" role="img" aria-label={product.name}>
+            {product.name}
+          </span>
+        )}
       </Link>
       <div className="card-body">
         <p className="muted">{product.brand.name}</p>

@@ -140,6 +140,66 @@ export const ORDER_STATUSES = [
   "REFUNDED",
 ] as const;
 
+export const STAFF_REFUNDABLE_STATUSES = ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] as const;
+
+export const CUSTOMER_REFUND_REASONS = [
+  { code: "changed_mind", label: "Changed my mind" },
+  { code: "ordered_by_mistake", label: "Ordered by mistake" },
+  { code: "wrong_or_damaged", label: "Wrong or damaged item" },
+  { code: "never_arrived", label: "Never arrived / too late" },
+  { code: "other", label: "Other" },
+] as const;
+
+export const STAFF_ONLY_REFUND_REASONS = [
+  { code: "customer_requested", label: "Customer requested" },
+  { code: "shop_error", label: "Shop error" },
+] as const;
+
+export const STAFF_REFUND_REASONS = [...CUSTOMER_REFUND_REASONS, ...STAFF_ONLY_REFUND_REASONS] as const;
+
+const customerRefundReasonCodes = CUSTOMER_REFUND_REASONS.map((row) => row.code) as [
+  (typeof CUSTOMER_REFUND_REASONS)[number]["code"],
+  ...(typeof CUSTOMER_REFUND_REASONS)[number]["code"][],
+];
+const staffRefundReasonCodes = STAFF_REFUND_REASONS.map((row) => row.code) as [
+  (typeof STAFF_REFUND_REASONS)[number]["code"],
+  ...(typeof STAFF_REFUND_REASONS)[number]["code"][],
+];
+
+function refundRequestSchema(reasonCodes: [string, ...string[]]) {
+  return z
+    .object({
+      reason: z.enum(reasonCodes, { errorMap: () => ({ message: "Choose a refund reason" }) }),
+      note: z.string().trim().max(240, "Keep the note under 240 characters").optional().or(z.literal("")),
+    })
+    .superRefine((value, ctx) => {
+      if (value.reason === "other" && !value.note?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Add a short note for Other",
+          path: ["note"],
+        });
+      }
+    });
+}
+
+export const customerRefundRequestSchema = refundRequestSchema(customerRefundReasonCodes);
+export const staffRefundRequestSchema = refundRequestSchema(staffRefundReasonCodes);
+
+export function refundReasonLabel(code: string) {
+  return STAFF_REFUND_REASONS.find((row) => row.code === code)?.label ?? code;
+}
+
+export function stripeRefundReason(code: string): "duplicate" | "requested_by_customer" {
+  return code === "ordered_by_mistake" ? "duplicate" : "requested_by_customer";
+}
+
+export function formatRefundNote(reason: string, note: string | undefined, actor: "customer" | "staff") {
+  const label = refundReasonLabel(reason);
+  const extra = note?.trim() ? ` — ${note.trim()}` : "";
+  return `${actor === "staff" ? "Staff" : "Customer"} refund: ${label}${extra}`;
+}
+
 export const orderListQuerySchema = z.object({
   status: z.enum(ORDER_STATUSES).optional(),
   from: z.string().min(1).optional(),
@@ -175,3 +235,6 @@ export type CheckoutPlaceInput = z.infer<typeof checkoutPlaceSchema>;
 export type ShippingMethod = z.infer<typeof shippingMethodSchema>;
 export type OrderStatusFilter = (typeof ORDER_STATUSES)[number];
 export type OrderListQuery = z.infer<typeof orderListQuerySchema>;
+export type CustomerRefundRequest = z.infer<typeof customerRefundRequestSchema>;
+export type StaffRefundRequest = z.infer<typeof staffRefundRequestSchema>;
+export type RefundReasonCode = (typeof STAFF_REFUND_REASONS)[number]["code"];

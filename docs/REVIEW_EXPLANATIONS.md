@@ -139,7 +139,7 @@ The current implementation mixes **automated** tests with **manual** tests for t
 | API + DB | `apps/api/test/cart.api.test.ts` | Guest add/persist/update, stock 409, merge on login, logged-in cart across sessions |
 | API + DB | `apps/api/test/checkout.api.test.ts` | Empty-cart quote, field errors, Finnish postcode, prefill, encrypted address column |
 | API + DB | `apps/api/test/payment.api.test.ts` | Stripe place + webhook, decline restores stock, timeout holds nothing, last-unit race |
-| API + DB | `apps/api/test/orders.api.test.ts` | Filter, cancel unpaid, refund paid, hide retry after a later paid order |
+| API + DB | `apps/api/test/orders.api.test.ts` | Filter, cancel unpaid, refund paid with a reason, hide retry after a later paid order |
 | API | `apps/api/test/openapi.test.ts` | OpenAPI 3 spec is served; Swagger UI HTML is available |
 | Security | `apps/api/test/security.test.ts` | Injection string in `q` does not drop tables; malformed JSON; `/me` without token |
 
@@ -182,12 +182,12 @@ We do not pretend CAPTCHA or Google’s redirect can be fully trusted from unit 
 
 - Stripe is mocked at the SDK in `payment.api.test.ts`. Routes and Postgres are real.
 - Place order → stock decrements immediately, cart empties, status `PENDING_PAYMENT`, client secret returned. A **signed** `payment_intent.succeeded` webhook (or the inline queue in tests) marks the order `PAID`. Shipping ciphertext still has no plaintext city.
-- `payment_intent.payment_failed` restores stock **and** puts the lines back in the cart.
+- `payment_intent.payment_failed` **or** `POST /checkout/orders/:id/sync` on a declined PaymentIntent restores stock **and** puts the lines back in the cart. Pay calls `/sync` on a card decline so Stripe CLI is not required for the Mailpit failure email.
 - `X-Volt-Simulate: stripe-timeout` on place returns **504** and does **not** decrement stock (gateway never created an intent).
 - Two agents checkout the last unit in `Promise.all`: statuses are `[201, 409]`, remaining stock is 0.
 - Tests set `QUEUE_INLINE=true` so the worker handler runs in-process. In Docker, the same handler is `apps/worker` consuming RabbitMQ.
 
-**Still demoed by hand:** Stripe.js Payment Element (no PAN on the shop Network tab), Mailpit HTML confirmation, RabbitMQ `payment.status`, decline cards `4000…9995` / `4000…0069`.
+**Still demoed by hand:** Stripe.js Payment Element (no PAN on the shop Network tab), Mailpit HTML confirmation, RabbitMQ `payment.status`, decline cards `4000…9995` / `4000…0069`. After a decline the order page opens and Mailpit gets the failure mail without Stripe CLI.
 
 ---
 
@@ -236,7 +236,7 @@ Code: `apps/web/src/pages/CheckoutPay.tsx`, `apps/api/src/services/order.service
 
 | Goal | How this shop does it |
 | --- | --- |
-| **Confidentiality** | TLS at nginx (`https://localhost:8443`); AES-256-GCM for addresses, order snapshots, payment metadata, audit `metaEnc`; access JWT only in memory; staff 2FA; RBAC on `/admin` |
+| **Confidentiality** | TLS at nginx (`https://localhost:8443`); AES-256-GCM for addresses, order snapshots, payment metadata, audit `metaEnc`, and refresh JTIs in Redis; access JWT only in memory; staff 2FA; RBAC on `/admin` |
 | **Integrity** | Signed JWTs; Argon2 password hashes; checkout `SELECT FOR UPDATE`; purchased-only reviews; audit log of staff writes |
 | **Availability** | Docker healthchecks; Redis token-bucket (429 before the process melts); worker can scale off HTTP; k6 report in `docs/PERFORMANCE.md` |
 
@@ -255,7 +255,7 @@ We use native landmarks (`header`, `nav`, `main`, `footer`, `aside`, `article`),
 - Admin: `apps/api/test/admin.api.test.ts` (MFA required, CRUD, bulk JSON, refuse staff role without 2FA).
 - Security: unauthenticated `/admin/users` is 401.
 
-Demo: `docker compose exec api pnpm test`. For load: `docker compose --profile load run --rm k6` and open `docs/PERFORMANCE.md`.
+Demo: `docker compose exec api pnpm test`. Storefront smokes: `pnpm test:e2e` (Playwright, stack on :8088). For load: `docker compose --profile load run --rm k6` and open `docs/PERFORMANCE.md`. A 200 VU browse ramp is `K6_PROFILE=stress`.
 
 ---
 
@@ -267,7 +267,7 @@ Demo: `docker compose exec api pnpm test`. For load: `docker compose --profile l
 4. Catalog facets + sort + typeahead + grid/list; open a PDP (thumbs + full, metric/imperial, reviews).
 5. Leave/vote a review on the seeded Sony purchase; average updates.
 6. Guest: add to cart, refresh, still there; header quick cart. Sign in: cart merges.
-7. Checkout: prefill, bad postcode field error, Pay with `4242…4242`; confirmation shows `VC-` reference + estimated delivery; Mailpit HTML.
+7. Checkout: prefill, bad postcode field error, Pay with `4242…4242`; confirmation shows `VC-` reference + estimated delivery; Mailpit HTML. Then `4000…9995`: order page opens, items return to the cart, Mailpit gets the failure mail (no Stripe CLI).
 8. Admin `admin@volt.test` + TOTP `DEMOADMIN2FASECRETKEYAA`: CRUD, bulk CSV, hide a review, change shipment, refuse a role until 2FA.
 9. Contact form → Mailpit; unknown URL → 404; burst `/auth/login` → 429.
 10. `docker compose exec api pnpm test` then k6 + `docs/PERFORMANCE.md`. Walk ACID, PCI, CIA, semantic HTML.

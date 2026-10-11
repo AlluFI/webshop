@@ -1,7 +1,60 @@
 import { Prisma } from "@prisma/client";
 import { catalogQuerySchema, suggestQuerySchema } from "@volt/shared";
 import { prisma } from "../prisma.js";
+import { redis } from "../redis.js";
 import { HttpError } from "../http-error.js";
+
+const FACET_TTL_SEC = 45;
+
+export async function bumpFacetCache() {
+  try {
+    const current = Number((await redis.get("facets:ver")) || "0");
+    await redis.set("facets:ver", String(current + 1));
+  } catch {
+    // Redis down: next list() will recompute.
+  }
+}
+
+async function cachedFacets(
+  query: {
+    category?: string;
+    brand?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    minRating?: number;
+    featured?: string;
+    q?: string;
+  },
+  compute: () => Promise<{
+    brands: { slug: string; name: string; count: number }[];
+    categories: { slug: string; name: string; count: number }[];
+    price: { min: number; max: number };
+  }>,
+) {
+  const version = (await redis.get("facets:ver").catch(() => "0")) || "0";
+  const key = `facets:v1:${version}:${JSON.stringify({
+    category: query.category ?? "",
+    brand: query.brand ?? "",
+    minPrice: query.minPrice ?? "",
+    maxPrice: query.maxPrice ?? "",
+    minRating: query.minRating ?? "",
+    featured: query.featured ?? "",
+    q: query.q ?? "",
+  })}`;
+  try {
+    const hit = await redis.get(key);
+    if (hit) return JSON.parse(hit) as Awaited<ReturnType<typeof compute>>;
+  } catch {
+    return compute();
+  }
+  const facets = await compute();
+  try {
+    await redis.set(key, JSON.stringify(facets), "EX", FACET_TTL_SEC);
+  } catch {
+    // ignore cache write
+  }
+  return facets;
+}
 
 function money(value: Prisma.Decimal | number | string) {
   return Number(value);
@@ -117,7 +170,7 @@ export const catalogService = {
 
     const skip = (query.page - 1) * query.pageSize;
 
-    const [total, items, brandFacets, categoryFacets, priceAgg] = await Promise.all([
+    const [total, items, facets] = await Promise.all([
       prisma.product.count({ where }),
       query.q && query.sort === "relevance"
         ? searchByRelevance(query.q, where, skip, query.pageSize)
@@ -128,27 +181,52 @@ export const catalogService = {
             skip,
             take: query.pageSize,
           }),
-      prisma.product.groupBy({
-        by: ["brandId"],
-        where: { ...where, brand: undefined },
-        _count: { _all: true },
-      }),
-      prisma.product.groupBy({
-        by: ["categoryId"],
-        where: { ...where, category: undefined },
-        _count: { _all: true },
-      }),
-      prisma.product.aggregate({
-        where: { ...where, price: undefined },
-        _min: { price: true },
-        _max: { price: true },
+      cachedFacets(query, async () => {
+        const [brandFacets, categoryFacets, priceAgg, brands, categories] = await Promise.all([
+          prisma.product.groupBy({
+            by: ["brandId"],
+            where: { ...where, brand: undefined },
+            _count: { _all: true },
+          }),
+          prisma.product.groupBy({
+            by: ["categoryId"],
+            where: { ...where, category: undefined },
+            _count: { _all: true },
+          }),
+          prisma.product.aggregate({
+            where: { ...where, price: undefined },
+            _min: { price: true },
+            _max: { price: true },
+          }),
+          prisma.brand.findMany(),
+          prisma.category.findMany(),
+        ]);
+        const brandMap = new Map(brands.map((b) => [b.id, b]));
+        const categoryMap = new Map(categories.map((c) => [c.id, c]));
+        return {
+          brands: brandFacets
+            .map((row) => {
+              const brand = brandMap.get(row.brandId);
+              return brand
+                ? { slug: brand.slug, name: brand.name, count: row._count._all }
+                : null;
+            })
+            .filter((row): row is { slug: string; name: string; count: number } => Boolean(row)),
+          categories: categoryFacets
+            .map((row) => {
+              const category = categoryMap.get(row.categoryId);
+              return category
+                ? { slug: category.slug, name: category.name, count: row._count._all }
+                : null;
+            })
+            .filter((row): row is { slug: string; name: string; count: number } => Boolean(row)),
+          price: {
+            min: priceAgg._min.price ? money(priceAgg._min.price) : 0,
+            max: priceAgg._max.price ? money(priceAgg._max.price) : 0,
+          },
+        };
       }),
     ]);
-
-    const brands = await prisma.brand.findMany();
-    const categories = await prisma.category.findMany();
-    const brandMap = new Map(brands.map((b) => [b.id, b]));
-    const categoryMap = new Map(categories.map((c) => [c.id, c]));
 
     return {
       items: items.map(mapProduct),
@@ -156,32 +234,7 @@ export const catalogService = {
       page: query.page,
       pageSize: query.pageSize,
       sort: query.sort,
-      facets: {
-        brands: brandFacets
-          .map((row) => {
-            const brand = brandMap.get(row.brandId);
-            return brand
-              ? { slug: brand.slug, name: brand.name, count: row._count._all }
-              : null;
-          })
-          .filter(Boolean),
-        categories: categoryFacets
-          .map((row) => {
-            const category = categoryMap.get(row.categoryId);
-            return category
-              ? {
-                  slug: category.slug,
-                  name: category.name,
-                  count: row._count._all,
-                }
-              : null;
-          })
-          .filter(Boolean),
-        price: {
-          min: priceAgg._min.price ? money(priceAgg._min.price) : 0,
-          max: priceAgg._max.price ? money(priceAgg._max.price) : 0,
-        },
-      },
+      facets,
     };
   },
 

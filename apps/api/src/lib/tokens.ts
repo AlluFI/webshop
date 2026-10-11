@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { HttpError } from "../http-error.js";
+import { decrypt, encrypt } from "./crypto.js";
 import {
   remainingTtlSec,
   signAccessToken,
@@ -7,6 +8,19 @@ import {
   verifyAccessToken,
   verifyRefreshToken,
 } from "./jwt.js";
+
+function storeRefreshJti(jti: string) {
+  return encrypt(jti);
+}
+
+function refreshJtiMatches(stored: string, jti: string) {
+  if (stored === jti) return true;
+  try {
+    return decrypt(stored) === jti;
+  } catch {
+    return false;
+  }
+}
 
 export type RefreshStore = {
   get(key: string): Promise<string | null>;
@@ -35,7 +49,7 @@ export class TokenService {
       this.refreshSecret,
       this.refreshTtlSec,
     );
-    await this.redis.set(`rf:${familyId}`, refreshJti, "EX", this.refreshTtlSec);
+    await this.redis.set(`rf:${familyId}`, storeRefreshJti(refreshJti), "EX", this.refreshTtlSec);
     await this.redis.sadd(`uf:${userId}`, familyId);
     await this.redis.expire(`uf:${userId}`, Math.max(this.refreshTtlSec, 86400 * 30));
     const accessToken = signAccessToken(
@@ -57,7 +71,7 @@ export class TokenService {
     if (current === null) {
       throw new HttpError(401, "Session expired or revoked");
     }
-    if (current !== parsed.jti) {
+    if (!refreshJtiMatches(current, parsed.jti)) {
       await this.revokeFamily(parsed.fam, parsed.sub);
       throw new HttpError(401, "Refresh token reuse detected");
     }
@@ -67,7 +81,7 @@ export class TokenService {
       this.refreshSecret,
       this.refreshTtlSec,
     );
-    await this.redis.set(`rf:${parsed.fam}`, newJti, "EX", this.refreshTtlSec);
+    await this.redis.set(`rf:${parsed.fam}`, storeRefreshJti(newJti), "EX", this.refreshTtlSec);
     const accessToken = signAccessToken(
       { sub: parsed.sub, email, role, jti: randomUUID() },
       this.accessSecret,

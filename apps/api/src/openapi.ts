@@ -1337,9 +1337,28 @@ export const openApiDocument: OpenAPIV3.Document = {
         tags: ["Orders"],
         summary: "Refund a paid order via Stripe sandbox and restore stock",
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["reason"],
+                properties: {
+                  reason: {
+                    type: "string",
+                    enum: ["changed_mind", "ordered_by_mistake", "wrong_or_damaged", "never_arrived", "other"],
+                  },
+                  note: { type: "string", maxLength: 240 },
+                },
+              },
+            },
+          },
+        },
         responses: {
           "200": { description: "Refunded" },
-          "409": { description: "Order is not paid" },
+          "400": { description: "Reason required; Other needs a note" },
+          "409": { description: "Order is no longer PAID" },
         },
       },
     },
@@ -1428,6 +1447,34 @@ export const openApiDocument: OpenAPIV3.Document = {
         summary: "All orders",
         security: [{ bearerAuth: [] }],
         responses: { "200": { description: "Orders" } },
+      },
+    },
+    "/api/v1/admin/orders/{id}/refund": {
+      post: {
+        tags: ["Admin"],
+        summary: "Refund a paid, processing, shipped, or delivered order. Staff-only reasons: customer_requested, shop_error.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["reason"],
+                properties: {
+                  reason: { type: "string" },
+                  note: { type: "string", maxLength: 240 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Refunded" },
+          "400": { description: "Reason required" },
+          "409": { description: "Order cannot be refunded" },
+        },
       },
     },
     "/api/v1/admin/orders/{id}/status": {

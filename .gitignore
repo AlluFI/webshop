@@ -17,3 +17,8 @@ packages/shared/dist
 
 # Local oral-review notes (not for the repo / reviewers)
 docs/ORAL_REVIEW_BRIEF.md
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/

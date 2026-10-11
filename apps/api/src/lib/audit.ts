@@ -1,3 +1,4 @@
+import { storeCalendarDate } from "@volt/shared";
 import { prisma } from "../prisma.js";
 import { decryptJson, encryptJson } from "./crypto.js";
 
@@ -12,7 +13,7 @@ export function formatAuditValue(value: unknown): string {
   if (value == null || value === "") return "—";
   if (typeof value === "boolean") return value ? "yes" : "no";
   if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? "—" : value.toISOString().slice(0, 10);
+    return Number.isNaN(value.getTime()) ? "—" : storeCalendarDate(value);
   }
   if (typeof value === "number") return String(value);
   if (typeof value === "object") {

@@ -189,12 +189,27 @@ describeLive("orders API", () => {
     expect(detail.body.events.length).toBeGreaterThan(1);
     expect(detail.body.canRefund).toBe(true);
 
+    const missingReason = await request(app)
+      .post(`/api/v1/orders/${orderId}/refund`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({});
+    expect(missingReason.status).toBe(400);
+
     const refunded = await request(app)
       .post(`/api/v1/orders/${orderId}/refund`)
-      .set("Authorization", `Bearer ${accessToken}`);
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ reason: "changed_mind" });
     expect(refunded.status).toBe(200);
     expect(refunded.body.status).toBe("REFUNDED");
-    expect(refundCreate).toHaveBeenCalled();
+    expect(refunded.body.events.some((event: { note: string | null }) => event.note?.includes("Changed my mind"))).toBe(
+      true,
+    );
+    expect(refundCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "requested_by_customer",
+        metadata: expect.objectContaining({ shop_reason: "changed_mind", actor: "customer" }),
+      }),
+    );
     expect((await prisma.product.findUniqueOrThrow({ where: { id: productId } })).stockQuantity).toBe(
       stockBefore,
     );

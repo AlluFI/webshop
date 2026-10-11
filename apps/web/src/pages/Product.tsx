@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
+import { formatStoreDate } from "@volt/shared";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
 import { AddToCartButton } from "../cart";
@@ -106,7 +107,13 @@ export function ProductPage() {
       />
       <article className="pdp">
         <div>
-          <img src={image?.url} alt={image?.altText || product.name} />
+          {image?.url ? (
+            <img src={image.url} alt={image.altText || product.name} />
+          ) : (
+            <div className="photo-fallback" role="img" aria-label={product.name}>
+              {product.name}
+            </div>
+          )}
           {product.images.length > 1 && (
             <div className="thumbs">
               {product.images.map((item, index) => (
@@ -211,7 +218,7 @@ export function ProductPage() {
               {review.title && <h3>{review.title}</h3>}
               <p>{review.body}</p>
               <p className="muted">
-                {review.author} · {new Date(review.createdAt).toLocaleDateString()} · {review.helpfulCount}{" "}
+                {review.author} · {formatStoreDate(review.createdAt)} · {review.helpfulCount}{" "}
                 found this helpful
               </p>
               {accessToken && (

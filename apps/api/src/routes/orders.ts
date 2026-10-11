@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { orderListQuerySchema } from "@volt/shared";
+import { customerRefundRequestSchema, orderListQuerySchema } from "@volt/shared";
 import { asyncHandler, validate } from "../middleware/error-handler.js";
 import { optionalAuth, requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { readCartCookie } from "../lib/cart-cookie.js";
@@ -54,12 +54,15 @@ ordersRouter.post(
 ordersRouter.post(
   "/:id/refund",
   optionalAuth,
+  validate(customerRefundRequestSchema),
   asyncHandler(async (req, res) => {
     res.json(
       await orderService.refund(
         ctx(req as AuthedRequest),
         String(req.params.id),
         orderToken(req as AuthedRequest),
+        false,
+        req.body,
       ),
     );
   }),

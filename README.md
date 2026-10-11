@@ -47,7 +47,7 @@ Guest carts use an httpOnly `cart_token` cookie. The raw token never goes in the
 
 Staff roles (`admin`, `support`, `sales`) **must** have TOTP enabled. Role assignment is refused until 2FA is on. Reviews are **purchased-only** and sort by helpfulness.
 
-## Setup (Docker is the only host prerequisite)
+## Setup (Docker starts the stack; Stripe test keys are needed to demo checkout)
 
 ```bash
 ./scripts/start.sh
@@ -78,15 +78,13 @@ Google reCAPTCHA **test keys** are in `.env.example` so registration and the con
 
 The API seed runs on container start **only when the catalog is empty**. A restart does not wipe demo addresses or 2FA. To reseed from scratch, drop the Postgres volume.
 
-If RabbitMQ exits with `.erlang.cookie: eacces`:
+If RabbitMQ still exits with `.erlang.cookie: eacces` (leftover volume from an older compose file):
 
 ```bash
 docker compose down
 docker volume rm i-love-shopping3_rabbitmq_data 2>/dev/null || true
 ./scripts/start.sh
 ```
-
-`no such volume` is fine: the old stack did not keep a RabbitMQ volume, so there is nothing to delete. The next `up` creates `i-love-shopping3_rabbitmq_data`. If the name differs, list it with `docker volume ls | grep rabbitmq`.
 
 ### Demo accounts
 
@@ -124,7 +122,7 @@ Host extra (optional, for live webhooks): [Stripe CLI](https://stripe.com/docs/s
 stripe listen --forward-to localhost:3000/api/v1/webhooks/stripe
 ```
 
-Without the CLI, the storefront still confirms payment by retrieving the PaymentIntent from Stripe (`POST /checkout/orders/:id/sync`). The webhook publishes that status to RabbitMQ; the worker marks the order paid or failed, sends Mailpit mail, and restores stock on failure. The same handler runs in-process during automated tests (`QUEUE_INLINE`).
+Without the CLI, the storefront still confirms payment by retrieving the PaymentIntent from Stripe (`POST /checkout/orders/:id/sync`) after both a successful pay and a declined card (for example `4000…9995`). Incomplete card fields stay on the Pay form. The webhook publishes that status to RabbitMQ; the worker marks the order paid or failed, sends Mailpit mail, and restores stock on failure. The same handler runs in-process during automated tests (`QUEUE_INLINE`).
 
 **Test cards** (any future expiry, any CVC):
 
@@ -166,10 +164,31 @@ pnpm dev:web   # http://localhost:5173
 5. Open **Cart**. Change quantities (live totals), hit a stock limit, refresh as a guest — the bag stays. Sign in: the guest bag merges into your account cart.
 6. **Checkout** is one page: contact, shipping and billing addresses (Finnish postcodes, US ZIP, and other offline checks), shipping options from the database, live summary, then Stripe Payment Element. Confirmation shows a `VC-…` reference, order ID, and estimated delivery window.
 7. **Account** (signed-in): edit display name, recent orders, 2FA, saved addresses. **Orders** lists the full history with status/date filters.
-8. **Admin** (`admin@volt.test` + TOTP): product create/edit/delete and image upload, category CRUD, bulk CSV/JSON, order status and refunds, user roles (2FA required before promotion), review hide/publish, shipping prices/days/active.
+8. **Admin** (`admin@volt.test` + TOTP): product create/edit/delete and image upload, category CRUD, bulk CSV/JSON, order status and refunds (any paid-through-delivered order, with a reason), user roles (2FA required before promotion), review hide/publish, shipping prices/days/active.
 9. **About**, **Contact** (CAPTCHA → Mailpit), **FAQ**, **Terms**, and a **404** catch-all.
 10. Create an account (CAPTCHA required), confirm via Mailpit, sign in. Access tokens never go to `localStorage`. Enable 2FA on **Account** before an admin can assign a staff role.
 11. Explore endpoints at **http://localhost:3000/api/v1/docs**. Burst login/contact traffic returns **429** (Redis token bucket; skipped in automated `NODE_ENV=test` except unit tests).
+
+## Bonus features (beyond the Part 3 mandatory list)
+
+These are extras a reviewer can click without extra setup. They are **not** required by the checklist; they are here so it is obvious what was added on top.
+
+| Bonus | Where to see it | What it does |
+| --- | --- | --- |
+| Staff **change log** | Admin → **log** (`admin@volt.test`) | Encrypted audit rows for product, category, order, review, user-role, and shipping edits |
+| **Shipped** email + tracking | Admin → ship an order; Mailpit + order page | HTML mail with carrier link, ETA, and a tracking modal on the order |
+| Finland carrier URLs | Ship with Posti / PostNord / Budbee | Posti uses `/en/tracking/{code}/{id}`; other carriers open their official pages |
+| Staff **roles** | `admin` / `support` / `sales` demo accounts | RBAC: catalog vs orders/refunds vs reviews vs shipping; 2FA required before promotion |
+| **FAQ** and **Terms** | Header/footer | Extra content pages (About / Contact / 404 are mandatory; these two are extra) |
+| Separate **billing** address | Checkout | Optional billing block when “same as shipping” is unchecked |
+| Human **`VC-…` references** | Confirmation and order email | Short storefront reference next to the UUID |
+| **Related products** | Cart and product page | Same category or brand recommendations |
+| Branded **failed-payment** HTML | Decline `4000…9995`; Mailpit | Same template as the paid confirmation, with decline reason and Return to cart |
+| Seed **does not wipe** demo data | Restart the API | `prisma db seed` no-ops once products exist so 2FA and addresses survive |
+| **OpenAPI / Swagger** | http://localhost:3000/api/v1/docs | Try-it-out for catalog, cart, checkout, reviews, and admin |
+| Header **quick bag** + typeahead | Every page | Mandatory chrome; listed here because it is easy to miss on first load |
+
+Mandatory Part 3 items (reviews, admin CRUD, TLS, k6, rate limits, derived images, home/about/contact/404, and so on) are in the sections above, not in this table.
 
 ## Tests
 
@@ -189,13 +208,23 @@ Load:
 
 ```bash
 docker compose --profile load run --rm --no-deps k6
+# optional: find the p95 > 5s breaking point
+docker compose --profile load run --rm --no-deps -e K6_PROFILE=stress k6
+```
+
+Storefront smoke (Playwright; needs the stack on :8088):
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:e2e
 ```
 
 Coverage:
 
 - **Unit:** JWT generate/validate/expire, refresh rotation + reuse, input validation, product model, cart totals, address encryption, review averages, token-bucket
 - **API:** register/login/refresh/revoke, catalog fields, facets, sort, suggestions, images, OpenAPI document, guest cart, merge on login, checkout validation, Stripe place + webhook (inline queue), concurrent last-unit checkout, order list/cancel/refund, purchased-only reviews + helpful votes, admin 2FA + CRUD + bulk JSON
-- **Security:** parameterized search (injection payload), malformed JSON, unauthenticated `/me` and `/admin`, token-bucket HTTP 429, encrypted address columns and TOTP secrets (`v1:` AES-GCM)
+- **Security:** parameterized search (injection payload), malformed JSON, unauthenticated `/me` and `/admin`, token-bucket HTTP 429, encrypted address columns, TOTP secrets, and refresh JTIs (`v1:` AES-GCM)
+- **E2E:** Playwright smokes for home, catalog, about, 404, and header search (`pnpm test:e2e`)
 
 ## Review talking points
 

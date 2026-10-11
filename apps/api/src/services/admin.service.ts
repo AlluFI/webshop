@@ -7,15 +7,22 @@ import {
   adminUserListQuerySchema,
   adminUserRoleSchema,
   AUDIT_ENTITIES,
+  formatRefundNote,
   isStaffRole,
   orderListQuerySchema,
   slugify,
+  staffRefundRequestSchema,
+  storeCalendarDate,
+  storeDayEnd,
+  storeDayStart,
 } from "@volt/shared";
 import { prisma } from "../prisma.js";
 import { HttpError } from "../http-error.js";
 import { diffRecords, parseAuditMeta, writeAudit } from "../lib/audit.js";
+import { config } from "../config.js";
 import { decrypt } from "../lib/crypto.js";
-import { catalogService } from "./catalog.service.js";
+import { writeDerivedImages, writePlaceholderImage } from "../lib/images.js";
+import { bumpFacetCache, catalogService } from "./catalog.service.js";
 import { sendOrderShippedMail } from "./order-fulfillment.js";
 import { orderService } from "./order.service.js";
 import { reviewService } from "./review.service.js";
@@ -120,6 +127,17 @@ export const adminService = {
           : undefined,
       },
     });
+    const imageName = await writePlaceholderImage(config.uploadDir, slug, dto.name);
+    const derived = await writeDerivedImages(config.uploadDir, imageName);
+    await prisma.productImage.create({
+      data: {
+        productId: product.id,
+        path: derived.full,
+        thumbPath: derived.thumb,
+        altText: `${dto.name} product photo`,
+        sortOrder: 0,
+      },
+    });
     await writeAudit({
       actorId,
       action: "product.create",
@@ -130,6 +148,7 @@ export const adminService = {
         changes: [{ field: "record", from: "—", to: product.name }],
       },
     });
+    await bumpFacetCache();
     return catalogService.byIdOrSlug(product.id);
   },
 
@@ -209,6 +228,7 @@ export const adminService = {
         meta: { target: dto.name, changes },
       });
     }
+    await bumpFacetCache();
     return catalogService.byIdOrSlug(id);
   },
 
@@ -226,6 +246,7 @@ export const adminService = {
         changes: [{ field: "record", from: existing.name, to: "deleted" }],
       },
     });
+    await bumpFacetCache();
     return { deleted: true };
   },
 
@@ -278,6 +299,7 @@ export const adminService = {
         changes: [{ field: "record", from: "—", to: row.name }],
       },
     });
+    await bumpFacetCache();
     return row;
   },
 
@@ -311,6 +333,7 @@ export const adminService = {
         meta: { target: row.name, changes },
       });
     }
+    await bumpFacetCache();
     return row;
   },
 
@@ -337,6 +360,7 @@ export const adminService = {
         changes: [{ field: "record", from: existing.name, to: "deleted" }],
       },
     });
+    await bumpFacetCache();
     return { deleted: true };
   },
 
@@ -412,8 +436,8 @@ export const adminService = {
     if (query.status) where.status = query.status;
     if (query.from || query.to) {
       where.createdAt = {};
-      if (query.from) where.createdAt.gte = new Date(`${query.from}T00:00:00.000Z`);
-      if (query.to) where.createdAt.lte = new Date(`${query.to}T23:59:59.999Z`);
+      if (query.from) where.createdAt.gte = storeDayStart(query.from);
+      if (query.to) where.createdAt.lte = storeDayEnd(query.to);
     }
     const skip = (query.page - 1) * query.pageSize;
     const [total, rows] = await Promise.all([
@@ -456,8 +480,12 @@ export const adminService = {
           shippingMethod: order.shippingMethod,
           trackingCarrier: order.trackingCarrier,
           trackingCode: order.trackingCode,
-          estimatedDeliveryFrom: order.estimatedDeliveryFrom?.toISOString().slice(0, 10) ?? null,
-          estimatedDeliveryTo: order.estimatedDeliveryTo?.toISOString().slice(0, 10) ?? null,
+          estimatedDeliveryFrom: order.estimatedDeliveryFrom
+            ? storeCalendarDate(order.estimatedDeliveryFrom)
+            : null,
+          estimatedDeliveryTo: order.estimatedDeliveryTo
+            ? storeCalendarDate(order.estimatedDeliveryTo)
+            : null,
         };
       }),
     };
@@ -482,15 +510,15 @@ export const adminService = {
     let estimatedFrom = order.estimatedDeliveryFrom;
     let estimatedTo = order.estimatedDeliveryTo;
     if (dto.estimatedDeliveryFrom && dto.estimatedDeliveryTo) {
-      estimatedFrom = new Date(`${dto.estimatedDeliveryFrom}T00:00:00.000Z`);
-      estimatedTo = new Date(`${dto.estimatedDeliveryTo}T23:59:59.999Z`);
+      estimatedFrom = storeDayStart(dto.estimatedDeliveryFrom);
+      estimatedTo = storeDayEnd(dto.estimatedDeliveryTo);
     } else if (becomingShipped && (!estimatedFrom || !estimatedTo)) {
       const options = await shippingService.list(true);
       const option = options.find((row) => row.code === order.shippingMethod);
       if (option) {
         const window = shippingService.estimate(option, new Date());
-        estimatedFrom = new Date(`${window.from}T00:00:00.000Z`);
-        estimatedTo = new Date(`${window.to}T23:59:59.999Z`);
+        estimatedFrom = storeDayStart(window.from);
+        estimatedTo = storeDayEnd(window.to);
       }
     }
 
@@ -507,15 +535,15 @@ export const adminService = {
         status: order.status,
         carrier: order.trackingCarrier ?? "",
         trackingCode: order.trackingCode ?? "",
-        deliveryFrom: order.estimatedDeliveryFrom?.toISOString().slice(0, 10) ?? "",
-        deliveryTo: order.estimatedDeliveryTo?.toISOString().slice(0, 10) ?? "",
+        deliveryFrom: order.estimatedDeliveryFrom ? storeCalendarDate(order.estimatedDeliveryFrom) : "",
+        deliveryTo: order.estimatedDeliveryTo ? storeCalendarDate(order.estimatedDeliveryTo) : "",
       },
       {
         status: dto.status,
         carrier: nextCarrier ?? "",
         trackingCode: nextTracking ?? "",
-        deliveryFrom: estimatedFrom?.toISOString().slice(0, 10) ?? "",
-        deliveryTo: estimatedTo?.toISOString().slice(0, 10) ?? "",
+        deliveryFrom: estimatedFrom ? storeCalendarDate(estimatedFrom) : "",
+        deliveryTo: estimatedTo ? storeCalendarDate(estimatedTo) : "",
       },
     );
 
@@ -557,9 +585,10 @@ export const adminService = {
     return orderService.adminGet(orderId);
   },
 
-  async refund(actorId: string, orderId: string) {
+  async refund(actorId: string, orderId: string, input: unknown) {
+    const dto = staffRefundRequestSchema.parse(input);
     const order = await prisma.order.findUnique({ where: { id: orderId } });
-    const result = await orderService.adminRefund(orderId);
+    const result = await orderService.adminRefund(orderId, dto);
     await writeAudit({
       actorId,
       action: "order.refund",
@@ -567,7 +596,10 @@ export const adminService = {
       entityId: orderId,
       meta: {
         target: orderId.slice(0, 8),
-        changes: [{ field: "status", from: order?.status ?? "—", to: "REFUNDED" }],
+        changes: [
+          { field: "status", from: order?.status ?? "—", to: "REFUNDED" },
+          { field: "reason", from: "—", to: formatRefundNote(dto.reason, dto.note, "staff") },
+        ],
       },
     });
     return result;

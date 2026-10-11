@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, Link } from "react-router-dom";
-import { CHECKOUT_COUNTRIES, addressSchema, isStaffRole, type AddressInput } from "@volt/shared";
+import { CHECKOUT_COUNTRIES, addressSchema, formatStoreDate, isStaffRole, type AddressInput } from "@volt/shared";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
 import { PageMeta } from "../seo";
@@ -194,7 +194,7 @@ function RecentOrders({ token }: { token: string }) {
                 <Link to={`/orders/${item.id}`}>{item.summary || item.id.slice(0, 8)}</Link>
                 <br />
                 <span className="muted">
-                  {item.status} · {new Date(item.createdAt).toLocaleDateString()}
+                  {item.status} · {formatStoreDate(item.createdAt)}
                 </span>
               </span>
               <span>{money(item.total)}</span>

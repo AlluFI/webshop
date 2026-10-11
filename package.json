@@ -6,9 +6,13 @@
     "dev:web": "pnpm --filter web dev",
     "build": "pnpm --filter @volt/shared build && pnpm --filter api build && pnpm --filter web build",
     "test": "pnpm --filter api test",
+    "test:e2e": "playwright test",
     "seed": "pnpm --filter api seed",
     "compose:up": "docker compose up --build",
     "compose:down": "docker compose down --volumes"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
   },
   "engines": {
     "node": ">=20"

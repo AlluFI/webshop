@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { ORDER_STATUSES } from "@volt/shared";
+import { ORDER_STATUSES, formatStoreDateTime } from "@volt/shared";
 import { api, userErrorMessage } from "../api";
 import { useAuth } from "../auth";
 import { money } from "../product";
@@ -111,7 +111,7 @@ export function OrdersPage() {
                   <strong>Order {order.id.slice(0, 8)}</strong>
                 </Link>
                 <p className="muted">
-                  {new Date(order.createdAt).toLocaleString()} · {order.summary}
+                  {formatStoreDateTime(order.createdAt)} · {order.summary}
                 </p>
                 <p>
                   {order.status.replaceAll("_", " ")} · {order.itemCount}{" "}

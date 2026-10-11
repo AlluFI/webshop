@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { addressSchema, checkoutValidateSchema, loginSchema, registerSchema } from "@volt/shared";
+import {
+  addressSchema,
+  checkoutValidateSchema,
+  customerRefundRequestSchema,
+  loginSchema,
+  registerSchema,
+  staffRefundRequestSchema,
+} from "@volt/shared";
 
 describe("user input validation", () => {
   it("accepts a well-formed registration payload", () => {
@@ -77,5 +84,16 @@ describe("user input validation", () => {
     if (!missingAddress.success) {
       expect(missingAddress.error.issues.map((issue) => issue.path[0])).toContain("address");
     }
+  });
+
+  it("requires a refund reason and a note when the reason is Other", () => {
+    expect(customerRefundRequestSchema.safeParse({}).success).toBe(false);
+    expect(customerRefundRequestSchema.parse({ reason: "changed_mind" }).reason).toBe("changed_mind");
+    expect(customerRefundRequestSchema.safeParse({ reason: "other" }).success).toBe(false);
+    expect(customerRefundRequestSchema.parse({ reason: "other", note: "Cracked case" }).note).toBe(
+      "Cracked case",
+    );
+    expect(staffRefundRequestSchema.parse({ reason: "shop_error" }).reason).toBe("shop_error");
+    expect(customerRefundRequestSchema.safeParse({ reason: "shop_error" }).success).toBe(false);
   });
 });
