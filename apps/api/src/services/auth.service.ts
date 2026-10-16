@@ -172,9 +172,15 @@ export const authService = {
       throw new HttpError(400, "Two-factor authentication is not active.");
     }
     if (dto.totpCode) {
+      let secret: string;
+      try {
+        secret = revealSecret(user.totpSecret.secret);
+      } catch {
+        throw new HttpError(401, "Invalid authenticator code");
+      }
       const ok = authenticator.verify({
         token: dto.totpCode,
-        secret: revealSecret(user.totpSecret.secret),
+        secret,
       });
       if (!ok) throw new HttpError(401, "Invalid authenticator code");
     } else if (dto.backupCode) {
@@ -360,9 +366,15 @@ export const authService = {
     if (isStaffRole(user.role.name)) {
       throw new HttpError(403, "Staff accounts cannot disable two-factor authentication.");
     }
+    let secret: string;
+    try {
+      secret = revealSecret(user.totpSecret.secret);
+    } catch {
+      throw new HttpError(401, "Invalid authenticator code");
+    }
     const ok = authenticator.verify({
       token: code,
-      secret: revealSecret(user.totpSecret.secret),
+      secret,
     });
     if (!ok) throw new HttpError(401, "Invalid authenticator code");
     await prisma.$transaction([

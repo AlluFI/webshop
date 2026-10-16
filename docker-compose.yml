@@ -128,16 +128,18 @@ services:
   web:
     build:
       context: .
-      dockerfile: docker/web.Dockerfile
+      dockerfile: docker/storefront.Dockerfile
       args:
-        VITE_API_BASE: /api/v1
-        VITE_RECAPTCHA_SITE_KEY: ${VITE_RECAPTCHA_SITE_KEY:-6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI}
-    volumes:
-      - uploads_data:/data/uploads:ro
+        NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${VITE_RECAPTCHA_SITE_KEY:-6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI}
+    environment:
+      API_PROXY_TARGET: http://api:3000
+      API_INTERNAL_URL: http://api:3000/api/v1
+      NEXT_PUBLIC_API_BASE: /api/v1
+      NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${VITE_RECAPTCHA_SITE_KEY:-6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI}
     depends_on:
       - api
     ports:
-      - "8088:80"
+      - "8088:3000"
 
   tls:
     build:
@@ -153,7 +155,7 @@ services:
     volumes:
       - ./load-tests:/scripts
     environment:
-      BASE_URL: http://web:80
+      BASE_URL: http://web:3000
       K6_PROFILE: ${K6_PROFILE:-review}
     command: ["run", "/scripts/shop.js"]
     depends_on:

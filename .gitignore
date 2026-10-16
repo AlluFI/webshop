@@ -13,6 +13,7 @@ coverage
 uploads
 apps/api/uploads
 apps/web/dist
+apps/storefront/.next
 packages/shared/dist
 
 # Local oral-review notes (not for the repo / reviewers)

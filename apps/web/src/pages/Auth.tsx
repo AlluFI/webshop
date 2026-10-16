@@ -376,11 +376,12 @@ export function ResetPage() {
 }
 
 export function OAuthCallbackPage() {
-  const { refreshSession } = useAuth();
+  const { ready, user } = useAuth();
   const navigate = useNavigate();
   useEffect(() => {
-    void refreshSession().then((ok) => navigate(ok ? "/account" : "/login"));
-  }, [navigate, refreshSession]);
+    if (!ready) return;
+    navigate(user ? "/account" : "/login");
+  }, [navigate, ready, user]);
   return (
     <div className="auth-card">
       <p>Finishing Google sign-in…</p>

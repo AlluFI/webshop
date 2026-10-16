@@ -3,7 +3,7 @@ import type { PaymentStatusMessage } from "@volt/shared";
 import { carrierName, carrierTrackingUrl, SHIPPING_CARRIER_META } from "@volt/shared";
 import { prisma } from "../prisma.js";
 import { config } from "../config.js";
-import { encryptJson, decrypt, decryptJson } from "../lib/crypto.js";
+import { encryptJson, decryptJson, decryptOrEmpty } from "../lib/crypto.js";
 import { mail } from "../mail.js";
 import type { OrderEmailShipping, OrderShippedEmailDetails } from "../lib/order-email.js";
 import { shippingService } from "./shipping.service.js";
@@ -157,9 +157,9 @@ export async function handlePaymentStatus(message: PaymentStatusMessage) {
       status: "PAID",
       paymentStatus: "SUCCEEDED",
       placedAt: payment.order.createdAt,
-      customerName: decrypt(payment.order.contactNameEnc),
-      email: decrypt(payment.order.contactEmailEnc),
-      phone: payment.order.contactPhoneEnc ? decrypt(payment.order.contactPhoneEnc) : "",
+      customerName: decryptOrEmpty(payment.order.contactNameEnc),
+      email: decryptOrEmpty(payment.order.contactEmailEnc),
+      phone: decryptOrEmpty(payment.order.contactPhoneEnc),
       items: payment.order.items.map((item) => ({
         name: item.productName,
         quantity: item.quantity,
@@ -233,9 +233,9 @@ export async function handlePaymentStatus(message: PaymentStatusMessage) {
     status: "PAYMENT_FAILED",
     paymentStatus: "FAILED",
     placedAt: payment.order.createdAt,
-    customerName: decrypt(payment.order.contactNameEnc),
-    email: decrypt(payment.order.contactEmailEnc),
-    phone: payment.order.contactPhoneEnc ? decrypt(payment.order.contactPhoneEnc) : "",
+    customerName: decryptOrEmpty(payment.order.contactNameEnc),
+    email: decryptOrEmpty(payment.order.contactEmailEnc),
+    phone: decryptOrEmpty(payment.order.contactPhoneEnc),
     items: payment.order.items.map((item) => ({
       name: item.productName,
       quantity: item.quantity,
@@ -283,9 +283,9 @@ export async function sendOrderShippedMail(orderId: string) {
     status: "WITH_COURIER",
     paymentStatus: "SUCCEEDED",
     placedAt: order.createdAt,
-    customerName: decrypt(order.contactNameEnc),
-    email: decrypt(order.contactEmailEnc),
-    phone: order.contactPhoneEnc ? decrypt(order.contactPhoneEnc) : "",
+    customerName: decryptOrEmpty(order.contactNameEnc),
+    email: decryptOrEmpty(order.contactEmailEnc),
+    phone: decryptOrEmpty(order.contactPhoneEnc),
     items: order.items.map((item) => ({
       name: item.productName,
       quantity: item.quantity,
@@ -315,5 +315,6 @@ export async function sendOrderShippedMail(orderId: string) {
     estimatedDeliveryTo: eta.to,
   };
 
+  if (!details.email) return;
   await mail.sendOrderShipped(details);
 }

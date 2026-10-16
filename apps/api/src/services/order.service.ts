@@ -23,7 +23,7 @@ import {
 import { prisma } from "../prisma.js";
 import { config } from "../config.js";
 import { HttpError } from "../http-error.js";
-import { encrypt, encryptJson, decrypt, decryptJson } from "../lib/crypto.js";
+import { encrypt, encryptJson, decryptJson, decryptOrEmpty } from "../lib/crypto.js";
 import { randomToken, sha256Hex } from "../lib/hash.js";
 import { orderTotal, taxAmount, toCents } from "../lib/cart-math.js";
 import { requireStripe, stripeConfigured, stripePublishableKey } from "../lib/stripe.js";
@@ -162,9 +162,9 @@ async function publicOrder(order: NonNullable<Awaited<ReturnType<typeof loadOrde
     shippingMethod: order.shippingMethod,
     estimatedDelivery,
     tracking,
-    email: decrypt(order.contactEmailEnc),
-    displayName: decrypt(order.contactNameEnc),
-    phone: order.contactPhoneEnc ? decrypt(order.contactPhoneEnc) : "",
+    email: decryptOrEmpty(order.contactEmailEnc),
+    displayName: decryptOrEmpty(order.contactNameEnc),
+    phone: decryptOrEmpty(order.contactPhoneEnc),
     shipping: shippingOf(order.shippingAddressEnc),
     createdAt: order.createdAt.toISOString(),
     canCancel: status === "PENDING_PAYMENT",

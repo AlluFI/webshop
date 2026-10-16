@@ -5,7 +5,8 @@ B2C electronics shop: accounts, a PostgreSQL catalog, faceted search, reviews, a
 ## Stack
 
 - **API:** Express + TypeScript
-- **Web:** React 19 + Vite
+- **Web:** Next.js 15 App Router (`apps/storefront`) on 8088 / 8443 — SSR catalog, client checkout/admin
+- **Web (legacy):** React 19 + Vite (`apps/web`) for local `pnpm dev:web` on 5173
 - **Edge:** nginx TLS terminator (`https://localhost:8443`)
 - **Data:** PostgreSQL (Prisma, ACID transactions) + Redis (refresh sessions + token-bucket rate limits)
 - **Mail:** Nodemailer → Mailpit (Docker)
@@ -13,7 +14,7 @@ B2C electronics shop: accounts, a PostgreSQL catalog, faceted search, reviews, a
 - **Queue:** RabbitMQ + `apps/worker` (payment status → email + inventory)
 - **Load:** k6 (`load-tests/shop.js`) — report in [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
 - **Staff Admin:** tab-by-tab guide and roles in [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
-- **Monorepo:** pnpm workspaces (`apps/api`, `apps/web`, `apps/worker`, `packages/shared`)
+- **Monorepo:** pnpm workspaces (`apps/api`, `apps/web`, `apps/storefront`, `apps/worker`, `packages/shared`)
 
 ## Entity relationship diagram
 
@@ -155,7 +156,10 @@ pnpm --filter api seed
 pnpm dev:api   # http://localhost:3000
 pnpm --filter worker dev
 pnpm dev:web   # http://localhost:5173
+pnpm dev:storefront   # http://localhost:3001 — Next.js SSR catalog (WIP)
 ```
+
+`./scripts/start.sh` serves the Next storefront on 8088 / 8443. It server-renders home, catalog, and product HTML (title, description, JSON-LD) and proxies `/api` to Express so guest `cart_token` cookies stay same-origin. Checkout, orders, account, and staff admin are client islands. Local Next without Docker: `pnpm dev:storefront` on 3001 (API on 3000). The Vite app on 5173 is the leftover SPA.
 
 ## Usage
 

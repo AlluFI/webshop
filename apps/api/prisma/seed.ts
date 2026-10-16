@@ -15,7 +15,7 @@ import {
   roundMoney,
   STANDARD_SHIPPING,
 } from "@volt/shared";
-import { encrypt, encryptJson, encryptOptional } from "../src/lib/crypto.js";
+import { encrypt, encryptJson, encryptOptional, revealSecret } from "../src/lib/crypto.js";
 import { writeDerivedImages } from "../src/lib/images.js";
 
 const prisma = new PrismaClient();
@@ -446,26 +446,33 @@ function wholesaleSkuFromSlug(slug: string) {
 async function ensureWholesalers() {
   const map = new Map<string, { id: string; categories: readonly string[] }>();
   for (const row of WHOLESALERS) {
-    const saved = await prisma.wholesaler.upsert({
-      where: { slug: row.slug },
-      update: {
-        name: row.name,
-        email: row.email,
-        contactName: row.contactName,
-        phone: row.phone,
-        address: row.address,
-        notes: row.notes,
-      },
-      create: {
-        name: row.name,
-        slug: row.slug,
-        email: row.email,
-        contactName: row.contactName,
-        phone: row.phone,
-        address: row.address,
-        notes: row.notes,
-      },
+    const existing = await prisma.wholesaler.findFirst({
+      where: { OR: [{ slug: row.slug }, { email: row.email }] },
     });
+    const saved = existing
+      ? await prisma.wholesaler.update({
+          where: { id: existing.id },
+          data: {
+            name: row.name,
+            slug: row.slug,
+            email: row.email,
+            contactName: row.contactName,
+            phone: row.phone,
+            address: row.address,
+            notes: row.notes,
+          },
+        })
+      : await prisma.wholesaler.create({
+          data: {
+            name: row.name,
+            slug: row.slug,
+            email: row.email,
+            contactName: row.contactName,
+            phone: row.phone,
+            address: row.address,
+            notes: row.notes,
+          },
+        });
     map.set(row.slug, { id: saved.id, categories: row.categories });
   }
   return map;
@@ -589,6 +596,44 @@ async function ensureMissingStaffUser(email: string, name: string, roleId: strin
   return ensureStaffUser(email, name, roleId);
 }
 
+const DEMO_STAFF_EMAILS = [
+  "admin@volt.test",
+  "support@volt.test",
+  "sales@volt.test",
+  "warehouse@volt.test",
+] as const;
+
+/** Re-encrypt the documented demo TOTP secret if the stored ciphertext is unreadable. */
+async function ensureDemoTotpReadable(email: string) {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { totpSecret: true },
+  });
+  if (!user) return;
+  if (user.totpSecret?.secret) {
+    try {
+      revealSecret(user.totpSecret.secret);
+      return;
+    } catch {
+      // Written with another DATA_ENCRYPTION_KEY — rewrite with the current one.
+    }
+  }
+  const totpCipher = encrypt(DEMO_ADMIN_TOTP_SECRET);
+  await prisma.totpSecret.upsert({
+    where: { userId: user.id },
+    update: { secret: totpCipher, confirmedAt: new Date() },
+    create: {
+      userId: user.id,
+      secret: totpCipher,
+      confirmedAt: new Date(),
+      backupCodes: [],
+    },
+  });
+  if (!user.totpEnabled) {
+    await prisma.user.update({ where: { id: user.id }, data: { totpEnabled: true } });
+  }
+}
+
 async function main() {
   mkdirSync(uploadDir, { recursive: true });
 
@@ -606,8 +651,11 @@ async function main() {
     await assignMissingBarcodes();
     await assignMissingWholesalePrices();
     await ensureMissingStaffUser("warehouse@volt.test", "Volt Warehouse", warehouseRole.id);
+    for (const email of DEMO_STAFF_EMAILS) {
+      await ensureDemoTotpReadable(email);
+    }
     console.log(
-      `Catalog already has ${existing} products; attached missing wholesalers, barcodes, wholesale prices, and warehouse staff and left demo addresses and 2FA intact.`,
+      `Catalog already has ${existing} products; attached missing wholesalers, barcodes, wholesale prices, and warehouse staff and left demo addresses and readable 2FA intact.`,
     );
     return;
   }

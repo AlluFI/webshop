@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { FINLAND_VAT_RATE, formatLocatorCode, normalizeBarcode, productPricing } from "@volt/shared";
 import { api, ApiError } from "../../api";
@@ -45,6 +45,13 @@ export function ProductsPanel({ token }: { token: string }) {
   } | null>(null);
   const [receiveQty, setReceiveQty] = useState("1");
   const [form, setForm] = useState(emptyProduct);
+  const [openRows, setOpenRows] = useState<string[]>([]);
+
+  function toggleRow(id: string) {
+    setOpenRows((current) =>
+      current.includes(id) ? current.filter((row) => row !== id) : [...current, id],
+    );
+  }
 
   async function load() {
     const [data, suppliers] = await Promise.all([
@@ -443,54 +450,84 @@ export function ProductsPanel({ token }: { token: string }) {
         <table className="admin-table">
           <thead>
             <tr>
+              <th scope="col" className="admin-row-lead">
+                <span className="skip">Expand row</span>
+              </th>
               <th scope="col">Product</th>
               <th scope="col">Retail</th>
               <th scope="col">Wholesale</th>
               <th scope="col">Margin</th>
               <th scope="col">Stock</th>
               <th scope="col">Category</th>
-              <th scope="col">Locator</th>
-              <th scope="col">Barcode</th>
-              <th scope="col">Wholesaler</th>
-              <th scope="col">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <Link to={`/products/${item.slug}`}>{item.name}</Link>
-                </td>
-                <td className="num">{money(item.price)}</td>
-                <td className="num">{item.wholesalePrice == null ? "—" : money(item.wholesalePrice)}</td>
-                <td className="num">
-                  {item.pricing?.margin == null ? "—" : money(item.pricing.margin)}
-                </td>
-                <td className="num">{item.stockQuantity}</td>
-                <td>{item.category.name}</td>
-                <td className="locator-code">{item.locator?.code ?? "—"}</td>
-                <td className="locator-code">{item.barcode ?? "—"}</td>
-                <td>{item.wholesaler?.name ?? "—"}</td>
-                <td>
-                  <div className="row-actions">
-                    <button className="link" type="button" onClick={() => startEdit(item)}>
-                      Edit
-                    </button>
-                    <button className="link" type="button" onClick={() => void onDelete(item.id)}>
-                      Delete
-                    </button>
-                    <label className="file-label">
-                      <span className="skip">Upload image for {item.name}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => void onImage(item.id, e.target.files?.[0] ?? null)}
-                      />
-                    </label>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {items.map((item) => {
+              const expanded = openRows.includes(item.id);
+              return (
+                <Fragment key={item.id}>
+                  <tr>
+                    <td className="admin-row-lead">
+                      <button
+                        type="button"
+                        className="admin-row-toggle"
+                        aria-expanded={expanded}
+                        aria-label={`${expanded ? "Collapse" : "Expand"} ${item.name}`}
+                        onClick={() => toggleRow(item.id)}
+                      >
+                        <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+                      </button>
+                    </td>
+                    <td>
+                      <Link to={`/products/${item.slug}`}>{item.name}</Link>
+                    </td>
+                    <td className="num">{money(item.price)}</td>
+                    <td className="num">{item.wholesalePrice == null ? "—" : money(item.wholesalePrice)}</td>
+                    <td className="num">
+                      {item.pricing?.margin == null ? "—" : money(item.pricing.margin)}
+                    </td>
+                    <td className="num">{item.stockQuantity}</td>
+                    <td>{item.category.name}</td>
+                  </tr>
+                  {expanded ? (
+                    <tr className="admin-row-detail">
+                      <td colSpan={7}>
+                        <div className="admin-row-detail-grid">
+                          <p>
+                            <span className="kicker">Locator</span>
+                            <span className="locator-code">{item.locator?.code ?? "—"}</span>
+                          </p>
+                          <p>
+                            <span className="kicker">Barcode</span>
+                            <span className="locator-code">{item.barcode ?? "—"}</span>
+                          </p>
+                          <p>
+                            <span className="kicker">Wholesaler</span>
+                            <span>{item.wholesaler?.name ?? "—"}</span>
+                          </p>
+                          <div className="row-actions">
+                            <button className="link" type="button" onClick={() => startEdit(item)}>
+                              Edit
+                            </button>
+                            <button className="link" type="button" onClick={() => void onDelete(item.id)}>
+                              Delete
+                            </button>
+                            <label className="file-label">
+                              <span className="skip">Upload image for {item.name}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => void onImage(item.id, e.target.files?.[0] ?? null)}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, type FormEvent } from "react";
 import {
   addStoreDays,
   formatOrderReference,
@@ -19,6 +19,13 @@ function isoDatePlus(days: number) {
   return storeCalendarDate(addStoreDays(new Date(), days));
 }
 
+function summaryLines(summary: string) {
+  return summary
+    .split(", ")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 export function OrdersPanel({ token, canRefund }: { token: string; canRefund: boolean }) {
   const [items, setItems] = useState<
     {
@@ -27,6 +34,8 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
       status: string;
       total: number;
       summary: string;
+      customerName?: string;
+      email?: string;
       createdAt: string;
       paidAt?: string | null;
       shippingMethod?: string;
@@ -40,6 +49,7 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
   const [shipOrder, setShipOrder] = useState<(typeof items)[number] | null>(null);
   const [refundOrder, setRefundOrder] = useState<(typeof items)[number] | null>(null);
   const [refundBusy, setRefundBusy] = useState(false);
+  const [openRows, setOpenRows] = useState<string[]>([]);
   const [form, setForm] = useState({
     carrier: "posti" as (typeof SHIPPING_CARRIERS)[number],
     trackingCode: "",
@@ -55,6 +65,12 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
   useEffect(() => {
     void load().catch((err: Error) => setError(err.message));
   }, [token]);
+
+  function toggleRow(id: string) {
+    setOpenRows((current) =>
+      current.includes(id) ? current.filter((row) => row !== id) : [...current, id],
+    );
+  }
 
   function openShip(item: (typeof items)[number]) {
     const express = item.shippingMethod === "express";
@@ -240,59 +256,105 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
         <table className="admin-table">
           <thead>
             <tr>
+              <th scope="col" className="admin-row-lead">
+                <span className="skip">Expand row</span>
+              </th>
               <th scope="col">Order</th>
-              <th scope="col">Paid</th>
-              <th scope="col">Status</th>
               <th scope="col">Total</th>
-              <th scope="col">Summary</th>
-              <th scope="col">Tracking</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td className="locator-code">{item.reference || formatOrderReference(item.id)}</td>
-                <td>{item.paidAt ? formatStoreDateTime(item.paidAt) : "—"}</td>
-                <td>{formatOrderStatus(item.status)}</td>
-                <td className="num">{money(item.total)}</td>
-                <td>{item.summary}</td>
-                <td>
-                  {item.trackingCode
-                    ? `${SHIPPING_CARRIER_META[item.trackingCarrier as (typeof SHIPPING_CARRIERS)[number]]?.name ?? item.trackingCarrier} ${item.trackingCode}`
-                    : "—"}
-                </td>
-                <td>
-                  <div className="row-actions">
-                    <select value={item.status} onChange={(e) => void setStatus(item.id, e.target.value)}>
-                      {ORDER_STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                          {formatOrderStatus(status)}
-                        </option>
-                      ))}
-                    </select>
-                    {["SHIPPING", "WITH_COURIER"].includes(item.status) && (
-                      <button className="link" type="button" onClick={() => openShip(item)}>
-                        {item.status === "WITH_COURIER" ? "Tracking" : "Courier"}
+            {items.map((item) => {
+              const expanded = openRows.includes(item.id);
+              const lines = summaryLines(item.summary);
+              const reference = item.reference || formatOrderReference(item.id);
+              const customer = item.customerName || item.email || "—";
+              const tracking = item.trackingCode
+                ? `${SHIPPING_CARRIER_META[item.trackingCarrier as (typeof SHIPPING_CARRIERS)[number]]?.name ?? item.trackingCarrier} ${item.trackingCode}`
+                : "—";
+              return (
+                <Fragment key={item.id}>
+                  <tr>
+                    <td className="admin-row-lead">
+                      <button
+                        type="button"
+                        className="admin-row-toggle"
+                        aria-expanded={expanded}
+                        aria-label={`${expanded ? "Collapse" : "Expand"} ${reference}`}
+                        onClick={() => toggleRow(item.id)}
+                      >
+                        <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
                       </button>
-                    )}
-                    {canRefund &&
-                      (STAFF_REFUNDABLE_STATUSES as readonly string[]).includes(item.status) && (
-                        <button
-                          className="link"
-                          type="button"
-                          onClick={() => {
-                            setRefundOrder(item);
-                            setError("");
-                          }}
-                        >
-                          Refund
-                        </button>
-                      )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                    </td>
+                    <td className="admin-order-cell">
+                      <div className="admin-order-id">
+                        <span className="locator-code">{reference}</span>
+                        <span>{customer}</span>
+                      </div>
+                    </td>
+                    <td className="num">{money(item.total)}</td>
+                    <td>
+                      <div className="row-actions">
+                        <select value={item.status} onChange={(e) => void setStatus(item.id, e.target.value)}>
+                          {ORDER_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {formatOrderStatus(status)}
+                            </option>
+                          ))}
+                        </select>
+                        {["SHIPPING", "WITH_COURIER"].includes(item.status) && (
+                          <button className="link" type="button" onClick={() => openShip(item)}>
+                            {item.status === "WITH_COURIER" ? "Tracking" : "Courier"}
+                          </button>
+                        )}
+                        {canRefund &&
+                          (STAFF_REFUNDABLE_STATUSES as readonly string[]).includes(item.status) && (
+                            <button
+                              className="link"
+                              type="button"
+                              onClick={() => {
+                                setRefundOrder(item);
+                                setError("");
+                              }}
+                            >
+                              Refund
+                            </button>
+                          )}
+                      </div>
+                    </td>
+                  </tr>
+                  {expanded ? (
+                    <tr className="admin-row-detail">
+                      <td colSpan={4}>
+                        <div className="admin-row-detail-grid">
+                          <p>
+                            <span className="kicker">Paid</span>
+                            <span>{item.paidAt ? formatStoreDateTime(item.paidAt) : "—"}</span>
+                          </p>
+                          <div>
+                            <span className="kicker">Ordered</span>
+                            {lines.length ? (
+                              <ul className="admin-order-summary-list">
+                                {lines.map((line, index) => (
+                                  <li key={`${item.id}-${index}`}>{line}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <span>—</span>
+                            )}
+                          </div>
+                          <p>
+                            <span className="kicker">Tracking</span>
+                            <span>{tracking}</span>
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

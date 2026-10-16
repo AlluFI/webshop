@@ -1,3 +1,4 @@
+# Legacy Vite static build. Compose `web` now uses docker/storefront.Dockerfile.
 FROM node:20-bookworm-slim AS build
 
 RUN corepack enable && corepack prepare pnpm@10.17.0 --activate

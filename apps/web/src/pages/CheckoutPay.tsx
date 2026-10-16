@@ -5,6 +5,7 @@ import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-
 import { STRIPE_TEST_CARDS } from "@volt/shared";
 import { api, ApiError, userErrorMessage } from "../api";
 import { money } from "../product";
+import { useCart } from "../cart";
 
 /** Incomplete fields stay on this form. A declined card must /sync so the worker can email. */
 function isPaymentDecline(error: {
@@ -46,6 +47,7 @@ function PayForm({
   const stripe = useStripe();
   const elements = useElements();
   const navigate = useNavigate();
+  const { refresh } = useCart();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -76,6 +78,7 @@ function PayForm({
           token: accessToken,
           orderToken,
         });
+        await refresh().catch(() => undefined);
       } catch (err) {
         if (!confirmError) {
           setError(

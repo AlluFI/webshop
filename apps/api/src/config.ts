@@ -1,4 +1,11 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const apiRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = path.resolve(apiRoot, "../..");
+loadEnv({ path: path.join(repoRoot, ".env") });
+loadEnv({ path: path.join(apiRoot, ".env") });
 
 function required(name: string): string {
   const value = process.env[name];

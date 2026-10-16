@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -62,14 +63,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const staff = Boolean(user && isStaffRole(user.role));
+  const fetchGeneration = useRef(0);
 
   const refresh = useCallback(async () => {
     if (staff) {
+      fetchGeneration.current += 1;
       setCart(emptyCart);
       setError("");
       return emptyCart;
     }
+    const generation = ++fetchGeneration.current;
     const next = await api<Cart>("/cart", { token: accessToken });
+    if (generation !== fetchGeneration.current) return next;
     setCart(next);
     setError("");
     return next;

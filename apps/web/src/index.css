@@ -112,6 +112,9 @@ h1, h2, .serif { font-family: Fraunces, Georgia, serif; }
   margin: 0 auto;
   padding: 28px 20px 64px;
 }
+.page:has(.admin-shell) {
+  max-width: min(1680px, calc(100vw - 32px));
+}
 .hero {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
@@ -492,24 +495,85 @@ button.link {
 .admin-tabs { margin: 12px 0 20px; }
 .admin-nav { margin: 12px 0 0; }
 .admin-subnav { margin: 8px 0 20px; }
-.admin-menu { position: relative; }
-.admin-menu-list {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 6;
+.admin-shell {
   display: grid;
-  gap: 4px;
-  min-width: 12rem;
-  padding: 8px;
+  grid-template-columns: 13.5rem minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 16px;
+}
+.admin-tree {
+  position: sticky;
+  top: 84px;
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--card);
+  padding: 10px 8px;
   box-shadow: var(--shadow);
 }
-.admin-menu-list button {
-  justify-content: flex-start;
+.admin-tree-list,
+.admin-tree-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.admin-tree-list {
+  display: grid;
+  gap: 2px;
+}
+.admin-tree-children {
+  display: grid;
+  gap: 2px;
+  padding: 2px 0 8px;
+}
+.admin-tree-toggle,
+.admin-tree-leaf {
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
   text-align: left;
+}
+.admin-tree-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  font-weight: 600;
+}
+.admin-tree-toggle.is-current,
+.admin-tree-toggle[aria-expanded="true"] {
+  background: rgba(31, 61, 52, 0.07);
+}
+.admin-tree-chevron {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.admin-tree-leaf {
+  padding: 8px 10px 8px 22px;
+  color: var(--muted);
+}
+.admin-tree-leaf:hover,
+.admin-tree-toggle:hover {
+  background: rgba(31, 61, 52, 0.07);
+}
+.admin-tree-leaf.is-active {
+  background: var(--forest);
+  color: #f7f3ea;
+}
+.admin-view {
+  min-width: 0;
+}
+@media (max-width: 800px) {
+  .admin-shell {
+    grid-template-columns: 1fr;
+  }
+  .admin-tree {
+    position: static;
+  }
 }
 .modal {
   box-sizing: border-box;
@@ -569,7 +633,8 @@ button.link {
   background: var(--card);
 }
 .admin-table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 0.95rem;
 }
@@ -579,6 +644,7 @@ button.link {
   padding: 10px 14px;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
+  white-space: nowrap;
 }
 .admin-table th {
   font-size: 0.78rem;
@@ -596,6 +662,43 @@ button.link {
 }
 .admin-table tbody tr.pickable:hover {
   background: #f7f3ea;
+}
+.admin-row-lead {
+  width: 2.25rem;
+  padding-left: 10px;
+  padding-right: 4px;
+}
+.admin-row-toggle {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+.admin-row-toggle:hover {
+  background: rgba(31, 61, 52, 0.07);
+}
+.admin-row-detail td {
+  background: #f7f3ea;
+  white-space: normal;
+}
+.admin-row-detail-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  align-items: center;
+}
+.admin-row-detail-grid p,
+.admin-row-detail-grid > div {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+.admin-row-detail-grid .kicker {
+  margin: 0;
 }
 .locator-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -637,6 +740,29 @@ button.link {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.admin-table td.admin-order-summary {
+  white-space: normal;
+  max-width: 16rem;
+}
+.admin-order-summary-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+.admin-order-summary-list li {
+  line-height: 1.35;
+}
+.admin-table td.admin-order-cell {
+  white-space: normal;
+}
+.admin-order-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
 }
 .admin-table .row-actions {
   display: flex;

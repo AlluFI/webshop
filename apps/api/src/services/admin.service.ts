@@ -697,6 +697,12 @@ export const adminService = {
             email = "";
           }
         }
+        let customerName = "";
+        try {
+          customerName = decrypt(order.contactNameEnc);
+        } catch {
+          customerName = "";
+        }
         return {
           id: order.id,
           reference: formatOrderReference(order.id),
@@ -711,6 +717,7 @@ export const adminService = {
               : order.createdAt.toISOString()),
           itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
           summary: order.items.map((item) => item.productName).join(", "),
+          customerName,
           email: order.user?.email || email,
           shippingMethod: order.shippingMethod,
           trackingCarrier: order.trackingCarrier,

@@ -32,6 +32,14 @@ export type RefreshStore = {
   expire(key: string, seconds: number): Promise<unknown>;
 };
 
+function readStoredJti(stored: string) {
+  try {
+    return decrypt(stored);
+  } catch {
+    return stored;
+  }
+}
+
 export class TokenService {
   constructor(
     private readonly redis: RefreshStore,
@@ -39,6 +47,7 @@ export class TokenService {
     private readonly refreshSecret: string,
     private readonly accessTtlSec: number,
     private readonly refreshTtlSec: number,
+    private readonly reuseGraceMs = 10_000,
   ) {}
 
   async createSession(userId: string, email: string, role: string) {
@@ -72,6 +81,9 @@ export class TokenService {
       throw new HttpError(401, "Session expired or revoked");
     }
     if (!refreshJtiMatches(current, parsed.jti)) {
+      if (await this.withinReuseGrace(parsed.fam, parsed.jti)) {
+        return this.issueFromCurrent(parsed.sub, parsed.fam, current, email, role);
+      }
       await this.revokeFamily(parsed.fam, parsed.sub);
       throw new HttpError(401, "Refresh token reuse detected");
     }
@@ -81,6 +93,14 @@ export class TokenService {
       this.refreshSecret,
       this.refreshTtlSec,
     );
+    if (this.reuseGraceMs > 0) {
+      await this.redis.set(
+        `rf:${parsed.fam}:prev`,
+        encrypt(JSON.stringify({ jti: parsed.jti, at: Date.now() })),
+        "EX",
+        Math.max(2, Math.ceil(this.reuseGraceMs / 1000) + 1),
+      );
+    }
     await this.redis.set(`rf:${parsed.fam}`, storeRefreshJti(newJti), "EX", this.refreshTtlSec);
     const accessToken = signAccessToken(
       { sub: parsed.sub, email, role, jti: randomUUID() },
@@ -88,6 +108,39 @@ export class TokenService {
       this.accessTtlSec,
     );
     return { userId: parsed.sub, accessToken, refreshToken: newRefresh };
+  }
+
+  private async withinReuseGrace(familyId: string, jti: string) {
+    if (this.reuseGraceMs <= 0) return false;
+    const prevEnc = await this.redis.get(`rf:${familyId}:prev`);
+    if (!prevEnc) return false;
+    try {
+      const prev = JSON.parse(decrypt(prevEnc)) as { jti?: string; at?: number };
+      return prev.jti === jti && Date.now() - Number(prev.at ?? 0) < this.reuseGraceMs;
+    } catch {
+      return false;
+    }
+  }
+
+  private issueFromCurrent(
+    userId: string,
+    familyId: string,
+    current: string,
+    email: string,
+    role: string,
+  ) {
+    const currentJti = readStoredJti(current);
+    const refreshToken = signRefreshToken(
+      { sub: userId, fam: familyId, jti: currentJti },
+      this.refreshSecret,
+      this.refreshTtlSec,
+    );
+    const accessToken = signAccessToken(
+      { sub: userId, email, role, jti: randomUUID() },
+      this.accessSecret,
+      this.accessTtlSec,
+    );
+    return { userId, accessToken, refreshToken };
   }
 
   async revokeRefresh(refreshToken: string) {

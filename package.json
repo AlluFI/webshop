@@ -4,7 +4,8 @@
   "scripts": {
     "dev:api": "pnpm --filter api dev",
     "dev:web": "pnpm --filter web dev",
-    "build": "pnpm --filter @volt/shared build && pnpm --filter api build && pnpm --filter web build",
+    "dev:storefront": "pnpm --filter storefront dev",
+    "build": "pnpm --filter @volt/shared build && pnpm --filter api build && pnpm --filter web build && pnpm --filter storefront build",
     "test": "pnpm --filter api test",
     "test:e2e": "playwright test",
     "seed": "pnpm --filter api seed",

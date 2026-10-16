@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decrypt, encrypt, encryptJson, decryptJson, revealSecret } from "./crypto.js";
+import { decrypt, decryptOrEmpty, encrypt, encryptJson, decryptJson, revealSecret } from "./crypto.js";
 
 describe("at-rest encryption", () => {
   it("round-trips plaintext with AES-256-GCM", () => {
@@ -24,5 +24,16 @@ describe("at-rest encryption", () => {
     expect(revealSecret("legacy-plain-totp")).toBe("legacy-plain-totp");
     const broken = `${cipher.slice(0, -2)}aa`;
     expect(() => decrypt(broken)).toThrow();
+    expect(decryptOrEmpty(broken)).toBe("");
+  });
+
+  it("reads ciphertext written with the default dev key after the env key changes", () => {
+    const previous = process.env.DATA_ENCRYPTION_KEY;
+    process.env.DATA_ENCRYPTION_KEY = "dev_data_encryption_key_must_be_32chars!";
+    const cipher = encrypt("Demo Customer");
+    process.env.DATA_ENCRYPTION_KEY = "another_data_encryption_key_32chars_min!";
+    expect(decrypt(cipher)).toBe("Demo Customer");
+    if (previous == null) delete process.env.DATA_ENCRYPTION_KEY;
+    else process.env.DATA_ENCRYPTION_KEY = previous;
   });
 });

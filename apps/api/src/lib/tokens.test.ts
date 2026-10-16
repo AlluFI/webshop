@@ -49,6 +49,7 @@ describe("refresh token rotation", () => {
       refresh,
       900,
       3600,
+      0,
     );
     const first = await service.createSession("u1", "a@volt.test", "customer");
     const rotated = await service.rotate(first.refreshToken, "a@volt.test", "customer");
@@ -59,6 +60,25 @@ describe("refresh token rotation", () => {
     await expect(
       service.rotate(first.refreshToken, "a@volt.test", "customer"),
     ).rejects.toMatchObject({ status: 401, message: "Refresh token reuse detected" });
+  });
+
+  it("allows a second rotate with the previous token inside the grace window", async () => {
+    const service = new TokenService(
+      new MemoryRedis() as unknown as RefreshStore,
+      access,
+      refresh,
+      900,
+      3600,
+      10_000,
+    );
+    const first = await service.createSession("u1", "a@volt.test", "customer");
+    const rotated = await service.rotate(first.refreshToken, "a@volt.test", "customer");
+    const raced = await service.rotate(first.refreshToken, "a@volt.test", "customer");
+    expect(raced.userId).toBe("u1");
+    expect(raced.accessToken).toBeTruthy();
+    expect(raced.refreshToken).toBeTruthy();
+    const next = await service.rotate(rotated.refreshToken, "a@volt.test", "customer");
+    expect(next.userId).toBe("u1");
   });
 
   it("revokes a refresh family so the token cannot be used again", async () => {

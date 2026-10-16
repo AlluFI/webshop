@@ -70,7 +70,7 @@ export function OrderConfirmationPage() {
         if (!cancelled) {
           setOrder(next);
           setError("");
-          if (next.status === "PAYMENT_FAILED") {
+          if (next.status === "PAID" || next.status === "PAYMENT_FAILED") {
             void refresh().catch(() => undefined);
           }
         }
