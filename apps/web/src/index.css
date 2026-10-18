@@ -212,6 +212,68 @@ h1, h2, .serif { font-family: Fraunces, Georgia, serif; }
   border: 1px solid var(--line);
   background: #ece6d8;
 }
+.pdp-highlights {
+  margin: 16px 0 0;
+  padding-left: 1.15rem;
+}
+.pdp-highlights li {
+  margin: 6px 0;
+}
+.pdp-warranty {
+  margin: 14px 0 0;
+}
+.pdp-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 12px 0 0;
+}
+.pdp-links a {
+  font-weight: 600;
+}
+.product-facts {
+  margin-top: 24px;
+}
+.product-facts h2 {
+  font-size: 1.05rem;
+  margin-bottom: 10px;
+}
+.product-facts table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.product-facts th,
+.product-facts td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.product-facts th {
+  width: 38%;
+  color: var(--muted);
+  font-weight: 600;
+}
+.product-facts td {
+  white-space: pre-line;
+}
+.fieldset-block {
+  margin: 8px 0 16px;
+  padding: 8px 14px 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.fieldset-block legend {
+  padding: 0 6px;
+  font-weight: 650;
+}
+.spec-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
 .auth-card {
   max-width: 420px;
   margin: 24px auto;
@@ -362,6 +424,11 @@ button.primary:disabled, button.ghost:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
+input:disabled {
+  background: #f3efe6;
+  color: var(--muted);
+  cursor: not-allowed;
+}
 button.link {
   background: none;
   border: 0;
@@ -418,6 +485,61 @@ button.link {
   padding: 8px 0;
   border-bottom: 1px solid var(--line);
 }
+.address-book {
+  margin-top: 28px;
+}
+.address-book h3 {
+  margin: 0 0 12px;
+}
+.address-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+  display: grid;
+  gap: 10px;
+}
+.address-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.address-card p {
+  margin: 0;
+}
+.address-card-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.address-default {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ok);
+  background: rgba(45, 106, 79, 0.1);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.address-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.address-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
 .choice {
   display: flex;
   gap: 8px;
@@ -451,6 +573,34 @@ button.link {
 
 .bag-wrap { position: relative; }
 .bag-toggle { color: #f7f3ea !important; text-decoration: none; }
+.cart-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+.cart-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.cart-count {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: var(--forest);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
 .quick-cart {
   position: absolute;
   right: 0;
@@ -480,6 +630,31 @@ button.link {
   border-bottom: 1px solid var(--line);
 }
 .quick-cart img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
+.account-wrap { position: relative; }
+.account-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  min-width: 168px;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 6px;
+  z-index: 20;
+}
+.account-menu a {
+  display: block;
+  color: var(--ink) !important;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+}
+.account-menu a:hover,
+.account-menu a[aria-current="page"] {
+  background: #f3eee3;
+}
 .admin-tabs, .admin-nav, .admin-subnav, .toolbar-actions, .view-toggle, .pagination {
   display: flex;
   flex-wrap: wrap;
@@ -663,6 +838,55 @@ button.link {
 .admin-table tbody tr.pickable:hover {
   background: #f7f3ea;
 }
+.admin-table tbody tr.pickable.express {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+.admin-table.admin-reviews {
+  width: 100%;
+  table-layout: fixed;
+}
+.admin-table.admin-reviews th,
+.admin-table.admin-reviews td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.admin-table.admin-reviews th:nth-child(1) {
+  width: 4.5rem;
+}
+.admin-table.admin-reviews th:nth-child(2) {
+  width: 18%;
+}
+.admin-table.admin-reviews th:nth-child(3) {
+  width: 8rem;
+}
+.admin-table.admin-reviews th:nth-child(4) {
+  width: 7.5rem;
+}
+.admin-table.admin-reviews th:nth-child(6) {
+  width: 5.5rem;
+}
+.express-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  margin-right: 0.5em;
+  color: var(--danger);
+  font-weight: 750;
+}
+.express-flag span {
+  font-size: 1.15em;
+  font-weight: 800;
+  line-height: 1;
+}
+.express-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  margin: 0 0 12px;
+  color: var(--danger);
+  font-weight: 650;
+}
 .admin-row-lead {
   width: 2.25rem;
   padding-left: 10px;
@@ -700,6 +924,11 @@ button.link {
 .admin-row-detail-grid .kicker {
   margin: 0;
 }
+.admin-tracking-link {
+  color: var(--forest-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .locator-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.92rem;
@@ -735,6 +964,36 @@ button.link {
   flex-wrap: wrap;
   gap: 8px 12px;
   align-items: baseline;
+}
+.package-hint {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f7f3ea;
+}
+.package-hint.warn {
+  border-color: #c4a574;
+  background: #f8f0de;
+}
+.package-hint .kicker {
+  margin: 0 0 4px;
+}
+.package-hint p {
+  margin: 0;
+}
+.package-hint .muted {
+  margin-top: 4px;
+}
+.ship-panel {
+  display: grid;
+  gap: 16px;
+  margin: 0 0 16px;
+}
+.ship-address {
+  margin: 0;
+  display: grid;
+  gap: 2px;
 }
 .admin-table .num {
   text-align: right;

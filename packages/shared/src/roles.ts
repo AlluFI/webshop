@@ -19,6 +19,7 @@ export const ADMIN_PERMISSIONS = {
   users: ["admin"],
   reviews: ["admin", "support"],
   shipping: ["admin", "sales"],
+  packages: ["admin", "support", "sales", "warehouse"],
   audit: ["admin", "support", "sales"],
 } as const;
 

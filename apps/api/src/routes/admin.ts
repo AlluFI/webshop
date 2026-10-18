@@ -1,6 +1,14 @@
 import { Router } from "express";
 import multer from "multer";
-import { pickOrderSchema, receiveStockSchema, restockOrderSchema, staffRefundRequestSchema } from "@volt/shared";
+import {
+  adminPackageSchema,
+  orderPackageSchema,
+  pickOrderSchema,
+  receivePackageSchema,
+  receiveStockSchema,
+  restockOrderSchema,
+  staffRefundRequestSchema,
+} from "@volt/shared";
 import { HttpError } from "../http-error.js";
 import { config } from "../config.js";
 import { saveUpload } from "../lib/images.js";
@@ -11,6 +19,7 @@ import { adminService } from "../services/admin.service.js";
 import { salesService } from "../services/sales.service.js";
 import { reviewService } from "../services/review.service.js";
 import { shippingService } from "../services/shipping.service.js";
+import { packageService } from "../services/package.service.js";
 
 export const adminRouter = Router();
 const upload = multer({
@@ -162,6 +171,22 @@ adminRouter.get(
 );
 
 adminRouter.get(
+  "/reports/overview",
+  requirePermission("sales"),
+  asyncHandler(async (req, res) => {
+    res.json(await salesService.overview(req.query));
+  }),
+);
+
+adminRouter.get(
+  "/reports/customers",
+  requirePermission("sales"),
+  asyncHandler(async (req, res) => {
+    res.json(await salesService.customers(req.query));
+  }),
+);
+
+adminRouter.get(
   "/orders",
   requirePermission("orders"),
   asyncHandler(async (req, res) => {
@@ -193,6 +218,15 @@ adminRouter.post(
   asyncHandler(async (req, res) => {
     const user = (req as AuthedRequest).user;
     res.json(await adminService.completePick(user.id, String(req.params.id), req.body));
+  }),
+);
+
+adminRouter.post(
+  "/orders/:id/shipment",
+  requirePermission("picking"),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.json(await adminService.createShipment(user.id, String(req.params.id), req.body ?? {}));
   }),
 );
 
@@ -240,6 +274,15 @@ adminRouter.post(
   }),
 );
 
+adminRouter.patch(
+  "/users/:id",
+  requirePermission("users"),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.json(await adminService.updateDisplayName(user.id, String(req.params.id), req.body));
+  }),
+);
+
 adminRouter.post(
   "/users/:id/role",
   requirePermission("users"),
@@ -283,6 +326,44 @@ adminRouter.patch(
     const user = (req as AuthedRequest).user;
     const row = await adminService.updateShipping(user.id, String(req.params.id), req.body);
     res.json(row);
+  }),
+);
+
+adminRouter.get(
+  "/packages",
+  requirePermission("packages"),
+  asyncHandler(async (_req, res) => {
+    res.json(await packageService.list(true));
+  }),
+);
+
+adminRouter.patch(
+  "/packages/:id",
+  requirePermission("packages"),
+  validate(adminPackageSchema),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.json(await packageService.update(user.id, String(req.params.id), req.body));
+  }),
+);
+
+adminRouter.post(
+  "/packages/:id/order",
+  requirePermission("packages"),
+  validate(orderPackageSchema),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.status(201).json(await packageService.orderMore(user.id, String(req.params.id), req.body));
+  }),
+);
+
+adminRouter.post(
+  "/packages/:id/receive",
+  requirePermission("packages"),
+  validate(receivePackageSchema),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.json(await packageService.receive(user.id, String(req.params.id), req.body));
   }),
 );
 

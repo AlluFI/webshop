@@ -118,6 +118,21 @@ const product = {
     averageRating: { type: "number" },
     reviewCount: { type: "integer" },
     featured: { type: "boolean" },
+    barcode: { type: "string", nullable: true },
+    modelCode: { type: "string", nullable: true, example: "WH-1000XM5" },
+    colorName: { type: "string", nullable: true, example: "Black" },
+    warrantyMonths: { type: "integer", nullable: true, example: 24 },
+    warrantyNote: { type: "string", nullable: true, example: "Manufacturer warranty" },
+    manufacturerUrl: {
+      type: "string",
+      nullable: true,
+      example: "https://www.sony.com/electronics/headband-headphones/wh-1000xm5",
+    },
+    brandUrl: { type: "string", nullable: true, example: "https://www.sony.fi" },
+    packageContents: { type: "string", nullable: true },
+    highlights: { type: "string", nullable: true },
+    releaseYear: { type: "integer", nullable: true, example: 2022 },
+    energyClass: { type: "string", nullable: true },
     attributes: {
       type: "array",
       items: {
@@ -516,6 +531,33 @@ export const openApiDocument: OpenAPIV3.Document = {
               "application/json": { schema: { $ref: "#/components/schemas/User" } },
             },
           },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+      patch: {
+        tags: ["Auth"],
+        summary: "Update the current customer's display name. Staff names are changed from Admin → Users.",
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["displayName"],
+                properties: { displayName: { type: "string", minLength: 1, maxLength: 80 } },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Updated profile",
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/User" } },
+            },
+          },
+          "403": { description: "Staff cannot change their own name" },
           "401": { $ref: "#/components/responses/Unauthorized" },
         },
       },
@@ -1121,7 +1163,7 @@ export const openApiDocument: OpenAPIV3.Document = {
       },
       post: {
         tags: ["Addresses"],
-        summary: "Save an address (encrypted at rest)",
+        summary: "Add a saved address (encrypted at rest). The first address, or one sent with isDefault, becomes the default.",
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1133,6 +1175,51 @@ export const openApiDocument: OpenAPIV3.Document = {
             content: { "application/json": { schema: { $ref: "#/components/schemas/Address" } } },
           },
           "400": { $ref: "#/components/responses/ValidationError" },
+        },
+      },
+    },
+    "/api/v1/addresses/{id}": {
+      patch: {
+        tags: ["Addresses"],
+        summary: "Update a saved address",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { $ref: "#/components/schemas/AddressInput" } } },
+        },
+        responses: {
+          "200": {
+            description: "Updated",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Address" } } },
+          },
+          "400": { $ref: "#/components/responses/ValidationError" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+      delete: {
+        tags: ["Addresses"],
+        summary: "Remove a saved address. If it was the default, another address becomes the default.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "Removed" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+    },
+    "/api/v1/addresses/{id}/default": {
+      post: {
+        tags: ["Addresses"],
+        summary: "Mark a saved address as the default shipping address",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": {
+            description: "This address is now the default",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/Address" } } },
+          },
+          "401": { $ref: "#/components/responses/Unauthorized" },
         },
       },
     },
@@ -1414,13 +1501,30 @@ export const openApiDocument: OpenAPIV3.Document = {
         responses: { "200": { description: "Shipping options" } },
       },
     },
+    "/api/v1/admin/packages": {
+      get: {
+        tags: ["Admin"],
+        summary: "List standard Posti parcel box sizes and warehouse stock",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Package sizes" } },
+      },
+    },
+    "/api/v1/admin/packages/{id}/order": {
+      post: {
+        tags: ["Admin"],
+        summary: "Email a restock order for more parcel boxes (Mailpit in local)",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "201": { description: "Package order emailed" } },
+      },
+    },
     "/api/v1/admin/audit": {
       get: {
         tags: ["Admin"],
         summary: "Staff change log for products, categories, orders, reviews, and shipping",
         security: [{ bearerAuth: [] }],
         parameters: [
-          { name: "entity", in: "query", schema: { type: "string", enum: ["product", "category", "order", "review", "shipping", "wholesaler", "purchase_order"] } },
+          { name: "entity", in: "query", schema: { type: "string", enum: ["product", "category", "order", "review", "shipping", "package", "package_order", "wholesaler", "purchase_order"] } },
           { name: "page", in: "query", schema: { type: "integer", default: 1 } },
           { name: "pageSize", in: "query", schema: { type: "integer", default: 30 } },
         ],
@@ -1455,7 +1559,64 @@ export const openApiDocument: OpenAPIV3.Document = {
           { name: "productId", in: "query", schema: { type: "string", format: "uuid" } },
           { name: "category", in: "query", schema: { type: "string" } },
         ],
-        responses: { "200": { description: "Revenue series, VAT, and margin" }, "403": { description: "Forbidden" } },
+        responses: { "200": { description: "Product sales series, VAT, and margin" }, "403": { description: "Forbidden" } },
+      },
+    },
+    "/api/v1/admin/reports/overview": {
+      get: {
+        tags: ["Admin"],
+        summary: "Shop-wide money report: customer amount, product sales, shipping, VAT, refunds, and margin",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "range",
+            in: "query",
+            schema: {
+              type: "string",
+              enum: [
+                "last_7_days",
+                "last_30_days",
+                "last_12_months",
+                "this_week",
+                "last_week",
+                "this_month",
+                "last_month",
+                "this_year",
+                "last_year",
+              ],
+            },
+          },
+          { name: "group", in: "query", schema: { type: "string", enum: ["day", "week", "month", "year"] } },
+        ],
+        responses: { "200": { description: "Overview totals and period series" }, "403": { description: "Forbidden" } },
+      },
+    },
+    "/api/v1/admin/reports/customers": {
+      get: {
+        tags: ["Admin"],
+        summary: "Customer report: unique buyers, new vs returning, and top spenders",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "range",
+            in: "query",
+            schema: {
+              type: "string",
+              enum: [
+                "last_7_days",
+                "last_30_days",
+                "last_12_months",
+                "this_week",
+                "last_week",
+                "this_month",
+                "last_month",
+                "this_year",
+                "last_year",
+              ],
+            },
+          },
+        ],
+        responses: { "200": { description: "Customer totals and top buyers" }, "403": { description: "Forbidden" } },
       },
     },
     "/api/v1/admin/products": {
@@ -1528,6 +1689,35 @@ export const openApiDocument: OpenAPIV3.Document = {
         },
       },
     },
+    "/api/v1/admin/orders/{id}/shipment": {
+      post: {
+        tags: ["Admin"],
+        summary:
+          "Create a carrier shipment and printable parcel label. Mock mode (default) maps the order to a Posti-, PostNord-, or Budbee-shaped payload and returns a Volt HTML label plus demo tracking. Set POSTI_MODE, POSTNORD_MODE, or BUDBEE_MODE to live to call that carrier instead.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  carrier: { type: "string", enum: ["posti", "postnord", "budbee"] },
+                  trackingCode: {
+                    type: "string",
+                    description: "Optional. In mock mode this tracking number is printed on the label instead of a generated demo code.",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Shipment tracking plus printable label" },
+          "409": { description: "Order is not ready to ship" },
+        },
+      },
+    },
     "/api/v1/admin/users": {
       get: {
         tags: ["Admin"],
@@ -1542,6 +1732,30 @@ export const openApiDocument: OpenAPIV3.Document = {
         responses: {
           "201": { description: "Created employee plus one-time authenticator secret and backup codes" },
           "409": { description: "Email already exists" },
+        },
+      },
+    },
+    "/api/v1/admin/users/{id}": {
+      patch: {
+        tags: ["Admin"],
+        summary: "Change an employee's display name",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["displayName"],
+                properties: { displayName: { type: "string", minLength: 1, maxLength: 80 } },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Updated name" },
+          "403": { description: "Not an admin, or the target is a customer" },
         },
       },
     },

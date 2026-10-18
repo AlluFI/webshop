@@ -1,10 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Navigate, Link } from "react-router-dom";
-import { CHECKOUT_COUNTRIES, addressSchema, formatOrderReference, formatOrderStatus, formatStoreDate, isStaffRole, type AddressInput } from "@volt/shared";
+import { Navigate } from "react-router-dom";
+import { CHECKOUT_COUNTRIES, addressSchema, isStaffRole, type AddressInput } from "@volt/shared";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
 import { PageMeta } from "../seo";
-import { money } from "../product";
 
 export function AccountPage() {
   const { user, accessToken, ready, reloadUser } = useAuth();
@@ -75,42 +74,52 @@ export function AccountPage() {
   return (
     <section className="auth-card" style={{ maxWidth: 560 }}>
       <PageMeta
-        title="Account — Volt & Co"
-        description="Manage your Volt & Co profile, order history, two-factor authentication, and saved shipping addresses."
+        title="Profile — Volt & Co"
+        description="Manage your Volt & Co display name, two-factor authentication, and saved shipping addresses."
       />
-      <h1>Your account</h1>
+      <h1>Profile</h1>
       <p>
         {user.displayName || "Customer"} · {user.email}
       </p>
-      <form
-        className="panel"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError("");
-          void api("/auth/me", {
-            method: "PATCH",
-            token: accessToken,
-            body: JSON.stringify({ displayName }),
-          })
-            .then(async () => {
-              setMessage("Profile updated.");
-              await reloadUser();
+      {isStaffRole(user.role) ? (
+        <div className="panel">
+          <h2>Profile</h2>
+          <label className="field">
+            <span>Display name</span>
+            <input value={user.displayName || ""} disabled readOnly />
+          </label>
+          <p className="muted">Only an admin can change employee names from Users.</p>
+        </div>
+      ) : (
+        <form
+          className="panel"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError("");
+            void api("/auth/me", {
+              method: "PATCH",
+              token: accessToken,
+              body: JSON.stringify({ displayName }),
             })
-            .catch((err) => {
-              setError(err instanceof ApiError ? err.message : "Could not update profile");
-            });
-        }}
-      >
-        <h2>Profile</h2>
-        <label className="field">
-          <span>Display name</span>
-          <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required />
-        </label>
-        <button className="primary" type="submit">
-          Save profile
-        </button>
-      </form>
-      {!isStaffRole(user.role) && <RecentOrders token={accessToken} />}
+              .then(async () => {
+                setMessage("Profile updated.");
+                await reloadUser();
+              })
+              .catch((err) => {
+                setError(err instanceof ApiError ? err.message : "Could not update profile");
+              });
+          }}
+        >
+          <h2>Profile</h2>
+          <label className="field">
+            <span>Display name</span>
+            <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required />
+          </label>
+          <button className="primary" type="submit">
+            Save profile
+          </button>
+        </form>
+      )}
       <p>
         Two-factor authentication:{" "}
         <strong>{user.totpEnabled ? "Active" : "Off"}</strong>
@@ -163,54 +172,15 @@ export function AccountPage() {
       {user.totpEnabled && isStaffRole(user.role) && (
         <p className="muted">Staff accounts must keep two-factor authentication on.</p>
       )}
-      <AddressBook token={accessToken} />
+      {!isStaffRole(user.role) && <AddressBook token={accessToken} />}
     </section>
   );
 }
 
 type SavedAddress = AddressInput & { id: string; label?: string | null; isDefault?: boolean };
 
-function RecentOrders({ token }: { token: string }) {
-  const [items, setItems] = useState<
-    { id: string; status: string; total: number; summary: string; createdAt: string }[]
-  >([]);
-
-  useEffect(() => {
-    void api<{ items: typeof items }>("/orders", { token })
-      .then((result) => setItems(result.items.slice(0, 5)))
-      .catch(() => undefined);
-  }, [token]);
-
-  return (
-    <div style={{ marginTop: 28 }}>
-      <h2>Order history</h2>
-      {items.length === 0 ? (
-        <p className="muted">No orders yet.</p>
-      ) : (
-        <ul className="summary-list">
-          {items.map((item) => (
-            <li key={item.id}>
-              <span>
-                <Link to={`/orders/${item.id}`}>{item.summary || formatOrderReference(item.id)}</Link>
-                <br />
-                <span className="muted">
-                  {formatOrderStatus(item.status)} · {formatStoreDate(item.createdAt)}
-                </span>
-              </span>
-              <span>{money(item.total)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p>
-        <Link to="/orders">View all orders</Link>
-      </p>
-    </div>
-  );
-}
-
-function AddressBook({ token }: { token: string }) {
-  const empty: AddressInput = {
+function emptyAddress(label = ""): AddressInput {
+  return {
     recipientName: "",
     line1: "",
     line2: "",
@@ -219,21 +189,44 @@ function AddressBook({ token }: { token: string }) {
     postal: "",
     country: "FI",
     phone: "",
-    label: "Home",
+    label,
   };
+}
+
+function countryName(code: string) {
+  return CHECKOUT_COUNTRIES.find((country) => country.code === code)?.name ?? code;
+}
+
+function AddressBook({ token }: { token: string }) {
   const [items, setItems] = useState<SavedAddress[]>([]);
-  const [form, setForm] = useState<AddressInput>(empty);
+  const [form, setForm] = useState<AddressInput>(emptyAddress("Home"));
+  const [makeDefault, setMakeDefault] = useState(true);
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
   async function load() {
     const result = await api<{ items: SavedAddress[] }>("/addresses", { token });
     setItems(result.items);
+    setError("");
+    if (result.items.length === 0) {
+      setAdding(true);
+      setMakeDefault(true);
+      setForm(emptyAddress("Home"));
+    }
   }
 
   useEffect(() => {
     void load().catch((err: Error) => setError(err.message));
   }, [token]);
+
+  function startAdd() {
+    setForm(emptyAddress(items.length === 0 ? "Home" : ""));
+    setMakeDefault(items.length === 0);
+    setAdding(true);
+    setError("");
+    setMessage("");
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -246,11 +239,26 @@ function AddressBook({ token }: { token: string }) {
       await api("/addresses", {
         method: "POST",
         token,
-        body: JSON.stringify({ ...parsed.data, isDefault: items.length === 0 }),
+        body: JSON.stringify({
+          ...parsed.data,
+          isDefault: items.length === 0 || makeDefault,
+        }),
       });
       setMessage("Address saved.");
       setError("");
-      setForm(empty);
+      setForm(emptyAddress());
+      setAdding(false);
+      await load();
+    } catch (err) {
+      if (err instanceof ApiError) setError(err.message);
+    }
+  }
+
+  async function setDefault(id: string) {
+    setError("");
+    try {
+      await api(`/addresses/${id}/default`, { method: "POST", token });
+      setMessage("Default address updated.");
       await load();
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
@@ -258,76 +266,144 @@ function AddressBook({ token }: { token: string }) {
   }
 
   async function remove(id: string) {
-    await api(`/addresses/${id}`, { method: "DELETE", token });
-    await load();
+    setError("");
+    try {
+      await api(`/addresses/${id}`, { method: "DELETE", token });
+      setMessage("Address removed.");
+      await load();
+    } catch (err) {
+      if (err instanceof ApiError) setError(err.message);
+    }
   }
 
   return (
-    <div style={{ marginTop: 28 }}>
+    <div className="address-book">
       <h2>Addresses</h2>
+      <p className="muted">Save more than one shipping address and choose which one checkout uses first.</p>
       {message && <p className="banner ok">{message}</p>}
       {error && <p className="banner error">{error}</p>}
-      {items.length === 0 && <p className="muted">No saved addresses yet. Checkout can add one.</p>}
-      <ul className="summary-list">
+      {items.length === 0 && !adding && <p className="muted">No saved addresses yet.</p>}
+      <ul className="address-list">
         {items.map((item) => (
-          <li key={item.id}>
-            <span>
-              {item.recipientName}, {item.line1}, {item.postal} {item.city}
-              {item.isDefault ? " (default)" : ""}
-            </span>
-            <button className="link" type="button" onClick={() => void remove(item.id)}>
-              Remove
-            </button>
+          <li key={item.id} className="address-card">
+            <div>
+              <div className="address-card-head">
+                <strong>{item.label || "Address"}</strong>
+                {item.isDefault && <span className="address-default">Default</span>}
+              </div>
+              <p>{item.recipientName}</p>
+              <p>{item.line1}</p>
+              {item.line2 ? <p>{item.line2}</p> : null}
+              <p>
+                {item.postal} {item.city}
+              </p>
+              {item.region ? <p>{item.region}</p> : null}
+              <p>{countryName(item.country)}</p>
+              {item.phone ? <p>{item.phone}</p> : null}
+            </div>
+            <div className="address-actions">
+              {!item.isDefault && (
+                <button className="link" type="button" onClick={() => void setDefault(item.id)}>
+                  Set as default
+                </button>
+              )}
+              <button className="link" type="button" onClick={() => void remove(item.id)}>
+                Remove
+              </button>
+            </div>
           </li>
         ))}
       </ul>
-      <form onSubmit={(event) => void onSubmit(event)}>
-        <label className="field">
-          <span>Label</span>
-          <input value={form.label || ""} onChange={(event) => setForm({ ...form, label: event.target.value })} />
-        </label>
-        <label className="field">
-          <span>Recipient</span>
-          <input
-            value={form.recipientName}
-            onChange={(event) => setForm({ ...form, recipientName: event.target.value })}
-          />
-        </label>
-        <label className="field">
-          <span>Street</span>
-          <input value={form.line1} onChange={(event) => setForm({ ...form, line1: event.target.value })} />
-        </label>
-        <div className="dims">
-          <label className="field">
-            <span>City</span>
-            <input value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
-          </label>
-          <label className="field">
-            <span>Postal code</span>
-            <input value={form.postal} onChange={(event) => setForm({ ...form, postal: event.target.value })} />
-          </label>
-        </div>
-        <label className="field">
-          <span>Country</span>
-          <select
-            value={form.country}
-            onChange={(event) => setForm({ ...form, country: event.target.value as AddressInput["country"] })}
-          >
-            {CHECKOUT_COUNTRIES.map((country) => (
-              <option key={country.code} value={country.code}>
-                {country.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Phone (optional)</span>
-          <input value={form.phone || ""} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
-        </label>
-        <button className="primary" type="submit">
-          Save address
+      {!adding && (
+        <button className="ghost" type="button" onClick={startAdd}>
+          Add another address
         </button>
-      </form>
+      )}
+      {adding && (
+        <form className="panel" onSubmit={(event) => void onSubmit(event)}>
+          <h3>{items.length === 0 ? "Add an address" : "Add another address"}</h3>
+          <label className="field">
+            <span>Label</span>
+            <input
+              value={form.label || ""}
+              placeholder="Home, work, cabin…"
+              onChange={(event) => setForm({ ...form, label: event.target.value })}
+            />
+          </label>
+          <label className="field">
+            <span>Recipient</span>
+            <input
+              value={form.recipientName}
+              onChange={(event) => setForm({ ...form, recipientName: event.target.value })}
+            />
+          </label>
+          <label className="field">
+            <span>Street</span>
+            <input value={form.line1} onChange={(event) => setForm({ ...form, line1: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>Apartment, suite (optional)</span>
+            <input value={form.line2 || ""} onChange={(event) => setForm({ ...form, line2: event.target.value })} />
+          </label>
+          <div className="dims">
+            <label className="field">
+              <span>Postal code</span>
+              <input value={form.postal} onChange={(event) => setForm({ ...form, postal: event.target.value })} />
+            </label>
+            <label className="field">
+              <span>City</span>
+              <input value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
+            </label>
+          </div>
+          <label className="field">
+            <span>Region / state (optional)</span>
+            <input value={form.region || ""} onChange={(event) => setForm({ ...form, region: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>Country</span>
+            <select
+              value={form.country}
+              onChange={(event) => setForm({ ...form, country: event.target.value as AddressInput["country"] })}
+            >
+              {CHECKOUT_COUNTRIES.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Phone (optional)</span>
+            <input value={form.phone || ""} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+          </label>
+          <label className="field choice">
+            <input
+              type="checkbox"
+              checked={items.length === 0 || makeDefault}
+              disabled={items.length === 0}
+              onChange={(event) => setMakeDefault(event.target.checked)}
+            />
+            <span>Set as default address</span>
+          </label>
+          <div className="address-form-actions">
+            <button className="primary" type="submit">
+              Save address
+            </button>
+            {items.length > 0 && (
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => {
+                  setAdding(false);
+                  setError("");
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </form>
+      )}
     </div>
   );
 }

@@ -57,6 +57,29 @@ export const mail = {
     await send(details.wholesalerEmail, built.subject, built.text, built.html);
   },
 
+  async sendPackageOrder(details: {
+    reference: string;
+    supplierName: string;
+    supplierEmail: string;
+    warehouse: { name: string; line1: string; city: string; postal: string; country: string };
+    item: { name: string; code: string; quantity: number; stockOnHand: number; dimensions: string };
+  }) {
+    const shipTo = `${details.warehouse.name}, ${details.warehouse.line1}, ${details.warehouse.postal} ${details.warehouse.city}, ${details.warehouse.country}`;
+    await send(
+      details.supplierEmail,
+      `Package restock ${details.reference}`,
+      [
+        `Please supply packaging to Volt & Co.`,
+        ``,
+        `${details.item.quantity} × ${details.item.name} (${details.item.code}, ${details.item.dimensions})`,
+        `Stock on hand: ${details.item.stockOnHand}`,
+        `Ship to: ${shipTo}`,
+        `Reference: ${details.reference}`,
+        ``,
+      ].join("\n"),
+    );
+  },
+
   async sendContact(input: { name: string; email: string; subject: string; message: string }) {
     await send(
       "support@localhost",

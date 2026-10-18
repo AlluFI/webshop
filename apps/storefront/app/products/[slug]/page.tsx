@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddToCartButton } from "@/components/cart";
 import { ProductCard } from "@/components/product-card";
+import { ProductFacts } from "@/components/product-facts";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductJsonLd } from "@/components/product-json-ld";
 import { ProductReviews } from "@/components/reviews";
@@ -58,6 +59,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <div className="actions">
             <AddToCartButton productId={product.id} stockQuantity={product.stockQuantity} />
           </div>
+          <ProductFacts product={product} />
           <div className="dims">
             <div>
               <h2>Metric</h2>
@@ -74,15 +76,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               </p>
             </div>
           </div>
-          {product.attributes.length > 0 && (
-            <ul>
-              {product.attributes.map((attribute) => (
-                <li key={`${attribute.name}-${attribute.value}`}>
-                  <strong>{attribute.name}:</strong> {attribute.value}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </article>
       <ProductReviews slug={slug} />

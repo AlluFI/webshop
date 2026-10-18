@@ -6,6 +6,8 @@ import {
   adminCategorySchema,
   adminCreateEmployeeSchema,
   adminOrderStatusSchema,
+  createShipmentSchema,
+  comparePickingPriority,
   adminProductSchema,
   adminUserListQuerySchema,
   adminUserRoleSchema,
@@ -14,8 +16,10 @@ import {
   restockOrderSchema,
   AUDIT_ENTITIES,
   ean13FromIndex,
+  carrierTrackingUrl,
   formatLocatorCode,
   formatOrderReference,
+  parcelLabelHtml,
   formatRefundNote,
   isStaffRole,
   LOW_STOCK_THRESHOLD,
@@ -26,6 +30,7 @@ import {
   slugify,
   staffRefundRequestSchema,
   STAFF_ROLES,
+  updateProfileSchema,
   storeCalendarDate,
   storeDayEnd,
   storeDayStart,
@@ -34,16 +39,36 @@ import { prisma } from "../prisma.js";
 import { HttpError } from "../http-error.js";
 import { diffRecords, parseAuditMeta, writeAudit } from "../lib/audit.js";
 import { config } from "../config.js";
-import { decrypt, encrypt } from "../lib/crypto.js";
+import { decrypt, decryptJson, decryptOrEmpty, encrypt } from "../lib/crypto.js";
 import { hashPassword, randomToken, sha256Hex } from "../lib/hash.js";
 import { writeDerivedImages, writePlaceholderImage } from "../lib/images.js";
 import { bumpFacetCache, catalogService } from "./catalog.service.js";
 import { mail } from "../mail.js";
 import { VOLT_WAREHOUSE } from "../lib/restock-email.js";
+import { carrierProductForMethod, carrierSource, getCarrierAdapter, resolveCarrier } from "../lib/carriers/index.js";
 import { sendOrderShippedMail } from "./order-fulfillment.js";
 import { orderService } from "./order.service.js";
 import { reviewService } from "./review.service.js";
 import { shippingService } from "./shipping.service.js";
+import { packageService } from "./package.service.js";
+
+function shippingSnapshot(enc: string | null | undefined) {
+  if (!enc) return null;
+  try {
+    return decryptJson<{
+      recipientName: string;
+      line1: string;
+      line2?: string;
+      city: string;
+      region?: string;
+      postal: string;
+      country?: string;
+      countryName?: string;
+    }>(enc);
+  } catch {
+    return null;
+  }
+}
 
 function kgToLb(kg: number) {
   return Number((kg * 2.20462).toFixed(3));
@@ -85,6 +110,16 @@ function productAuditFields(input: {
   wholesaler?: string | null;
   wholesaleSku?: string | null;
   barcode?: string | null;
+  modelCode?: string | null;
+  colorName?: string | null;
+  warrantyMonths?: number | null;
+  warrantyNote?: string | null;
+  manufacturerUrl?: string | null;
+  brandUrl?: string | null;
+  packageContents?: string | null;
+  highlights?: string | null;
+  releaseYear?: number | null;
+  energyClass?: string | null;
 }) {
   return {
     name: input.name,
@@ -106,6 +141,42 @@ function productAuditFields(input: {
     wholesaler: input.wholesaler || "—",
     sku: input.wholesaleSku || "—",
     barcode: input.barcode || "—",
+    model: input.modelCode || "—",
+    color: input.colorName || "—",
+    warrantyMonths: input.warrantyMonths ?? "—",
+    warrantyNote: input.warrantyNote || "—",
+    manufacturerUrl: input.manufacturerUrl || "—",
+    brandUrl: input.brandUrl || "—",
+    packageContents: input.packageContents || "—",
+    highlights: input.highlights || "—",
+    releaseYear: input.releaseYear ?? "—",
+    energyClass: input.energyClass || "—",
+  };
+}
+
+function productDetailsOf(dto: {
+  modelCode?: string | null;
+  colorName?: string | null;
+  warrantyMonths?: number | null;
+  warrantyNote?: string | null;
+  manufacturerUrl?: string | null;
+  brandUrl?: string | null;
+  packageContents?: string | null;
+  highlights?: string | null;
+  releaseYear?: number | null;
+  energyClass?: string | null;
+}) {
+  return {
+    modelCode: blankToNull(dto.modelCode),
+    colorName: blankToNull(dto.colorName),
+    warrantyMonths: dto.warrantyMonths ?? null,
+    warrantyNote: blankToNull(dto.warrantyNote),
+    manufacturerUrl: blankToNull(dto.manufacturerUrl),
+    brandUrl: blankToNull(dto.brandUrl),
+    packageContents: blankToNull(dto.packageContents),
+    highlights: blankToNull(dto.highlights),
+    releaseYear: dto.releaseYear ?? null,
+    energyClass: blankToNull(dto.energyClass),
   };
 }
 
@@ -256,6 +327,7 @@ export const adminService = {
         wholesalerId: wholesaler?.id ?? null,
         wholesaleSku: dto.wholesaleSku,
         barcode,
+        ...productDetailsOf(dto),
         ...dimensions(dto),
         ...locatorOf(dto),
         attributes: dto.attributes?.length
@@ -328,6 +400,7 @@ export const adminService = {
           wholesalerId: wholesaler?.id ?? null,
           wholesaleSku: dto.wholesaleSku,
           barcode,
+          ...productDetailsOf(dto),
           ...dimensions(dto),
           ...locatorOf(dto),
         },
@@ -364,6 +437,16 @@ export const adminService = {
         wholesaler: existing.wholesaler?.name,
         wholesaleSku: existing.wholesaleSku,
         barcode: existing.barcode,
+        modelCode: existing.modelCode,
+        colorName: existing.colorName,
+        warrantyMonths: existing.warrantyMonths,
+        warrantyNote: existing.warrantyNote,
+        manufacturerUrl: existing.manufacturerUrl,
+        brandUrl: existing.brandUrl,
+        packageContents: existing.packageContents,
+        highlights: existing.highlights,
+        releaseYear: existing.releaseYear,
+        energyClass: existing.energyClass,
       }),
       productAuditFields({
         name: dto.name,
@@ -380,6 +463,7 @@ export const adminService = {
         wholesaler: wholesaler?.name,
         wholesaleSku: dto.wholesaleSku,
         barcode,
+        ...productDetailsOf(dto),
       }),
     );
     if (changes.length) {
@@ -575,6 +659,9 @@ export const adminService = {
       include: { role: true },
     });
     if (!user) throw new HttpError(404, "User not found");
+    if (!isStaffRole(user.role.name)) {
+      throw new HttpError(409, "Customer accounts cannot change role. Add a new employee instead.");
+    }
     if (isStaffRole(role) && !user.totpEnabled) {
       throw new HttpError(
         409,
@@ -595,6 +682,33 @@ export const adminService = {
       },
     });
     return { id: userId, role };
+  },
+
+  async updateDisplayName(actorId: string, userId: string, input: unknown) {
+    const dto = updateProfileSchema.parse(input);
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true },
+    });
+    if (!user) throw new HttpError(404, "User not found");
+    if (!isStaffRole(user.role.name)) {
+      throw new HttpError(403, "Customers change their own name from their profile.");
+    }
+    await prisma.user.update({
+      where: { id: userId },
+      data: { displayName: dto.displayName },
+    });
+    await writeAudit({
+      actorId,
+      action: "user.rename",
+      entity: "user",
+      entityId: userId,
+      meta: {
+        target: user.email,
+        changes: [{ field: "displayName", from: user.displayName || "—", to: dto.displayName }],
+      },
+    });
+    return { id: userId, displayName: dto.displayName };
   },
 
   async createEmployee(actorId: string, input: unknown) {
@@ -719,6 +833,7 @@ export const adminService = {
           summary: order.items.map((item) => item.productName).join(", "),
           customerName,
           email: order.user?.email || email,
+          shipping: shippingSnapshot(order.shippingAddressEnc),
           shippingMethod: order.shippingMethod,
           trackingCarrier: order.trackingCarrier,
           trackingCode: order.trackingCode,
@@ -738,34 +853,43 @@ export const adminService = {
   },
 
   async listPicking() {
-    const rows = await prisma.order.findMany({
-      where: { status: { in: ["PAID", "PROCESSING"] } },
-      include: {
-        items: {
-          select: {
-            id: true,
-            productName: true,
-            quantity: true,
-            locatorCode: true,
-            barcode: true,
-            thumbnailPath: true,
-            product: {
-              select: {
-                locatorStation: true,
-                locatorBlock: true,
-                locatorShelf: true,
-                locatorPlace: true,
-                barcode: true,
+    const [rows, boxes] = await Promise.all([
+      prisma.order.findMany({
+        where: { status: { in: ["PAID", "PROCESSING", "SHIPPING"] } },
+        include: {
+          items: {
+            select: {
+              id: true,
+              productName: true,
+              quantity: true,
+              locatorCode: true,
+              barcode: true,
+              thumbnailPath: true,
+              product: {
+                select: {
+                  locatorStation: true,
+                  locatorBlock: true,
+                  locatorShelf: true,
+                  locatorPlace: true,
+                  barcode: true,
+                  lengthCm: true,
+                  widthCm: true,
+                  heightCm: true,
+                  weightKg: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: { createdAt: "asc" },
-    });
+        orderBy: { createdAt: "asc" },
+      }),
+      packageService.candidates(),
+    ]);
+    const queue = [...rows].sort(comparePickingPriority);
     return {
-      total: rows.length,
-      items: rows.map((order) => {
+      total: queue.length,
+      postiMode: config.postiMode,
+      items: queue.map((order) => {
         const items = [...order.items]
           .map((item) => ({
             id: item.id,
@@ -781,6 +905,10 @@ export const adminService = {
               ),
             barcode: item.barcode || item.product.barcode,
             thumbnail: item.thumbnailPath ? `/api/v1/files/${item.thumbnailPath}` : null,
+            lengthCm: Number(item.product.lengthCm),
+            widthCm: Number(item.product.widthCm),
+            heightCm: Number(item.product.heightCm),
+            weightKg: Number(item.product.weightKg),
           }))
           .sort((a, b) => a.locatorCode.localeCompare(b.locatorCode) || a.name.localeCompare(b.name));
         return {
@@ -790,6 +918,18 @@ export const adminService = {
           createdAt: order.createdAt.toISOString(),
           itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
           summary: items.map((item) => item.name).join(", "),
+          customerName: decryptOrEmpty(order.contactNameEnc),
+          shipping: shippingSnapshot(order.shippingAddressEnc),
+          shippingMethod: order.shippingMethod,
+          trackingCarrier: order.trackingCarrier,
+          trackingCode: order.trackingCode,
+          estimatedDeliveryFrom: order.estimatedDeliveryFrom
+            ? storeCalendarDate(order.estimatedDeliveryFrom)
+            : null,
+          estimatedDeliveryTo: order.estimatedDeliveryTo
+            ? storeCalendarDate(order.estimatedDeliveryTo)
+            : null,
+          packaging: packageService.recommend(items, boxes),
           items,
         };
       }),
@@ -873,6 +1013,112 @@ export const adminService = {
       },
     });
     return { id: orderId, status: "SHIPPING" as const, reference: formatOrderReference(orderId) };
+  },
+
+  async createShipment(actorId: string, orderId: string, input: unknown) {
+    const dto = createShipmentSchema.parse(input ?? {});
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: { select: { productName: true, quantity: true } } },
+    });
+    if (!order) throw new HttpError(404, "Order not found");
+    if (!["SHIPPING", "WITH_COURIER"].includes(order.status)) {
+      throw new HttpError(409, "Finish picking before creating a parcel label.");
+    }
+
+    const carrier = resolveCarrier(dto.carrier || order.trackingCarrier);
+    const requestedTracking = dto.trackingCode?.trim() || "";
+    const shipping = shippingSnapshot(order.shippingAddressEnc);
+    const reference = formatOrderReference(order.id);
+    const shipmentInput = {
+      orderId: order.id,
+      reference,
+      carrier,
+      shippingMethod: order.shippingMethod,
+      trackingCode: requestedTracking || undefined,
+      sender: {
+        name: VOLT_WAREHOUSE.name,
+        street: VOLT_WAREHOUSE.line1,
+        postalCode: VOLT_WAREHOUSE.postal,
+        city: VOLT_WAREHOUSE.city,
+        country: "FI",
+      },
+      recipient: {
+        name: shipping?.recipientName || decryptOrEmpty(order.contactNameEnc) || "Customer",
+        street: [shipping?.line1, shipping?.line2].filter(Boolean).join(", ") || "—",
+        postalCode: shipping?.postal || "",
+        city: shipping?.city || "",
+        country: shipping?.country || "FI",
+        email: decryptOrEmpty(order.contactEmailEnc) || undefined,
+        phone: decryptOrEmpty(order.contactPhoneEnc) || undefined,
+      },
+      parcels: [
+        {
+          description: order.items.map((item) => `${item.productName} × ${item.quantity}`).join(", "),
+        },
+      ],
+    };
+
+    let result;
+    if (
+      order.trackingCode &&
+      order.trackingCarrier === carrier &&
+      (!requestedTracking || requestedTracking === order.trackingCode)
+    ) {
+      const product = carrierProductForMethod(carrier, order.shippingMethod);
+      result = {
+        source: carrierSource(carrier),
+        carrier,
+        shipmentId: order.trackingCode,
+        trackingCode: order.trackingCode,
+        trackingUrl: carrierTrackingUrl(carrier, order.trackingCode),
+        productCode: product.code,
+        productName: product.name,
+        label: {
+          contentType: "text/html" as const,
+          body: parcelLabelHtml({
+            reference,
+            carrier,
+            trackingCode: order.trackingCode,
+            shippingMethod: order.shippingMethod,
+            recipient: shipping,
+          }),
+        },
+      };
+    } else {
+      result = await getCarrierAdapter(carrier).createShipment(shipmentInput);
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { trackingCarrier: result.carrier, trackingCode: result.trackingCode },
+      });
+      await writeAudit({
+        actorId,
+        action: "order.shipment",
+        entity: "order",
+        entityId: orderId,
+        meta: {
+          target: reference,
+          changes: [
+            { field: "carrier", from: order.trackingCarrier ?? "—", to: result.carrier },
+            { field: "trackingCode", from: order.trackingCode ?? "—", to: result.trackingCode },
+          ],
+        },
+      });
+    }
+
+    return {
+      id: orderId,
+      reference,
+      status: order.status,
+      carrier: result.carrier,
+      trackingCode: result.trackingCode,
+      trackingUrl: result.trackingUrl,
+      shipmentId: result.shipmentId,
+      productCode: result.productCode,
+      productName: result.productName,
+      source: result.source,
+      label: result.label,
+    };
   },
 
   async setOrderStatus(actorId: string, orderId: string, input: unknown) {

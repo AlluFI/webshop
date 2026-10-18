@@ -1,23 +1,27 @@
 # Volt & Co staff user manual
 
-This guide is for people who work in **Admin** (`/admin`). Customers never see these tabs. Staff sign in with email and password, then a six-digit authenticator code (2FA is required for every staff account).
+This guide is intended for staff who work in **Admin** (`/admin`). These tabs are not shown to customers. Staff accounts are signed in with email and password, then a six-digit authenticator code. Two-factor authentication is required for every staff account.
 
 Demo logins (password `Shopping123`, TOTP secret `DEMOADMIN2FASECRETKEYAA`):
 
-| Role | Email | What they are for |
+| Role | Email | Access |
 | --- | --- | --- |
 | **admin** | `admin@volt.test` | Full shop: catalog, warehouse, orders, users, reviews |
 | **sales** | `sales@volt.test` | Catalog, warehouse buying, orders, shipping |
 | **support** | `support@volt.test` | Customer orders, refunds, review moderation |
-| **warehouse** | `warehouse@volt.test` | Products, orders, and picking only |
+| **warehouse** | `warehouse@volt.test` | Products, orders, and order handling |
 
-Open Admin at http://localhost:8088/admin (or https://localhost:8443/admin). The page is grouped as **Product**, **Orders**, and **Admin**. Menus you are not allowed to use are hidden.
+Admin is opened at http://localhost:8088/admin (or https://localhost:8443/admin). The page is grouped as **Product**, **Orders**, **Reports**, **Shipping**, and **Admin**. Menus that are not permitted for the signed-in role are hidden.
 
-- **Product:** products, categories, wholesalers, shipping
-- **Orders:** orders, picking, sales
+- **Product:** products, categories, wholesalers
+- **Orders:** orders, order handling
+- **Reports:** overview, sales, customers
+- **Shipping:** methods, packages
 - **Admin:** users, reviews, bulk, log
 
-Order numbers are the same everywhere: **`VC-` plus eight uppercase characters** (for example `VC-23AAA1B2`). That number is what you see on Orders, Picking, the customer order page, and Mailpit emails.
+Order numbers are formatted as **`VC-` plus eight uppercase characters** (for example `VC-23AAA1B2`). The same reference is shown on Orders, Order handling, the customer order page, and Mailpit emails.
+
+After a successful password check, a separate two-factor form is mounted. Authenticator and backup-code fields are left empty; the email and password from the previous step are not reused.
 
 ---
 
@@ -28,8 +32,10 @@ Order numbers are the same everywhere: **`VC-` plus eight uppercase characters**
 | products | yes | yes | — | yes |
 | categories | yes | yes | — | — |
 | orders | yes | yes | yes | yes |
+| overview | yes | yes | yes | — |
 | sales | yes | yes | yes | — |
-| picking | yes | yes | yes | yes |
+| customers | yes | yes | yes | — |
+| order handling | yes | yes | yes | yes |
 | wholesalers | yes | yes | — | — |
 | users | yes | — | — | — |
 | reviews | yes | — | yes | — |
@@ -37,9 +43,9 @@ Order numbers are the same everywhere: **`VC-` plus eight uppercase characters**
 | bulk | yes | yes | — | — |
 | log | yes | yes | yes | — |
 
-Refunds on the **orders** tab are **admin** and **support** only. Sales and warehouse can change status and hand an order to the courier, but cannot refund.
+Refunds on the **orders** tab are limited to **admin** and **support**. Status changes and courier hand-off are allowed for sales and warehouse. Refunds are not allowed for those roles.
 
-Customers have no Admin access.
+Admin access is not granted to customer accounts.
 
 ---
 
@@ -47,16 +53,18 @@ Customers have no Admin access.
 
 **Who:** admin, sales, warehouse
 
-Catalog of products on the shop.
+The catalog of products sold in the shop is managed here.
 
 - Table: name, retail price, wholesale price, margin, stock, category, warehouse locator (`01|02|2|1`), barcode, wholesaler
-- **Add product** / **Edit**: name, description, retail price (includes 25.5% Finnish VAT), wholesale price, VAT %, live net/VAT/margin, stock, category slug, brand, featured flag, locator (station, block, shelf, place), wholesaler, wholesale SKU, barcode (EAN-13 / UPC / warehouse code)
-- The shop always shows the retail price. Confirmation, checkout, and the paid email list VAT as its own included row.
-- **Receive stock**: scan or type a barcode once, then enter how many pieces arrived (you do not scan each unit)
-- Upload a product photo
-- Delete a product
+- **Add product** / **Edit**: name, description, retail price (25.5% Finnish VAT included), wholesale price, VAT %, live net/VAT/margin, stock, category slug, brand, featured flag, locator (station, block, shelf, place), wholesaler, wholesale SKU, barcode (EAN-13 / UPC / warehouse code)
+- **Product information**: model, color, release year, energy class, warranty months and note, manufacturer product page, brand website, key highlights, what’s in the box, and extra name/value specifications
+- The shop product page shows those fields as highlights, warranty, manufacturer/brand links, and a product information table
+- The retail price is shown on the shop. VAT is listed as its own included row on confirmation, checkout, and the paid email.
+- **Receive stock**: a barcode is scanned or typed once, then the arrived quantity is entered (each unit is not scanned)
+- A product photo may be uploaded
+- A product may be deleted
 
-The locator is where the item sits in the warehouse. The barcode is what a scanner reads on the box. Seeded products use Finland GS1 codes starting with `640`.
+The locator is the warehouse place of the item. The barcode is the value read from the box. Seeded products use Finland GS1 codes starting with `640`.
 
 ---
 
@@ -64,10 +72,10 @@ The locator is where the item sits in the warehouse. The barcode is what a scann
 
 **Who:** admin, sales
 
-Shop categories used on the catalog filters.
+Shop categories used on the catalog filters are managed here.
 
 - List of categories (name, slug, description)
-- Create, edit, delete
+- Create, edit, and delete
 
 ---
 
@@ -75,19 +83,19 @@ Shop categories used on the catalog filters.
 
 **Who:** admin, support, sales, warehouse (refunds: admin, support)
 
-Every customer order, newest first.
+Every customer order is listed, newest first.
 
-- Table: order number (`VC-…`), **Paid** date (Helsinki time, or a dash if never paid), status, total, product summary, tracking
-- Change status with the dropdown
-- **Courier** / **Tracking** on Shipping or With the courier: carrier (Posti, PostNord, Budbee), tracking number, delivery window. That emails the customer and sets status to **With the courier**
-- **Refund** (admin/support): reason required; Stripe sandbox refund; stock comes back if it was still reserved
+- Table: order number (`VC-…`), customer name, **Paid** date (Helsinki time, or a dash if never paid), status, total, stacked product summary, tracking
+- Status is changed with the dropdown
+- **Courier** / **Tracking** on Shipping or With the courier: carrier (Posti, PostNord, Budbee), tracking number, delivery window. The customer is emailed and the status is set to **With the courier**
+- **Refund** (admin/support): a reason is required; a Stripe sandbox refund is created; reserved stock is returned
 
 Statuses in order:
 
 1. Pending payment
 2. Payment failed (or Paid)
-3. Processing (after staff press **Process** on Picking)
-4. Shipping (after pick is confirmed)
+3. Processing (after **Process** is pressed on Order handling)
+4. Shipping (after the pick is confirmed)
 5. With the courier (after tracking is saved)
 6. Delivered
 
@@ -95,32 +103,60 @@ Cancelled and Refunded are end states.
 
 ---
 
+## overview
+
+**Who:** admin, support, sales
+
+Shop-wide money for paid-through-delivered orders on the Helsinki calendar. Refunded orders in the same window are shown as a separate refunds figure, not subtracted from product sales.
+
+- **Customer amount** is what buyers paid (`order.total`: products + shipping, VAT included)
+- **Product sales** is the sum of line totals
+- **Shipping**, **VAT included**, **net of VAT**, **refunds**, **net sales**, and **margin**
+- Orders, units, AOV, and unique customers
+- Time frames and grouping match **sales**
+- A period table with those money columns
+
+---
+
 ## sales
 
 **Who:** admin, support, sales
 
-Revenue reporting for paid through delivered orders (Helsinki calendar).
+Product and category sales for paid-through-delivered orders on the Helsinki calendar.
 
-- Filter by all products, one category, or one product
+- Filters: all products, one category, or one product
 - Time frames: last 7 / 30 days, last 12 months, this/last calendar week, month, and year
-- Group by day, calendar week, calendar month, or calendar year (Auto picks a sensible default)
-- KPI cards for revenue, orders, units, included VAT, and margin
-- Bar chart plus a period table
+- Grouping: day, calendar week, calendar month, or calendar year (Auto selects a default)
+- KPI cards for product sales, orders, units, included VAT, and margin
+- A bar chart and a period table
 
 ---
 
-## picking
+## customers
+
+**Who:** admin, support, sales
+
+Buyers on paid-through-delivered orders in the selected time frame. Signed-in shoppers are grouped by account; guests are grouped by the order contact email.
+
+- Unique customers, new vs returning in the range, customer amount, and AOV
+- Top buyers by spend: name, email, orders, units, customer amount
+
+---
+
+## order handling
 
 **Who:** admin, support, sales, warehouse
 
-Warehouse pick list for paid work.
+Warehouse pick and ship work is listed here.
 
-- Lists **Paid** and **Processing** orders, oldest first
-- Open a row: locator codes, barcodes, and quantities
+- **Paid**, **Processing**, and **Shipping** orders are listed with **express first** (oldest to newest), then standard (oldest to newest). Express rows show a red **! Express** mark
+- A row is opened for locator codes, barcodes, quantities, and the delivery address
 - Lines stay locked until **Process** (status becomes **Processing**)
-- Tick every line by hand, or scan a barcode (USB scanner, or Use camera — on a phone this takes a photo). Scanning only ticks a matching line; checkboxes still work
-- **Order completed**, confirm quantities
-- Confirmed pick moves the order to **Shipping** and removes it from this list
+- Each line is ticked by hand, or a barcode is scanned (USB scanner, or Use camera on a phone). A scan only ticks a matching line; checkboxes remain available
+- **Order completed** is used, then quantities are confirmed
+- A confirmed pick moves the order to **Shipping**. The order **stays on this list** until it is handed to the courier
+- **Create label** / **Print label** calls `POST /api/v1/admin/orders/{id}/shipment`. A carrier adapter is selected (Posti, PostNord, or Budbee). In mock mode a Volt HTML label and a demo tracking code are returned. The same request shape is used later when `POSTI_MODE`, `POSTNORD_MODE`, or `BUDBEE_MODE` is set to `live`
+- **Hand to courier** saves tracking, emails the customer, and removes the order from this list. The order remains under **Orders**
 
 ---
 
@@ -128,14 +164,14 @@ Warehouse pick list for paid work.
 
 **Who:** admin, sales
 
-Suppliers and warehouse restock.
+Suppliers and warehouse restock are managed here.
 
 - List: name, order email, product count, low-stock count
 - **Add wholesaler** / **Edit**: name, email, contact, phone, address, notes
-- Assign a wholesaler and wholesale SKU on each product (Products tab)
-- **Order stock**: set quantities, optional note, **Send restock order**
-- Mailpit receives the purchase order (`VCPO-…`) at the supplier email (http://localhost:8025)
-- Sending the email does **not** increase stock; that happens when the goods arrive and you edit stock on Products
+- A wholesaler and wholesale SKU are assigned on each product (Products tab)
+- **Order stock**: quantities are set, an optional note is added, then **Send restock order** is used
+- A purchase order (`VCPO-…`) is received in Mailpit at the supplier email (http://localhost:8025)
+- Stock is not increased by the email. Stock is increased when the goods arrive and the product is updated
 
 Seeded suppliers: ElectroNordic Oy (audio, wearables, phones), Baltic IT Wholesale (computers, accessories), Nordic Lighting Supply (smart home).
 
@@ -145,13 +181,13 @@ Seeded suppliers: ElectroNordic Oy (audio, wearables, phones), Baltic IT Wholesa
 
 **Who:** admin
 
-Accounts and roles.
+Accounts and roles are managed here.
 
 - Table: name, email, 2FA on/off, role
 - Filter by role: all accounts, **All employees** (admin, support, sales, warehouse), or one role
-- **Add employee**: name, work email, staff role, temporary password. The account is verified and 2FA is turned on immediately. After save, copy the QR / authenticator secret and backup codes once and give them to the new person with the password.
-- Change role: customer, admin, support, sales, warehouse
-- Promoting an existing customer to a staff role still requires that they already have 2FA enabled (Account page)
+- **Add employee**: name, work email, staff role, temporary password. The account is verified and 2FA is enabled immediately. After save, the QR / authenticator secret and backup codes are copied once and given to the new person with the password
+- Customer roles cannot be changed. New staff are created with **Add employee**
+- Staff role changes (admin, support, sales, warehouse, or back to customer) ask for confirmation first
 
 ---
 
@@ -159,12 +195,12 @@ Accounts and roles.
 
 **Who:** admin, support
 
-Product reviews from customers who bought the item.
+Product reviews from customers who bought the item are moderated here.
 
 - Table: stars, product, author, status, text
 - **Hide** or **Publish**
 
-Hidden reviews do not count toward the product average.
+Hidden reviews are excluded from the product average.
 
 ---
 
@@ -172,10 +208,10 @@ Hidden reviews do not count toward the product average.
 
 **Who:** admin, sales
 
-Checkout shipping options (Standard, Express).
+Checkout shipping options (Standard, Express) are edited here.
 
 - Name, description, price, free-shipping threshold, min/max days, active flag
-- Edit an option; inactive options are hidden at checkout
+- An option is edited; inactive options are hidden at checkout
 
 ---
 
@@ -183,12 +219,12 @@ Checkout shipping options (Standard, Express).
 
 **Who:** admin, sales
 
-Create many products at once.
+Many products are created at once.
 
-- Upload CSV or JSON
+- CSV or JSON is uploaded
 - CSV headers: `name`, `description`, `price`, `stockQuantity`, `category`, `brand`, `weightKg`, `lengthCm`, `widthCm`, `heightCm`
 - JSON is an array of the same fields
-- Result shows how many rows were created and any row errors
+- The result shows how many rows were created and any row errors
 
 ---
 
@@ -196,7 +232,7 @@ Create many products at once.
 
 **Who:** admin, support, sales
 
-Staff change history (who changed what, old value → new value).
+Staff change history is listed (who changed what, old value → new value).
 
 - Filter by entity: product, category, order, review, shipping, wholesaler, purchase order
 - Paginated list with time, actor, and field diffs
@@ -205,4 +241,4 @@ Staff change history (who changed what, old value → new value).
 
 ## Storefront (not Admin tabs)
 
-Customers use the public site: Home, Catalog, product pages, Cart, Checkout, Account, Orders, About, Contact, FAQ, Terms. Staff (admin, sales, support, warehouse) can open Catalog and product pages to see the customer view, but Cart, Checkout, Add to cart, and customer Orders are hidden or disabled so staff cannot buy from the shop. Staff 2FA is set under **Account**. Contact form and order mail land in Mailpit.
+The public site is used by customers: Home, Catalog, product pages, Cart, Checkout, Profile, Orders, About, Contact, FAQ, Terms. Catalog and product pages may be opened by staff (admin, sales, support, warehouse) to see the customer view. Cart, Checkout, Add to cart, and customer Orders are hidden or disabled so staff cannot buy from the shop. Signed-in customers open **Profile** and **Orders** from their name in the header. Staff 2FA is set under **Profile**. Contact form and order mail are delivered to Mailpit.

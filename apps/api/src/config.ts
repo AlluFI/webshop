@@ -52,6 +52,26 @@ export const config = {
   rabbitmqUrl: process.env.RABBITMQ_URL ?? "",
   queueInline: process.env.QUEUE_INLINE === "true" || !process.env.RABBITMQ_URL,
   nodeEnv: process.env.NODE_ENV ?? "development",
+  postiMode: process.env.POSTI_MODE === "live" ? "live" : "mock",
+  postiClientId: process.env.POSTI_CLIENT_ID ?? "",
+  postiClientSecret: process.env.POSTI_CLIENT_SECRET ?? "",
+  postiOauthUrl: process.env.POSTI_OAUTH_URL ?? "https://oauth2.posti.com/oauth/token",
+  postiShipmentUrl: process.env.POSTI_SHIPMENT_URL ?? "https://nextshipping.posti.fi/prinetti/create-shipment",
+  postiLabelUrl: process.env.POSTI_LABEL_URL ?? "https://nextshipping.posti.fi/prinetti/get-shipping-label",
+  postnordMode: process.env.POSTNORD_MODE === "live" ? "live" : "mock",
+  postnordClientId: process.env.POSTNORD_CLIENT_ID ?? "",
+  postnordClientSecret: process.env.POSTNORD_CLIENT_SECRET ?? "",
+  postnordOauthUrl:
+    process.env.POSTNORD_OAUTH_URL ?? "https://api2.postnord.com/oauth2/token",
+  postnordBookingUrl:
+    process.env.POSTNORD_BOOKING_URL ?? "https://api2.postnord.com/rest/booking/v1/bookings",
+  postnordLabelUrl:
+    process.env.POSTNORD_LABEL_URL ?? "https://api2.postnord.com/rest/booking/v1/labels",
+  budbeeMode: process.env.BUDBEE_MODE === "live" ? "live" : "mock",
+  budbeeApiKey: process.env.BUDBEE_API_KEY ?? "",
+  budbeeApiSecret: process.env.BUDBEE_API_SECRET ?? "",
+  budbeeBaseUrl: process.env.BUDBEE_BASE_URL ?? "https://api.staging.budbee.com",
+  budbeeCollectionId: number("BUDBEE_COLLECTION_ID", 0),
 };
 
 if (config.jwtAccessSecret.length < 32 || config.jwtRefreshSecret.length < 32) {

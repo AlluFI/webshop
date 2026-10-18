@@ -1,24 +1,25 @@
 # Volt & Co — I Love Shopping (Part 3)
 
-B2C electronics shop: accounts, a PostgreSQL catalog, faceted search, reviews, admin, and a React storefront behind **self-signed TLS**. This is **Project 3 (Experience)** of three. Cart, checkout, Stripe sandbox payments, RabbitMQ, and encrypted addresses stay from Part 2.
+A B2C electronics shop is provided: accounts, a PostgreSQL catalog, faceted search, reviews, admin, and a Next.js storefront behind **self-signed TLS**. This repository is **Project 3 (Experience)** of three. Cart, checkout, Stripe sandbox payments, RabbitMQ, and encrypted addresses from Part 2 are retained.
 
 ## Stack
 
 - **API:** Express + TypeScript
 - **Web:** Next.js 15 App Router (`apps/storefront`) on 8088 / 8443 — SSR catalog, client checkout/admin
-- **Web (legacy):** React 19 + Vite (`apps/web`) for local `pnpm dev:web` on 5173
-- **Edge:** nginx TLS terminator (`https://localhost:8443`)
+- **Web (leftover):** React 19 + Vite (`apps/web`) for local `pnpm dev:web` on 5173; Docker does not serve this app
+- **Edge:** nginx TLS terminator (`https://localhost:8443`) proxies to the Next storefront
 - **Data:** PostgreSQL (Prisma, ACID transactions) + Redis (refresh sessions + token-bucket rate limits)
 - **Mail:** Nodemailer → Mailpit (Docker)
 - **Payments:** Stripe test mode + Payment Element (card data is never sent to the API)
 - **Queue:** RabbitMQ + `apps/worker` (payment status → email + inventory)
+- **Carriers:** Posti, PostNord, and Budbee adapters (mock labels by default; live mode is enabled with env credentials)
 - **Load:** k6 (`load-tests/shop.js`) — report in [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
 - **Staff Admin:** tab-by-tab guide and roles in [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - **Monorepo:** pnpm workspaces (`apps/api`, `apps/web`, `apps/storefront`, `apps/worker`, `packages/shared`)
 
 ## Entity relationship diagram
 
-Reviews, carts, orders, and staff audit live in PostgreSQL. Refresh sessions stay in Redis (not shown). Full diagrams: [docs/erd.md](docs/erd.md).
+Reviews, carts, orders, and staff audit are stored in PostgreSQL. Refresh sessions are kept in Redis (not shown). Full diagrams: [docs/erd.md](docs/erd.md).
 
 ```mermaid
 erDiagram
@@ -43,11 +44,11 @@ erDiagram
   }
 ```
 
-Refresh tokens are **not** stored in Postgres. Each login creates a Redis family (`rf:{familyId}` → current `jti`). Every refresh writes a new `jti` (single use). Replaying an old refresh token revokes the whole family. Access tokens are JWTs held **only in React memory**; logout puts the access `jti` on a Redis denylist until expiry.
+Refresh tokens are **not** stored in Postgres. A Redis family (`rf:{familyId}` → current `jti`) is created on each login. A new `jti` is written on every refresh (single use). The whole family is revoked if an old refresh token is replayed. Access tokens are JWTs held **only in React memory** (`apps/storefront/components/auth.tsx`); on logout the access `jti` is placed on a Redis denylist until expiry.
 
-Guest carts use an httpOnly `cart_token` cookie. The raw token never goes in the database — only its SHA-256. Signing in merges that cart into the user cart and clamps quantities to stock. Shipping addresses are encrypted at rest with AES-256-GCM (`DATA_ENCRYPTION_KEY`).
+Guest carts use an httpOnly `cart_token` cookie. The raw token is never stored — only its SHA-256. On sign-in that cart is merged into the user cart and quantities are clamped to stock. Shipping addresses are encrypted at rest with AES-256-GCM (`DATA_ENCRYPTION_KEY`).
 
-Staff roles (`admin`, `support`, `sales`, `warehouse`) **must** have TOTP enabled. Role assignment is refused until 2FA is on. Reviews are **purchased-only** and sort by helpfulness.
+TOTP is required for staff roles (`admin`, `support`, `sales`, `warehouse`). Customer accounts cannot be promoted. New staff are created with 2FA already on. Reviews are **purchased-only** and are sorted by helpfulness.
 
 ## Setup (Docker starts the stack; Stripe test keys are needed to demo checkout)
 
@@ -76,9 +77,9 @@ docker compose up --build
 
 Accept the browser warning on **8443** — the certificate is generated inside the `tls` container for local review.
 
-Google reCAPTCHA **test keys** are in `.env.example` so registration and the contact form work on localhost without a Google Cloud project.
+Google reCAPTCHA **test keys** are included in `.env.example` so registration and the contact form work on localhost without a Google Cloud project.
 
-The API seed runs on container start **only when the catalog is empty**. A restart does not wipe demo addresses or 2FA. To reseed from scratch, drop the Postgres volume.
+The API seed is run on container start **only when the catalog is empty**. Demo addresses and 2FA are not wiped on restart. A full reseed is done by dropping the Postgres volume.
 
 If RabbitMQ still exits with `.erlang.cookie: eacces` (leftover volume from an older compose file):
 
@@ -96,7 +97,7 @@ docker volume rm i-love-shopping3_rabbitmq_data 2>/dev/null || true
 | `admin@volt.test` | `Shopping123` | Full admin. **TOTP required** — add secret `DEMOADMIN2FASECRETKEYAA` in Google Authenticator / Authy |
 | `support@volt.test` | `Shopping123` | Orders, refunds, review moderation (same TOTP secret) |
 | `sales@volt.test` | `Shopping123` | Catalog and shipping (same TOTP secret) |
-| `warehouse@volt.test` | `Shopping123` | Products, orders, and picking only (same TOTP secret) |
+| `warehouse@volt.test` | `Shopping123` | Products, orders, and order handling only (same TOTP secret) |
 
 Registering a new user sends a link to Mailpit.
 
@@ -106,7 +107,7 @@ Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`. Authorized redirect
 
 `http://localhost:3000/api/v1/auth/google/callback`
 
-If those variables are empty, email-password still works and the Google button is hidden. Staff accounts always sign in with email + 2FA (not Google).
+If those variables are empty, email-password sign-in is still available and the Google button is hidden. Staff accounts are signed in with email + 2FA (not Google). After the password is accepted, a new two-factor form is mounted so the email and password are not left in the authenticator fields.
 
 ### Stripe (sandbox)
 
@@ -155,11 +156,11 @@ pnpm --filter api exec prisma migrate deploy
 pnpm --filter api seed
 pnpm dev:api   # http://localhost:3000
 pnpm --filter worker dev
-pnpm dev:web   # http://localhost:5173
-pnpm dev:storefront   # http://localhost:3001 — Next.js SSR catalog (WIP)
+pnpm dev:web   # http://localhost:5173 — leftover Vite SPA
+pnpm dev:storefront   # http://localhost:3001 — Next.js storefront
 ```
 
-`./scripts/start.sh` serves the Next storefront on 8088 / 8443. It server-renders home, catalog, and product HTML (title, description, JSON-LD) and proxies `/api` to Express so guest `cart_token` cookies stay same-origin. Checkout, orders, account, and staff admin are client islands. Local Next without Docker: `pnpm dev:storefront` on 3001 (API on 3000). The Vite app on 5173 is the leftover SPA.
+The Next storefront is served by `./scripts/start.sh` on 8088 / 8443. Home, catalog, and product HTML (title, description, JSON-LD) are server-rendered. `/api` is proxied to Express so guest `cart_token` cookies stay same-origin. Checkout, orders, account, and staff admin are client islands. Local Next without Docker is started with `pnpm dev:storefront` on 3001 (API on 3000). The Vite app on 5173 is retained as a leftover SPA and is not used in Docker.
 
 ## Usage
 
@@ -169,15 +170,28 @@ pnpm dev:storefront   # http://localhost:3001 — Next.js SSR catalog (WIP)
 4. Sign in as `customer@volt.test` and review the seeded Sony WH-1000XM5 (already purchased). Vote a review helpful; the average on the product updates.
 5. Open **Cart**. Change quantities (live totals), hit a stock limit, refresh as a guest — the bag stays. Sign in: the guest bag merges into your account cart.
 6. **Checkout** is one page: contact, shipping and billing addresses (Finnish postcodes, US ZIP, and other offline checks), shipping options from the database, live summary (retail prices include 25.5% Finnish VAT, shown as its own row), then Stripe Payment Element. Confirmation shows a `VC-…` reference, order ID, VAT line, and estimated delivery window.
-7. **Account** (signed-in): edit display name, recent orders, 2FA, saved addresses. **Orders** lists the full history with status/date filters.
-8. **Admin** (`admin@volt.test` + TOTP): product create/edit/delete and image upload, warehouse locator codes (`01|02|2|1`), barcodes (EAN-13) and **Receive stock** scan-in, retail / wholesale / VAT / margin on each product, wholesaler on each product, **wholesalers** tab (list suppliers and email a restock purchase order to Mailpit), category CRUD, bulk CSV/JSON, **sales** (filter by product or category, last week/month/12 months and calendar week/month/year), **picking** (paid orders oldest first; Process → tick lines or optional barcode scan → confirm pick → Shipping → With the courier), order status and refunds (any paid-through-delivered order, with a reason), **users** (add employees with a password and 2FA already on, or promote a customer after they enable 2FA), review hide/publish, shipping prices/days/active. To try a live Posti link, paste the sample tracking number below into **Courier**.
+7. **Profile** (signed-in name menu): edit display name, 2FA, saved addresses. **Orders** (same menu) lists the full history with status/date filters.
+8. **Admin** (`admin@volt.test` + TOTP): products are created, edited, and deleted; images are uploaded; warehouse locator codes (`01|02|2|1`), barcodes (EAN-13), and **Receive stock** scan-in are used; retail / wholesale / VAT / margin are shown on each product; a wholesaler is assigned per product; **wholesalers** lists suppliers and emails a restock purchase order to Mailpit; categories are managed; bulk CSV/JSON is imported; **Reports** covers shop-wide money (**overview**), product/category **sales**, and **customers**; sales is filtered by product or category and by last week/month/12 months or calendar week/month/year; **order handling** lists paid work oldest first (Process → tick lines or optional barcode scan → confirm pick → Print label → Hand to courier); order status and refunds are applied to any paid-through-delivered order with a reason; **users** adds employees with a password and 2FA already on (customer roles stay locked; staff role changes ask for confirmation); reviews are hidden or published; shipping prices/days/active are edited. Print label uses the Posti / PostNord / Budbee mock adapters by default.
 9. **About**, **Contact** (CAPTCHA → Mailpit), **FAQ**, **Terms**, and a **404** catch-all.
-10. Create an account (CAPTCHA required), confirm via Mailpit, sign in. Access tokens never go to `localStorage`. Enable 2FA on **Account** before an admin can assign a staff role.
+10. Create an account (CAPTCHA required), confirm via Mailpit, sign in. Access tokens never go to `localStorage`. Staff accounts are created under Admin → users, not by promoting a customer.
 11. Explore endpoints at **http://localhost:3000/api/v1/docs**. Burst login/contact traffic returns **429** (Redis token bucket; skipped in automated `NODE_ENV=test` except unit tests).
+
+### Carrier shipping (mock today)
+
+**Print label** on Order handling calls `POST /api/v1/admin/orders/{id}/shipment`. A carrier adapter is selected. The order is mapped to that carrier’s developer-portal request shape, then:
+
+- `*_MODE=mock` (default) — a Volt printable HTML label and a demo tracking code are generated. A carrier account is not required.
+- `*_MODE=live` plus that carrier’s credentials — the same request shape is sent to the live API.
+
+| Carrier | Mock tracking | Live products | Switch |
+| --- | --- | --- | --- |
+| Posti | `JJFI…` | **2104** Home / **2102** Express (Nextshipping) | `POSTI_MODE=live` + `POSTI_CLIENT_ID` / `POSTI_CLIENT_SECRET` |
+| PostNord | `00TEST…` | **17** Home / **18** Parcel (Booking API) | `POSTNORD_MODE=live` + `POSTNORD_CLIENT_ID` / `POSTNORD_CLIENT_SECRET` |
+| Budbee | `BUD-DEV-…` | **HOME** (Multiple Orders v2) | `BUDBEE_MODE=live` + `BUDBEE_API_KEY` / `BUDBEE_API_SECRET` |
 
 ### Posti tracking (reviewer sample)
 
-Same value as the Admin **Courier** field placeholder. Paste it when handing an order to Posti; the shop builds a working Posti tracking URL.
+The same value is used as the Admin **Courier** field placeholder. When it is pasted for a Posti hand-off, a working Posti tracking URL is built.
 
 ```
 JJFI66012700410158170/32109367922
@@ -187,14 +201,14 @@ Opens: https://www.posti.fi/en/tracking/JJFI66012700410158170/32109367922
 
 ## Bonus features (beyond the Part 3 mandatory list)
 
-These are extras a reviewer can click without extra setup. They are **not** required by the checklist; they are here so it is obvious what was added on top.
+These extras can be opened by a reviewer without extra setup. They are **not** required by the checklist; they are listed so additions on top of the mandatory items are visible.
 
 | Bonus | Where to see it | What it does |
 | --- | --- | --- |
 | Staff **change log** | Admin → **log** (`admin@volt.test`) | Encrypted audit rows for product, category, order, review, user-role, and shipping edits |
 | **Shipped** email + tracking | Admin → hand an order to the courier; Mailpit + order page | HTML mail with carrier link, ETA, and a tracking modal on the order |
 | Finland carrier URLs | Ship with Posti / PostNord / Budbee | Posti uses `/en/tracking/{code}/{id}`; sample code `JJFI66012700410158170/32109367922` (same as the Courier placeholder). Other carriers open their official pages |
-| Staff **roles** | `admin` / `support` / `sales` / `warehouse` demo accounts | RBAC: catalog vs orders/refunds vs reviews vs shipping vs warehouse floor; 2FA required before promotion |
+| Staff **roles** | `admin` / `support` / `sales` / `warehouse` demo accounts | RBAC: catalog vs orders/refunds vs reviews vs shipping vs warehouse floor; customer roles stay locked |
 | **FAQ** and **Terms** | Header/footer | Extra content pages (About / Contact / 404 are mandatory; these two are extra) |
 | Separate **billing** address | Checkout | Optional billing block when “same as shipping” is unchecked |
 | Human **`VC-…` references** | Confirmation and order email | Short storefront reference next to the UUID |
@@ -237,8 +251,8 @@ pnpm test:e2e
 
 Coverage:
 
-- **Unit:** JWT generate/validate/expire, refresh rotation + reuse, input validation, product model, cart totals, address encryption, review averages, token-bucket
-- **API:** register/login/refresh/revoke, catalog fields, facets, sort, suggestions, images, OpenAPI document, guest cart, merge on login, checkout validation, Stripe place + webhook (inline queue), concurrent last-unit checkout, order list/cancel/refund, purchased-only reviews + helpful votes, admin 2FA + CRUD + bulk JSON
+- **Unit:** JWT generate/validate/expire, refresh rotation + reuse, input validation, product model, cart totals, address encryption, review averages, token-bucket, Posti / PostNord / Budbee mock adapters
+- **API:** register/login/refresh/revoke, catalog fields, facets, sort, suggestions, images, OpenAPI document, guest cart, merge on login, checkout validation, Stripe place + webhook (inline queue), concurrent last-unit checkout, order list/cancel/refund, purchased-only reviews + helpful votes, admin 2FA + CRUD + bulk JSON + shipment labels
 - **Security:** parameterized search (injection payload), malformed JSON, unauthenticated `/me` and `/admin`, token-bucket HTTP 429, encrypted address columns, TOTP secrets, and refresh JTIs (`v1:` AES-GCM)
 - **E2E:** Playwright smokes for home, catalog, about, 404, and header search (`pnpm test:e2e`)
 
@@ -261,4 +275,4 @@ k6 scenarios in `load-tests/shop.js` (browse, search+cart, login). Full write-up
 
 ## Architecture notes
 
-Modular monolith: Express API plus a RabbitMQ worker process from the same image (`node dist/worker.js`). nginx terminates TLS and proxies to the SPA. PostgreSQL is the system of record (transactions, `SELECT FOR UPDATE` on checkout). Redis holds hot session state and rate-limit buckets. Stripe webhooks publish `payment.status`; the worker emails and adjusts inventory. Failed handler messages go to `payment.status.dlq`.
+A modular monolith is used: an Express API plus a RabbitMQ worker process from the same image (`node dist/worker.js`). nginx terminates TLS and proxies to the Next.js storefront (`apps/storefront`). PostgreSQL is the system of record (transactions, `SELECT FOR UPDATE` on checkout). Redis holds hot session state and rate-limit buckets. Stripe webhooks publish `payment.status`; email is sent and inventory is adjusted by the worker. Failed handler messages are sent to `payment.status.dlq`. Parcel labels are created through carrier adapters under `apps/api/src/lib/carriers/` (Posti Nextshipping, PostNord Booking, Budbee Multiple Orders). Mock mode is the default.

@@ -62,6 +62,21 @@ export const productDimensionsSchema = z.object({
   heightIn: dimension,
 });
 
+export function linesFromText(value?: string | null, max = 12) {
+  return (value ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^[-•]\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, max);
+}
+
+export function formatWarrantyLabel(months?: number | null, note?: string | null) {
+  const period = months ? `${months} month${months === 1 ? "" : "s"}` : "";
+  const extra = note?.trim() ?? "";
+  if (period && extra) return `${period} · ${extra}`;
+  return period || extra;
+}
+
 export const productSchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().min(1).max(200),

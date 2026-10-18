@@ -12,6 +12,7 @@ describe("staff role permissions", () => {
     expect(can("warehouse", "users")).toBe(false);
     expect(can("warehouse", "reviews")).toBe(false);
     expect(can("warehouse", "shipping")).toBe(false);
+    expect(can("warehouse", "packages")).toBe(true);
     expect(can("warehouse", "audit")).toBe(false);
   });
 

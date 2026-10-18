@@ -51,6 +51,19 @@ describeLive("catalog API", () => {
     expect(audio.body.facets.categories.length).toBeGreaterThan(0);
   });
 
+  it("returns warranty, manufacturer links, and product information on a detail page", async () => {
+    const res = await request(app).get("/api/v1/products/sony-wh-1000xm5");
+    expect(res.status).toBe(200);
+    expect(res.body.warrantyMonths).toBe(24);
+    expect(res.body.warrantyNote).toMatch(/manufacturer/i);
+    expect(res.body.manufacturerUrl).toMatch(/^https:\/\/www\.sony\.com/);
+    expect(res.body.brandUrl).toMatch(/^https:\/\//);
+    expect(res.body.modelCode).toBe("WH-1000XM5");
+    expect(res.body.highlights).toMatch(/noise cancellation/i);
+    expect(res.body.packageContents).toMatch(/carrying case/i);
+    expect(res.body.attributes.length).toBeGreaterThan(2);
+  });
+
   it("returns typeahead suggestions", async () => {
     const res = await request(app).get("/api/v1/search/suggest?q=sony");
     expect(res.status).toBe(200);

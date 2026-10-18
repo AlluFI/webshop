@@ -1,8 +1,8 @@
 # Performance report (Part 3)
 
-Load tests live in `load-tests/shop.js` (k6). They run against the Docker storefront proxy so the path matches a reviewer hitting nginx, not a raw Node process on a laptop.
+Load tests are kept in `load-tests/shop.js` (k6). They are run against the Docker Next storefront so the path matches a reviewer hitting nginx, not a raw Node process on a laptop.
 
-Each virtual user sends a unique `X-Forwarded-For` address so the token-bucket (keyed per IP) models 50 shoppers rather than one NAT’d client. A first run without that header failed ~74% of API calls with 429s while p90 stayed under 20ms — the limiter was doing its job, not the CPU.
+A unique `X-Forwarded-For` address is sent by each virtual user so the token-bucket (keyed per IP) models 50 shoppers rather than one NAT’d client. A first run without that header failed ~74% of API calls with 429s while p90 stayed under 20ms — the limiter was doing its job, not the CPU.
 
 ## How to run
 
@@ -11,7 +11,7 @@ Each virtual user sends a unique `X-Forwarded-For` address so the token-bucket (
 docker compose --profile load run --rm --no-deps k6
 ```
 
-`BASE_URL` defaults to `http://web:80` inside Compose. `--no-deps` avoids recreating the API mid-run (that also produces false 502/429s). Override if you point k6 at TLS:
+`BASE_URL` is set to `http://web:3000` in Compose (the Next storefront listens on 3000). `--no-deps` is used so the API is not recreated mid-run (that also produces false 502/429s). TLS is targeted if the following override is used:
 
 ```bash
 docker compose --profile load run --rm --no-deps -e BASE_URL=https://tls:443 k6
@@ -28,7 +28,7 @@ docker compose --profile load run --rm --no-deps -e BASE_URL=https://tls:443 k6
 | `checkout` | Guest cart + `/checkout/quote` + `/checkout/validate` | 8 VUs constant |
 | `auth` | Login (`customer@volt.test`) | 5 arrivals/sec |
 
-Stripe Payment Element confirm stays in the browser demo. The k6 checkout path covers the shop APIs that reserve a quote (address, shipping, totals) without posting a card.
+Stripe Payment Element confirm is left to the browser demo. The shop APIs that reserve a quote (address, shipping, totals) are covered by the k6 checkout path without a card being posted.
 
 A second profile ramps browse to **200 VUs** to look for the p95 > 5s cliff:
 
@@ -55,7 +55,7 @@ Normal operating load for this shop is a handful of browsers (catalog + PDP + ca
 
 ## Bottlenecks and fixes
 
-| Bottleneck | Why it shows up | What we would do next |
+| Bottleneck | Why it shows up | What is done next |
 | --- | --- | --- |
 | Shared IP rate limits | Token buckets are per `X-Forwarded-For`. One NAT IP looks like one attacker. | Keep per-IP buckets; k6 must use distinct forwarded addresses (the script does). |
 | Catalog `groupBy` facets on every list | Prisma facet counts scan products per request | **Done:** Redis cache (`facets:v1:{ver}:…`, 45s TTL); admin product/category writes bump `facets:ver` |

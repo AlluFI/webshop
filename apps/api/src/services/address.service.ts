@@ -1,7 +1,9 @@
-import { addressSchema, savedAddressSchema, type AddressInput } from "@volt/shared";
+import { savedAddressSchema, type AddressInput } from "@volt/shared";
 import { prisma } from "../prisma.js";
 import { HttpError } from "../http-error.js";
-import { decrypt, decryptOptional, encrypt, encryptOptional } from "../lib/crypto.js";
+import { decrypt, decryptOrEmpty, encrypt, encryptOptional } from "../lib/crypto.js";
+
+const UNREADABLE_ADDRESS = "This saved address could not be unlocked. Add it again.";
 
 function toDto(row: {
   id: string;
@@ -21,14 +23,22 @@ function toDto(row: {
     label: row.label,
     recipientName: decrypt(row.recipientNameEnc),
     line1: decrypt(row.line1Enc),
-    line2: decryptOptional(row.line2Enc) ?? "",
+    line2: decryptOrEmpty(row.line2Enc),
     city: decrypt(row.cityEnc),
-    region: decryptOptional(row.regionEnc) ?? "",
+    region: decryptOrEmpty(row.regionEnc),
     postal: decrypt(row.postalEnc),
     country: row.country,
-    phone: decryptOptional(row.phoneEnc) ?? "",
+    phone: decryptOrEmpty(row.phoneEnc),
     isDefault: row.isDefault,
   };
+}
+
+function toDtoOrNull(row: Parameters<typeof toDto>[0]) {
+  try {
+    return toDto(row);
+  } catch {
+    return null;
+  }
 }
 
 function encryptedFields(input: AddressInput) {
@@ -60,13 +70,20 @@ export const addressService = {
       where: { userId },
       orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
     });
-    return { items: rows.map(toDto) };
+    const items: ReturnType<typeof toDto>[] = [];
+    for (const row of rows) {
+      const dto = toDtoOrNull(row);
+      if (dto) items.push(dto);
+    }
+    return { items };
   },
 
   async get(userId: string, id: string) {
     const row = await prisma.address.findFirst({ where: { id, userId } });
     if (!row) throw new HttpError(404, "Address not found");
-    return toDto(row);
+    const dto = toDtoOrNull(row);
+    if (!dto) throw new HttpError(409, UNREADABLE_ADDRESS);
+    return dto;
   },
 
   async create(userId: string, input: unknown) {
@@ -88,6 +105,7 @@ export const addressService = {
   async update(userId: string, id: string, input: unknown) {
     const existing = await prisma.address.findFirst({ where: { id, userId } });
     if (!existing) throw new HttpError(404, "Address not found");
+    if (!toDtoOrNull(existing)) throw new HttpError(409, UNREADABLE_ADDRESS);
     const dto = savedAddressSchema.parse(input);
     if (dto.isDefault) await unsetDefaults(userId, id);
     const row = await prisma.address.update({
@@ -97,6 +115,20 @@ export const addressService = {
         isDefault: dto.isDefault ?? existing.isDefault,
         ...encryptedFields(dto),
       },
+    });
+    return toDto(row);
+  },
+
+  async setDefault(userId: string, id: string) {
+    const existing = await prisma.address.findFirst({ where: { id, userId } });
+    if (!existing) throw new HttpError(404, "Address not found");
+    const current = toDtoOrNull(existing);
+    if (!current) throw new HttpError(409, UNREADABLE_ADDRESS);
+    if (existing.isDefault) return current;
+    await unsetDefaults(userId, id);
+    const row = await prisma.address.update({
+      where: { id },
+      data: { isDefault: true },
     });
     return toDto(row);
   },

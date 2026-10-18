@@ -70,6 +70,13 @@ describeLive("auth API", () => {
       .set("Authorization", `Bearer ${accessToken}`);
     expect(me.status).toBe(200);
     expect(me.body.email).toBe(email);
+
+    const renamed = await request(app)
+      .patch("/api/v1/auth/me")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ displayName: "Updated Tester" });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.displayName).toBe("Updated Tester");
   });
 
   it("rotates refresh tokens and rejects reuse", async () => {

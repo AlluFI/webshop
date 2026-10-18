@@ -87,6 +87,16 @@ erDiagram
     decimal widthIn
     decimal heightIn
     float averageRating
+    string modelCode
+    string colorName
+    int warrantyMonths
+    string warrantyNote
+    string manufacturerUrl
+    string brandUrl
+    string packageContents
+    string highlights
+    int releaseYear
+    string energyClass
   }
   ProductImage {
     uuid id PK
@@ -143,8 +153,11 @@ erDiagram
     uuid userId FK
     string status
     decimal total
+    string shippingMethod
     string shippingAddressEnc
     string contactEmailEnc
+    string trackingCarrier
+    string trackingCode
   }
   OrderItem {
     uuid id PK
@@ -164,7 +177,7 @@ erDiagram
 
 ## Part 3 — implemented
 
-Reviews are purchased-only (`PAID` / `PROCESSING` / `SHIPPING` / `WITH_COURIER` / `DELIVERED`). Helpful votes are unique per user. Product `averageRating` / `reviewCount` are recalculated from published reviews. Staff actions write an encrypted audit row. Shipping options are editable in admin.
+Reviews are purchased-only (`PAID` / `PROCESSING` / `SHIPPING` / `WITH_COURIER` / `DELIVERED`). Helpful votes are unique per user. Product `averageRating` / `reviewCount` are recalculated from published reviews. Staff actions write an encrypted audit row. Shipping options are editable in admin. Parcel labels are created through carrier adapters (Posti, PostNord, Budbee); tracking is stored on `Order.trackingCarrier` / `Order.trackingCode`.
 
 ```mermaid
 erDiagram

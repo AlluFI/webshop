@@ -34,14 +34,35 @@ describeLive("admin API", () => {
   let productId = "";
 
   afterAll(async () => {
-    if (productId) {
-      await prisma.product.delete({ where: { id: productId } }).catch(() => undefined);
+    const leftover = await prisma.product.findMany({
+      where: {
+        OR: [
+          ...(productId ? [{ id: productId }] : []),
+          { name: { startsWith: "Volt Test Dongle" } },
+          { name: { startsWith: "Volt Bulk Cable" } },
+        ],
+      },
+      select: { id: true },
+    });
+    const leftoverIds = leftover.map((row) => row.id);
+    if (leftoverIds.length) {
+      await prisma.cartItem.deleteMany({ where: { productId: { in: leftoverIds } } }).catch(() => undefined);
+      await prisma.purchaseOrderItem.deleteMany({ where: { productId: { in: leftoverIds } } }).catch(() => undefined);
+      const orderRows = await prisma.orderItem.findMany({
+        where: { productId: { in: leftoverIds } },
+        select: { orderId: true },
+      });
+      const orderIds = [...new Set(orderRows.map((row) => row.orderId))];
+      if (orderIds.length) {
+        await prisma.order.deleteMany({ where: { id: { in: orderIds } } }).catch(() => undefined);
+      }
+      await prisma.inventoryReservation.deleteMany({ where: { productId: { in: leftoverIds } } }).catch(() => undefined);
+      await prisma.product.deleteMany({ where: { id: { in: leftoverIds } } }).catch(() => undefined);
     }
-    await prisma.product.deleteMany({ where: { name: { startsWith: "Volt Test Dongle" } } }).catch(() => undefined);
     await prisma.user.deleteMany({ where: { email: { in: [email, customerEmail, warehouseEmail, employeeEmail] } } }).catch(() => undefined);
   });
 
-  it("requires 2FA for staff login and supports product CRUD plus bulk JSON", async () => {
+  it("requires 2FA for staff login and supports product CRUD plus bulk JSON", { timeout: 15_000 }, async () => {
     const adminRole = await prisma.role.upsert({
       where: { name: "admin" },
       update: {},
@@ -132,9 +153,24 @@ describeLive("admin API", () => {
         locatorBlock: 2,
         locatorShelf: 2,
         locatorPlace: 1,
+        modelCode: "VOLT-HUB-1",
+        colorName: "Black",
+        warrantyMonths: 24,
+        warrantyNote: "Manufacturer warranty",
+        manufacturerUrl: "https://www.example.com/products/usb-c-hub",
+        brandUrl: "https://www.example.com",
+        highlights: "Four USB-C ports\n60W pass-through",
+        packageContents: "Hub\nUSB-C cable",
+        attributes: [{ name: "Ports", value: "4× USB-C" }],
       });
     expect(patched.status).toBe(200);
     expect(patched.body.price).toBe(31);
+    expect(patched.body.warrantyMonths).toBe(24);
+    expect(patched.body.manufacturerUrl).toBe("https://www.example.com/products/usb-c-hub");
+    expect(patched.body.modelCode).toBe("VOLT-HUB-1");
+    expect(patched.body.attributes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "Ports", value: "4× USB-C" })]),
+    );
     expect(patched.body.locator).toEqual({
       station: 1,
       block: 2,
@@ -168,6 +204,42 @@ describeLive("admin API", () => {
         vat: expect.any(Number),
         profit: expect.any(Number),
         orders: expect.any(Number),
+      }),
+    );
+    const overview = await request(app)
+      .get("/api/v1/admin/reports/overview?range=this_year")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(overview.status).toBe(200);
+    expect(overview.body.series).toBeInstanceOf(Array);
+    expect(overview.body.totals).toEqual(
+      expect.objectContaining({
+        customerAmount: expect.any(Number),
+        productSales: expect.any(Number),
+        shipping: expect.any(Number),
+        vat: expect.any(Number),
+        netOfVat: expect.any(Number),
+        refunds: expect.any(Number),
+        netSales: expect.any(Number),
+        margin: expect.any(Number),
+        orders: expect.any(Number),
+        units: expect.any(Number),
+        customers: expect.any(Number),
+        aov: expect.any(Number),
+      }),
+    );
+    const customers = await request(app)
+      .get("/api/v1/admin/reports/customers?range=this_year")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(customers.status).toBe(200);
+    expect(customers.body.items).toBeInstanceOf(Array);
+    expect(customers.body.totals).toEqual(
+      expect.objectContaining({
+        customers: expect.any(Number),
+        newCustomers: expect.any(Number),
+        returningCustomers: expect.any(Number),
+        customerAmount: expect.any(Number),
+        orders: expect.any(Number),
+        aov: expect.any(Number),
       }),
     );
     const received = await request(app)
@@ -240,6 +312,7 @@ describeLive("admin API", () => {
       .set("Authorization", `Bearer ${accessToken}`)
       .send({ role: "support" });
     expect(blockedRole.status).toBe(409);
+    expect(blockedRole.body.error).toMatch(/customer accounts cannot change role/i);
 
     const catalogProduct = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
     const shipOrder = await prisma.order.create({
@@ -361,18 +434,57 @@ describeLive("admin API", () => {
         payment: { create: { status: "SUCCEEDED", amount: 10, currency: "EUR" } },
       },
     });
+    const expressPick = await prisma.order.create({
+      data: {
+        status: "PAID",
+        createdAt: new Date("2026-10-03T08:00:00.000Z"),
+        subtotal: 10,
+        shippingCost: 18,
+        tax: 0,
+        total: 28,
+        shippingMethod: "express",
+        contactEmailEnc: encrypt("pick-express@volt.test"),
+        contactNameEnc: encrypt("Express Pick"),
+        shippingAddressEnc: encryptJson({
+          recipientName: "Express Pick",
+          line1: "Testikatu 1",
+          city: "Helsinki",
+          postal: "00100",
+          country: "FI",
+          countryName: "Finland",
+        }),
+        items: {
+          create: {
+            productId: catalogProduct.id,
+            productName: catalogProduct.name,
+            quantity: 1,
+            unitPrice: 10,
+            lineTotal: 10,
+            locatorCode: "01|02|2|1",
+          },
+        },
+        payment: { create: { status: "SUCCEEDED", amount: 28, currency: "EUR" } },
+      },
+    });
     const queue = await request(app)
       .get("/api/v1/admin/orders/picking")
       .set("Authorization", `Bearer ${accessToken}`);
     expect(queue.status).toBe(200);
+    expect(queue.body.postiMode).toBe("mock");
     const queueIds = (queue.body.items as { id: string; items: { locatorCode: string; quantity: number }[] }[])
-      .filter((row) => row.id === olderPick.id || row.id === newerPick.id)
+      .filter((row) => row.id === olderPick.id || row.id === newerPick.id || row.id === expressPick.id)
       .map((row) => row.id);
-    expect(queueIds).toEqual([olderPick.id, newerPick.id]);
-    const olderRow = (queue.body.items as { id: string; items: { id: string; locatorCode: string; quantity: number }[] }[])
-      .find((row) => row.id === olderPick.id);
+    expect(queueIds).toEqual([expressPick.id, olderPick.id, newerPick.id]);
+    const olderRow = (
+      queue.body.items as {
+        id: string;
+        packaging?: { note?: string };
+        items: { id: string; locatorCode: string; quantity: number }[];
+      }[]
+    ).find((row) => row.id === olderPick.id);
     expect(olderRow?.items[0]?.locatorCode).toBe("01|02|2|1");
     expect(olderRow?.items[0]?.quantity).toBe(2);
+    expect(olderRow?.packaging?.note).toBeTruthy();
 
     const tooSoon = await request(app)
       .post(`/api/v1/admin/orders/${olderPick.id}/pick`)
@@ -402,11 +514,63 @@ describeLive("admin API", () => {
     const remaining = await request(app)
       .get("/api/v1/admin/orders/picking")
       .set("Authorization", `Bearer ${accessToken}`);
-    const remainingIds = (remaining.body.items as { id: string }[]).map((row) => row.id);
+    const remainingIds = (remaining.body.items as { id: string; status: string }[]).map((row) => row.id);
     expect(remainingIds).toContain(newerPick.id);
-    expect(remainingIds).not.toContain(olderPick.id);
+    expect(remainingIds).toContain(olderPick.id);
+    expect((remaining.body.items as { id: string; status: string }[]).find((row) => row.id === olderPick.id)?.status).toBe(
+      "SHIPPING",
+    );
 
-    await prisma.order.deleteMany({ where: { id: { in: [olderPick.id, newerPick.id] } } });
+    const tooEarlyLabel = await request(app)
+      .post(`/api/v1/admin/orders/${newerPick.id}/shipment`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ carrier: "posti" });
+    expect(tooEarlyLabel.status).toBe(409);
+
+    const shipment = await request(app)
+      .post(`/api/v1/admin/orders/${olderPick.id}/shipment`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ carrier: "posti" });
+    expect(shipment.status).toBe(200);
+    expect(shipment.body.source).toBe("mock");
+    expect(shipment.body.productCode).toBe("2104");
+    expect(shipment.body.trackingCode).toMatch(/^JJFI/);
+    expect(shipment.body.label.body).toContain("Old Pick");
+    expect(shipment.body.label.body).toContain(shipment.body.trackingCode);
+
+    const reprint = await request(app)
+      .post(`/api/v1/admin/orders/${olderPick.id}/shipment`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ carrier: "posti" });
+    expect(reprint.status).toBe(200);
+    expect(reprint.body.trackingCode).toBe(shipment.body.trackingCode);
+
+    const manualTracking = await request(app)
+      .post(`/api/v1/admin/orders/${olderPick.id}/shipment`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ carrier: "posti", trackingCode: "JJFI66012700410158170" });
+    expect(manualTracking.status).toBe(200);
+    expect(manualTracking.body.trackingCode).toBe("JJFI66012700410158170");
+    expect(manualTracking.body.label.body).toContain("JJFI66012700410158170");
+
+    const postnord = await request(app)
+      .post(`/api/v1/admin/orders/${olderPick.id}/shipment`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ carrier: "postnord" });
+    expect(postnord.status).toBe(200);
+    expect(postnord.body.source).toBe("mock");
+    expect(postnord.body.productCode).toBe("17");
+    expect(postnord.body.trackingCode).toMatch(/^00TEST/);
+
+    const budbee = await request(app)
+      .post(`/api/v1/admin/orders/${olderPick.id}/shipment`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ carrier: "budbee" });
+    expect(budbee.status).toBe(200);
+    expect(budbee.body.productCode).toBe("HOME");
+    expect(budbee.body.trackingCode).toMatch(/^BUD-DEV-/);
+
+    await prisma.order.deleteMany({ where: { id: { in: [olderPick.id, newerPick.id, expressPick.id] } } });
 
     const supplier = await request(app)
       .post("/api/v1/admin/wholesalers")
@@ -552,6 +716,31 @@ describeLive("admin API", () => {
       .set("Authorization", `Bearer ${mfa.body.accessToken}`);
     expect(me.status).toBe(200);
     expect(me.body.role).toBe("sales");
+
+    const selfRename = await request(app)
+      .patch("/api/v1/auth/me")
+      .set("Authorization", `Bearer ${mfa.body.accessToken}`)
+      .send({ displayName: "I renamed myself" });
+    expect(selfRename.status).toBe(403);
+
+    const staffAddress = await request(app)
+      .post("/api/v1/addresses")
+      .set("Authorization", `Bearer ${mfa.body.accessToken}`)
+      .send({
+        recipientName: "New Hire",
+        line1: "Mannerheimintie 12",
+        city: "Helsinki",
+        postal: "00100",
+        country: "FI",
+      });
+    expect(staffAddress.status).toBe(403);
+
+    const renamed = await request(app)
+      .patch(`/api/v1/admin/users/${created.body.id}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ displayName: "Renamed Hire" });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.displayName).toBe("Renamed Hire");
   });
 
   it("limits warehouse staff to products, orders, and picking", async () => {
@@ -583,13 +772,57 @@ describeLive("admin API", () => {
     const token = mfa.body.accessToken as string;
 
     expect((await request(app).get("/api/v1/admin/products").set("Authorization", `Bearer ${token}`)).status).toBe(200);
+    const boxes = await request(app).get("/api/v1/admin/packages").set("Authorization", `Bearer ${token}`);
+    expect(boxes.status).toBe(200);
+    let boxId = (boxes.body.items as { id: string }[])[0]?.id;
+    if (!boxId) {
+      const createdBox = await prisma.packageSize.create({
+        data: {
+          code: `S-${stamp}`,
+          name: "Posti S",
+          lengthCm: 25,
+          widthCm: 17.5,
+          heightCm: 8,
+          maxWeightKg: 2,
+          stockQuantity: 4,
+          sortOrder: 1,
+        },
+      });
+      boxId = createdBox.id;
+    }
+    const ordered = await request(app)
+      .post(`/api/v1/admin/packages/${boxId}/order`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ quantity: 6 });
+    expect(ordered.status).toBe(201);
+    expect(ordered.body.incomingQuantity).toBeGreaterThanOrEqual(6);
+    const received = await request(app)
+      .post(`/api/v1/admin/packages/${boxId}/receive`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ quantity: 6 });
+    expect(received.status).toBe(200);
+    expect((await request(app).get("/api/v1/admin/shipping").set("Authorization", `Bearer ${token}`)).status).toBe(403);
     expect((await request(app).get("/api/v1/admin/orders").set("Authorization", `Bearer ${token}`)).status).toBe(200);
     expect((await request(app).get("/api/v1/admin/orders/picking").set("Authorization", `Bearer ${token}`)).status).toBe(
       200,
     );
     expect((await request(app).get("/api/v1/admin/sales").set("Authorization", `Bearer ${token}`)).status).toBe(403);
+    expect(
+      (await request(app).get("/api/v1/admin/reports/overview").set("Authorization", `Bearer ${token}`)).status,
+    ).toBe(403);
+    expect(
+      (await request(app).get("/api/v1/admin/reports/customers").set("Authorization", `Bearer ${token}`)).status,
+    ).toBe(403);
     expect((await request(app).get("/api/v1/admin/audit").set("Authorization", `Bearer ${token}`)).status).toBe(403);
     expect((await request(app).get("/api/v1/admin/users").set("Authorization", `Bearer ${token}`)).status).toBe(403);
+    expect(
+      (
+        await request(app)
+          .patch("/api/v1/admin/users/00000000-0000-0000-0000-000000000000")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ displayName: "Nope" })
+      ).status,
+    ).toBe(403);
     expect(
       (
         await request(app)

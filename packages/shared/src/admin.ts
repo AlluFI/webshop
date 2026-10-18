@@ -8,6 +8,28 @@ import { SHIPPING_CARRIERS } from "./shipping.js";
 
 const dimension = z.coerce.number().positive("Must be a positive number");
 
+const optionalText = (max: number) =>
+  z.preprocess(
+    (value) => (value === "" || value == null ? null : String(value).trim()),
+    z.string().max(max).nullable(),
+  );
+
+const optionalInt = (min: number, max: number) =>
+  z.preprocess(
+    (value) => (value === "" || value == null ? null : value),
+    z.coerce.number().int().min(min).max(max).nullable(),
+  );
+
+const optionalHttpUrl = z.preprocess(
+  (value) => (value === "" || value == null ? null : String(value).trim()),
+  z
+    .string()
+    .url("Use a full http(s) URL")
+    .max(500)
+    .refine((value) => /^https?:\/\//i.test(value), "Use an http(s) URL")
+    .nullable(),
+);
+
 export function slugify(value: string) {
   return value
     .toLowerCase()
@@ -52,11 +74,21 @@ export const adminProductSchema = z.object({
     z.string().max(80).nullable(),
   ),
   barcode: barcodeSchema,
+  modelCode: optionalText(80),
+  colorName: optionalText(60),
+  warrantyMonths: optionalInt(1, 240),
+  warrantyNote: optionalText(120),
+  manufacturerUrl: optionalHttpUrl,
+  brandUrl: optionalHttpUrl,
+  packageContents: optionalText(2000),
+  highlights: optionalText(2000),
+  releaseYear: optionalInt(1990, 2100),
+  energyClass: optionalText(12),
   attributes: z
     .array(
       z.object({
-        name: z.string().trim().min(1).max(40),
-        value: z.string().trim().min(1).max(80),
+        name: z.string().trim().min(1).max(60),
+        value: z.string().trim().min(1).max(160),
       }),
     )
     .optional(),
@@ -103,6 +135,11 @@ export const pickOrderSchema = z.object({
       }),
     )
     .min(1),
+});
+
+export const createShipmentSchema = z.object({
+  carrier: z.enum(SHIPPING_CARRIERS).optional(),
+  trackingCode: z.string().trim().max(120).optional().or(z.literal("")),
 });
 
 export const adminShippingSchema = z.object({
@@ -165,12 +202,32 @@ export function suggestedRestockQty(stockQuantity: number) {
   return Math.max(6, 20 - stockQuantity);
 }
 
+export const orderPackageSchema = z.object({
+  quantity: z.coerce.number().int().min(1).max(9999),
+});
+
+export const receivePackageSchema = z.object({
+  quantity: z.coerce.number().int().min(1).max(9999),
+});
+
+export const adminPackageSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  lengthCm: z.coerce.number().positive().max(200).optional(),
+  widthCm: z.coerce.number().positive().max(200).optional(),
+  heightCm: z.coerce.number().positive().max(200).optional(),
+  maxWeightKg: z.coerce.number().positive().max(80).optional(),
+  stockQuantity: z.coerce.number().int().min(0).max(99999).optional(),
+  active: z.boolean().optional(),
+});
+
 export const AUDIT_ENTITIES = [
   "product",
   "category",
   "order",
   "review",
   "shipping",
+  "package",
+  "package_order",
   "wholesaler",
   "purchase_order",
   "user",
@@ -189,6 +246,64 @@ export const adminSalesQuerySchema = z.object({
   ),
 });
 
+export const adminReportsQuerySchema = z.object({
+  range: z.enum(SALES_RANGES).optional().default("last_30_days"),
+  group: z.enum(SALES_GROUPS).optional(),
+});
+
+export type AdminReportsQuery = z.infer<typeof adminReportsQuerySchema>;
+
+export type OverviewReportRow = {
+  key: string;
+  label: string;
+  customerAmount: number;
+  productSales: number;
+  shipping: number;
+  vat: number;
+  netOfVat: number;
+  refunds: number;
+  netSales: number;
+  margin: number;
+  orders: number;
+  units: number;
+  customers: number;
+};
+
+export type OverviewReportTotals = Omit<OverviewReportRow, "key" | "label"> & { aov: number };
+
+export type OverviewReport = {
+  range: (typeof SALES_RANGES)[number];
+  group: (typeof SALES_GROUPS)[number];
+  from: string;
+  to: string;
+  series: OverviewReportRow[];
+  totals: OverviewReportTotals;
+};
+
+export type CustomersReportItem = {
+  name: string;
+  email: string;
+  orders: number;
+  units: number;
+  customerAmount: number;
+  returning: boolean;
+};
+
+export type CustomersReport = {
+  range: (typeof SALES_RANGES)[number];
+  from: string;
+  to: string;
+  totals: {
+    customers: number;
+    newCustomers: number;
+    returningCustomers: number;
+    customerAmount: number;
+    orders: number;
+    aov: number;
+  };
+  items: CustomersReportItem[];
+};
+
 export const adminAuditQuerySchema = z.object({
   entity: z.preprocess(
     (value) => (value === "" || value == null ? undefined : value),
@@ -204,3 +319,6 @@ export type AdminWholesalerInput = z.infer<typeof adminWholesalerSchema>;
 export type AdminCreateEmployeeInput = z.infer<typeof adminCreateEmployeeSchema>;
 export type PickOrderInput = z.infer<typeof pickOrderSchema>;
 export type RestockOrderInput = z.infer<typeof restockOrderSchema>;
+export type OrderPackageInput = z.infer<typeof orderPackageSchema>;
+export type ReceivePackageInput = z.infer<typeof receivePackageSchema>;
+export type AdminPackageInput = z.infer<typeof adminPackageSchema>;

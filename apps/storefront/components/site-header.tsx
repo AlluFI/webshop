@@ -31,9 +31,14 @@ export function SiteHeader() {
   const [q, setQ] = useState("");
   const [suggest, setSuggest] = useState<Suggest | null>(null);
   const [bagOpen, setBagOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const box = useRef<HTMLFormElement>(null);
   const bag = useRef<HTMLDivElement>(null);
+  const account = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
+  const onAccount = pathname === "/account" || pathname.startsWith("/account/");
+  const onOrders = pathname === "/orders" || pathname.startsWith("/orders/");
 
   useEffect(() => {
     if (q.trim().length < 2) {
@@ -52,9 +57,17 @@ export function SiteHeader() {
     function onClick(event: MouseEvent) {
       if (!box.current?.contains(event.target as Node)) setSuggest(null);
       if (!bag.current?.contains(event.target as Node)) setBagOpen(false);
+      if (!account.current?.contains(event.target as Node)) setAccountOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setAccountOpen(false);
     }
     document.addEventListener("click", onClick);
-    return () => document.removeEventListener("click", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
   }, []);
 
   function onSearch(event: FormEvent) {
@@ -100,11 +113,27 @@ export function SiteHeader() {
             )}
           </form>
           <nav className="nav" aria-label="Account">
-            <NavItem href="/catalog">Catalog</NavItem>
             {ready && !staff && (
               <div className="bag-wrap" ref={bag}>
-                <button className="link bag-toggle" type="button" onClick={() => setBagOpen((open) => !open)}>
-                  Cart{cart.itemCount > 0 ? ` (${cart.itemCount})` : ""}
+                <button
+                  className="link bag-toggle cart-btn"
+                  type="button"
+                  aria-label={cart.itemCount > 0 ? `Cart, ${cart.itemCount} items` : "Cart"}
+                  onClick={() => setBagOpen((open) => !open)}
+                >
+                  <svg className="cart-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 7h15l-1.4 8.2a2 2 0 0 1-2 1.6H9.2a2 2 0 0 1-2-1.6L5.2 4H3"
+                    />
+                    <circle cx="9.5" cy="20" r="1.4" fill="currentColor" />
+                    <circle cx="17.5" cy="20" r="1.4" fill="currentColor" />
+                  </svg>
+                  {cart.itemCount > 0 && <span className="cart-count">{cart.itemCount}</span>}
                 </button>
                 {bagOpen && (
                   <div className="quick-cart" role="dialog" aria-label="Cart preview">
@@ -141,11 +170,52 @@ export function SiteHeader() {
                 )}
               </div>
             )}
+            <NavItem href="/catalog">Catalog</NavItem>
             {ready && user ? (
               <>
-                {!staff && <NavItem href="/orders">Orders</NavItem>}
                 {staff && <NavItem href="/admin">Admin</NavItem>}
-                <NavItem href="/account">{user.displayName || user.email}</NavItem>
+                <div className="account-wrap" ref={account}>
+                  <button
+                    className="link account-toggle"
+                    type="button"
+                    aria-expanded={accountOpen}
+                    aria-haspopup="menu"
+                    aria-current={onAccount || onOrders ? "page" : undefined}
+                    onClick={() => setAccountOpen((open) => !open)}
+                  >
+                    {user.displayName || user.email}
+                  </button>
+                  {accountOpen && (
+                    <div className="account-menu" role="menu" aria-label="Account">
+                      <Link
+                        href="/account"
+                        role="menuitem"
+                        aria-current={onAccount ? "page" : undefined}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setAccountOpen(false);
+                          router.push("/account");
+                        }}
+                      >
+                        Profile
+                      </Link>
+                      {!staff && (
+                        <Link
+                          href="/orders"
+                          role="menuitem"
+                          aria-current={onOrders ? "page" : undefined}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            setAccountOpen(false);
+                            router.push("/orders");
+                          }}
+                        >
+                          Orders
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <button className="link" type="button" onClick={() => void logout()}>
                   Sign out
                 </button>

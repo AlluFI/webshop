@@ -143,7 +143,7 @@ export function SalesPanel({ token }: { token: string }) {
         <>
           <div className="sales-kpis">
             <div className="sales-kpi">
-              <span>Revenue</span>
+              <span>Product sales</span>
               <strong>{money(report.totals.revenue)}</strong>
             </div>
             <div className="sales-kpi">
@@ -166,7 +166,7 @@ export function SalesPanel({ token }: { token: string }) {
           <div
             className="sales-chart"
             role="img"
-            aria-label={`Revenue by ${GROUP_LABELS[report.group].toLowerCase()}`}
+            aria-label={`Product sales by ${GROUP_LABELS[report.group].toLowerCase()}`}
           >
             {report.series.map((row) => (
               <div key={row.key} className="sales-bar-wrap">
@@ -186,7 +186,7 @@ export function SalesPanel({ token }: { token: string }) {
                   <th scope="col">Period</th>
                   <th scope="col">Orders</th>
                   <th scope="col">Units</th>
-                  <th scope="col">Revenue</th>
+                  <th scope="col">Product sales</th>
                   <th scope="col">VAT</th>
                   <th scope="col">Margin</th>
                 </tr>

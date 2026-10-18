@@ -5,6 +5,7 @@ import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
 import { AddToCartButton } from "../cart";
 import { ProductCard, money, stars, type Product } from "../product";
+import { ProductFacts } from "../product-facts";
 import { PageMeta } from "../seo";
 
 type Review = {
@@ -150,6 +151,7 @@ export function ProductPage() {
           <div className="actions">
             <AddToCartButton productId={product.id} stockQuantity={product.stockQuantity} />
           </div>
+          <ProductFacts product={product} />
           <div className="dims">
             <div>
               <h2>Metric</h2>
@@ -166,15 +168,6 @@ export function ProductPage() {
               </p>
             </div>
           </div>
-          {product.attributes.length > 0 && (
-            <ul>
-              {product.attributes.map((attribute) => (
-                <li key={`${attribute.name}-${attribute.value}`}>
-                  <strong>{attribute.name}:</strong> {attribute.value}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </article>
       <section>

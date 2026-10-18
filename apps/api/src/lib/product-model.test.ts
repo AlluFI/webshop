@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { ean13FromIndex, formatLocatorCode, formatOrderReference, formatOrderStatus, locatorFromIndex, normalizeBarcode, productSchema, suggestedRestockQty } from "@volt/shared";
+import {
+  adminProductSchema,
+  comparePickingPriority,
+  ean13FromIndex,
+  formatLocatorCode,
+  formatOrderReference,
+  formatOrderStatus,
+  formatWarrantyLabel,
+  linesFromText,
+  locatorFromIndex,
+  normalizeBarcode,
+  productSchema,
+  suggestedRestockQty,
+} from "@volt/shared";
 
 describe("product data model", () => {
   const valid = {
@@ -68,6 +81,48 @@ describe("product data model", () => {
 
   it("prints the same uppercase VC- order number from a UUID", () => {
     expect(formatOrderReference("23aaa1b2-a575-482f-94c0-22c71db1631b")).toBe("VC-23AAA1B2");
+  });
+
+  it("lists express picking orders before standard, each oldest first", () => {
+    const olderStandard = { shippingMethod: "standard", createdAt: "2026-10-01T08:00:00.000Z" };
+    const newerStandard = { shippingMethod: "standard", createdAt: "2026-10-03T08:00:00.000Z" };
+    const olderExpress = { shippingMethod: "express", createdAt: "2026-10-02T08:00:00.000Z" };
+    const newerExpress = { shippingMethod: "express", createdAt: "2026-10-04T08:00:00.000Z" };
+    expect(
+      [newerStandard, newerExpress, olderStandard, olderExpress].sort(comparePickingPriority),
+    ).toEqual([olderExpress, newerExpress, olderStandard, newerStandard]);
+  });
+
+  it("formats warranty and highlight lines for the product page", () => {
+    expect(formatWarrantyLabel(24, "Manufacturer warranty")).toBe("24 months · Manufacturer warranty");
+    expect(formatWarrantyLabel(1, null)).toBe("1 month");
+    expect(linesFromText("- 8-mic ANC\n\n30-hour battery\n")).toEqual(["8-mic ANC", "30-hour battery"]);
+  });
+
+  it("accepts optional warranty, manufacturer links, and specs on admin product input", () => {
+    const parsed = adminProductSchema.parse({
+      name: "Sony WH-1000XM5",
+      description: "Noise-cancelling headphones",
+      price: 349.99,
+      stockQuantity: 10,
+      category: "audio",
+      brand: "sony",
+      weightKg: 0.25,
+      lengthCm: 19.5,
+      widthCm: 16.5,
+      heightCm: 8,
+      warrantyMonths: 24,
+      warrantyNote: "Manufacturer warranty",
+      manufacturerUrl: "https://www.sony.com/electronics/headband-headphones/wh-1000xm5",
+      brandUrl: "https://www.sony.fi",
+      modelCode: "WH-1000XM5",
+      colorName: "Black",
+      highlights: "8-mic ANC\n30-hour battery",
+      attributes: [{ name: "Battery", value: "Up to 30 hours" }],
+    });
+    expect(parsed.warrantyMonths).toBe(24);
+    expect(parsed.manufacturerUrl).toContain("sony.com");
+    expect(adminProductSchema.safeParse({ ...parsed, manufacturerUrl: "sony.com" }).success).toBe(false);
   });
 
   it("labels warehouse and courier statuses for staff", () => {

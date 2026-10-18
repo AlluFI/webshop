@@ -46,6 +46,16 @@ export type Product = {
   };
   averageRating: number;
   reviewCount: number;
+  modelCode?: string | null;
+  colorName?: string | null;
+  warrantyMonths?: number | null;
+  warrantyNote?: string | null;
+  manufacturerUrl?: string | null;
+  brandUrl?: string | null;
+  packageContents?: string | null;
+  highlights?: string | null;
+  releaseYear?: number | null;
+  energyClass?: string | null;
   attributes: { name: string; value: string }[];
 };
 

@@ -88,7 +88,7 @@ export function ShippingPanel({ token }: { token: string }) {
     <div>
       {error && !open && <p className="banner error">{error}</p>}
       <div className="toolbar">
-        <h2>Shipping</h2>
+        <h2>Methods</h2>
       </div>
       <Modal open={open} title={editing ? `Edit ${editing.code}` : "Edit shipping"} onClose={closeForm}>
         {error && <p className="banner error">{error}</p>}

@@ -9,7 +9,19 @@ export function ProductJsonLd({ product }: { product: Product }) {
     name: product.name,
     description: product.description,
     sku: product.slug,
+    mpn: product.modelCode || product.slug,
     brand: { "@type": "Brand", name: product.brand.name },
+    color: product.colorName || undefined,
+    warranty:
+      product.warrantyMonths || product.warrantyNote
+        ? {
+            "@type": "WarrantyPromise",
+            durationOfWarranty: product.warrantyMonths
+              ? `P${product.warrantyMonths}M`
+              : undefined,
+            warrantyScope: product.warrantyNote || undefined,
+          }
+        : undefined,
     image: image?.url ? [image.url] : undefined,
     aggregateRating:
       product.reviewCount > 0

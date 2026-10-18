@@ -8,6 +8,7 @@ import {
   SHIPPING_CARRIERS,
   SHIPPING_CARRIER_META,
   STAFF_REFUNDABLE_STATUSES,
+  carrierTrackingUrl,
   storeCalendarDate,
 } from "@volt/shared";
 import { api, ApiError } from "../../api";
@@ -43,6 +44,16 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
       trackingCode?: string | null;
       estimatedDeliveryFrom?: string | null;
       estimatedDeliveryTo?: string | null;
+      shipping?: {
+        recipientName?: string;
+        line1?: string;
+        line2?: string;
+        city?: string;
+        region?: string;
+        postal?: string;
+        country?: string;
+        countryName?: string;
+      } | null;
     }[]
   >([]);
   const [error, setError] = useState("");
@@ -270,9 +281,13 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
               const lines = summaryLines(item.summary);
               const reference = item.reference || formatOrderReference(item.id);
               const customer = item.customerName || item.email || "—";
-              const tracking = item.trackingCode
-                ? `${SHIPPING_CARRIER_META[item.trackingCarrier as (typeof SHIPPING_CARRIERS)[number]]?.name ?? item.trackingCarrier} ${item.trackingCode}`
-                : "—";
+              const carrierLabel =
+                SHIPPING_CARRIER_META[item.trackingCarrier as (typeof SHIPPING_CARRIERS)[number]]?.name ??
+                item.trackingCarrier;
+              const trackingUrl =
+                item.trackingCode && item.trackingCarrier
+                  ? carrierTrackingUrl(item.trackingCarrier, item.trackingCode)
+                  : "";
               return (
                 <Fragment key={item.id}>
                   <tr>
@@ -346,7 +361,38 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
                           </div>
                           <p>
                             <span className="kicker">Tracking</span>
-                            <span>{tracking}</span>
+                            {item.trackingCode && trackingUrl ? (
+                              <span>
+                                {carrierLabel}{" "}
+                                <a
+                                  className="admin-tracking-link"
+                                  href={trackingUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {item.trackingCode}
+                                </a>
+                              </span>
+                            ) : (
+                              <span>—</span>
+                            )}
+                          </p>
+                          <p>
+                            <span className="kicker">Deliver to</span>
+                            <span>
+                              {item.shipping
+                                ? [
+                                    item.shipping.recipientName,
+                                    item.shipping.line1,
+                                    item.shipping.line2,
+                                    [item.shipping.postal, item.shipping.city].filter(Boolean).join(" "),
+                                    item.shipping.countryName || item.shipping.country,
+                                  ]
+                                    .map((line) => line?.trim())
+                                    .filter(Boolean)
+                                    .join(" · ") || "—"
+                                : "—"}
+                            </span>
                           </p>
                         </div>
                       </td>

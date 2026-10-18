@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ALL_ROLES, STAFF_ROLES, adminCreateEmployeeSchema } from "@volt/shared";
+import { ALL_ROLES, STAFF_ROLES, adminCreateEmployeeSchema, isStaffRole, updateProfileSchema } from "@volt/shared";
 import { api, ApiError } from "@/lib/api";
 import { Modal } from "./Modal";
 
@@ -48,6 +48,9 @@ export function UsersPanel({ token }: { token: string }) {
   const [copied, setCopied] = useState("");
   const [busy, setBusy] = useState(false);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("");
+  const [rename, setRename] = useState<UserRow | null>(null);
+  const [renameName, setRenameName] = useState("");
+  const [pendingRole, setPendingRole] = useState<{ user: UserRow; role: string } | null>(null);
 
   async function load(nextRole = roleFilter) {
     const query = new URLSearchParams({ pageSize: "50" });
@@ -76,13 +79,59 @@ export function UsersPanel({ token }: { token: string }) {
     setOpen(true);
   }
 
-  async function assign(id: string, role: string) {
+  function requestRoleChange(item: UserRow, role: string) {
+    if (!isStaffRole(item.role) || role === item.role) return;
     setError("");
+    setPendingRole({ user: item, role });
+  }
+
+  async function confirmRoleChange() {
+    if (!pendingRole) return;
+    setError("");
+    setBusy(true);
     try {
-      await api(`/admin/users/${id}/role`, { method: "POST", token, body: JSON.stringify({ role }) });
+      await api(`/admin/users/${pendingRole.user.id}/role`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ role: pendingRole.role }),
+      });
+      setPendingRole(null);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not assign role");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openRename(item: UserRow) {
+    setError("");
+    setRename(item);
+    setRenameName(item.displayName || "");
+  }
+
+  async function onRename(event: FormEvent) {
+    event.preventDefault();
+    if (!rename) return;
+    setError("");
+    const parsed = updateProfileSchema.safeParse({ displayName: renameName });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message || "Check the name");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api(`/admin/users/${rename.id}`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify(parsed.data),
+      });
+      setRename(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not change the name");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -147,9 +196,75 @@ export function UsersPanel({ token }: { token: string }) {
         </div>
       </div>
       <p className="muted">
-        Add staff here, or promote an existing customer after they have enabled 2FA on their Account
-        page.
+        Add staff with <strong>Add employee</strong>. Customer roles cannot be changed. Changing a
+        staff role asks for confirmation. Only admins can change employee names.
       </p>
+      <Modal
+        open={Boolean(pendingRole)}
+        title="Confirm role change"
+        onClose={() => {
+          if (!busy) setPendingRole(null);
+        }}
+      >
+        {error && <p className="banner error">{error}</p>}
+        <p>
+          Change <strong>{pendingRole?.user.displayName || pendingRole?.user.email}</strong> from{" "}
+          <strong>{pendingRole?.user.role}</strong> to <strong>{pendingRole?.role}</strong>?
+        </p>
+        <div className="actions">
+          <button className="primary" type="button" disabled={busy} onClick={() => void confirmRoleChange()}>
+            {busy ? "Saving…" : "Confirm"}
+          </button>
+          <button
+            className="ghost"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setPendingRole(null);
+              setError("");
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </Modal>
+      <Modal
+        open={Boolean(rename)}
+        title="Change employee name"
+        onClose={() => {
+          setRename(null);
+          setError("");
+        }}
+      >
+        {error && <p className="banner error">{error}</p>}
+        <form onSubmit={(event) => void onRename(event)}>
+          <label className="field">
+            <span>Name</span>
+            <input
+              value={renameName}
+              onChange={(e) => setRenameName(e.target.value)}
+              required
+              autoFocus
+            />
+          </label>
+          <p className="muted">{rename?.email}</p>
+          <div className="actions">
+            <button className="primary" type="submit" disabled={busy}>
+              {busy ? "Saving…" : "Save name"}
+            </button>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => {
+                setRename(null);
+                setError("");
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Modal>
       <Modal open={open} title={created ? "Employee created" : "Add employee"} onClose={closeForm}>
         {error && <p className="banner error">{error}</p>}
         {created ? (
@@ -270,17 +385,34 @@ export function UsersPanel({ token }: { token: string }) {
             ) : (
               items.map((item) => (
                 <tr key={item.id}>
-                  <td>{item.displayName || "—"}</td>
+                  <td>
+                    <div className="copy-row">
+                      <span>{item.displayName || "—"}</span>
+                      {isStaffRole(item.role) && (
+                        <button className="ghost" type="button" onClick={() => openRename(item)}>
+                          Change
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   <td>{item.email}</td>
                   <td>{item.totpEnabled ? "On" : "Off"}</td>
                   <td>
-                    <select value={item.role} onChange={(e) => void assign(item.id, e.target.value)}>
-                      {ALL_ROLES.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </select>
+                    {isStaffRole(item.role) ? (
+                      <select
+                        value={item.role}
+                        aria-label={`Role for ${item.displayName || item.email}`}
+                        onChange={(e) => requestRoleChange(item, e.target.value)}
+                      >
+                        {ALL_ROLES.map((role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span>{item.role}</span>
+                    )}
                   </td>
                 </tr>
               ))

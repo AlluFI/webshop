@@ -63,6 +63,19 @@ export const optionalPhoneSchema = z
 
 export const shippingMethodSchema = z.enum(["standard", "express"]);
 
+export function isExpressShipping(method?: string | null) {
+  return method === "express";
+}
+
+export function comparePickingPriority(
+  a: { shippingMethod?: string | null; createdAt: string | Date },
+  b: { shippingMethod?: string | null; createdAt: string | Date },
+) {
+  const expressDelta = Number(isExpressShipping(b.shippingMethod)) - Number(isExpressShipping(a.shippingMethod));
+  if (expressDelta) return expressDelta;
+  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+}
+
 export const addressSchema = z
   .object({
     recipientName: z.string().trim().min(1, "Name is required").max(80, "Name is too long"),

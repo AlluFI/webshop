@@ -28,6 +28,10 @@ export default defineConfig({
       STRIPE_WEBHOOK_SECRET: "whsec_test",
       QUEUE_INLINE: "true",
       RABBITMQ_URL: "",
+      POSTI_MODE: "mock",
+      POSTNORD_MODE: "mock",
+      BUDBEE_MODE: "mock",
+      BUDBEE_COLLECTION_ID: "0",
     },
   },
 });

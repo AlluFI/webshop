@@ -1,7 +1,7 @@
 import http from "k6/http";
 import { check, sleep } from "k6";
 
-const BASE = __ENV.BASE_URL || "http://web:80";
+const BASE = __ENV.BASE_URL || "http://web:3000";
 const PROFILE = __ENV.K6_PROFILE || "review";
 
 function vuHeaders(extra) {

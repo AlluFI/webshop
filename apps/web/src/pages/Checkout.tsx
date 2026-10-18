@@ -290,7 +290,7 @@ export function CheckoutPage() {
                   <option value="">New address</option>
                   {saved.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {(item.label || item.city) + ` · ${item.postal}`}
+                      {(item.label || item.city) + ` · ${item.postal}` + (item.isDefault ? " (default)" : "")}
                     </option>
                   ))}
                 </select>
@@ -332,6 +332,17 @@ export function CheckoutPage() {
             </label>
             <div className="dims">
               <label className="field">
+                <span>Postal code</span>
+                <input
+                  autoComplete="postal-code"
+                  value={address.postal}
+                  onChange={(event) => {
+                    setAddressId("");
+                    setAddress({ ...address, postal: event.target.value });
+                  }}
+                />
+              </label>
+              <label className="field">
                 <span>City</span>
                 <input
                   autoComplete="address-level2"
@@ -342,17 +353,6 @@ export function CheckoutPage() {
                   }}
                 />
                 {fields.city && <p className="error">{fields.city}</p>}
-              </label>
-              <label className="field">
-                <span>Postal code</span>
-                <input
-                  autoComplete="postal-code"
-                  value={address.postal}
-                  onChange={(event) => {
-                    setAddressId("");
-                    setAddress({ ...address, postal: event.target.value });
-                  }}
-                />
               </label>
             </div>
             {fields.postal && <p className="error">{fields.postal}</p>}
@@ -419,17 +419,17 @@ export function CheckoutPage() {
                 </label>
                 <div className="dims">
                   <label className="field">
-                    <span>City</span>
-                    <input
-                      value={billing.city}
-                      onChange={(event) => setBilling({ ...billing, city: event.target.value })}
-                    />
-                  </label>
-                  <label className="field">
                     <span>Postal code</span>
                     <input
                       value={billing.postal}
                       onChange={(event) => setBilling({ ...billing, postal: event.target.value })}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>City</span>
+                    <input
+                      value={billing.city}
+                      onChange={(event) => setBilling({ ...billing, city: event.target.value })}
                     />
                   </label>
                 </div>

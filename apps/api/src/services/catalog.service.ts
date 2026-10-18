@@ -82,6 +82,17 @@ function mapProduct(product: {
   locatorBlock: number;
   locatorShelf: number;
   locatorPlace: number;
+  barcode?: string | null;
+  modelCode?: string | null;
+  colorName?: string | null;
+  warrantyMonths?: number | null;
+  warrantyNote?: string | null;
+  manufacturerUrl?: string | null;
+  brandUrl?: string | null;
+  packageContents?: string | null;
+  highlights?: string | null;
+  releaseYear?: number | null;
+  energyClass?: string | null;
   category: { id: string; name: string; slug: string };
   brand: { id: string; name: string; slug: string };
   images: { path: string; thumbPath: string | null; altText: string; sortOrder: number }[];
@@ -132,7 +143,18 @@ function mapProduct(product: {
         product.locatorPlace,
       ),
     },
-    attributes: product.attributes,
+    barcode: product.barcode ?? null,
+    modelCode: product.modelCode ?? null,
+    colorName: product.colorName ?? null,
+    warrantyMonths: product.warrantyMonths ?? null,
+    warrantyNote: product.warrantyNote ?? null,
+    manufacturerUrl: product.manufacturerUrl ?? null,
+    brandUrl: product.brandUrl ?? null,
+    packageContents: product.packageContents ?? null,
+    highlights: product.highlights ?? null,
+    releaseYear: product.releaseYear ?? null,
+    energyClass: product.energyClass ?? null,
+    attributes: product.attributes.map(({ name, value }) => ({ name, value })),
   };
 }
 

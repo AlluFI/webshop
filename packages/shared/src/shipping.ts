@@ -1,3 +1,5 @@
+export const POSTI_LIVE_TEST_TRACKING = "JJFI66012700410158170";
+
 export const SHIPPING_CARRIERS = ["posti", "postnord", "budbee"] as const;
 export type ShippingCarrier = (typeof SHIPPING_CARRIERS)[number];
 

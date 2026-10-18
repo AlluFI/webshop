@@ -54,18 +54,47 @@ function GoogleSignInLink() {
   );
 }
 
+function useGoogleSignInEnabled() {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let interval = 0;
+    async function check() {
+      try {
+        const value = await api<{ configured: boolean }>("/auth/google/status");
+        if (!cancelled) setEnabled(value.configured);
+        return value.configured;
+      } catch {
+        // Storefront often boots before the API finishes migrate/seed.
+        return false;
+      }
+    }
+    void check().then((done) => {
+      if (done || cancelled) return;
+      interval = window.setInterval(() => {
+        void check().then((ready) => {
+          if (ready) window.clearInterval(interval);
+        });
+      }, 2000);
+    });
+    const stop = window.setTimeout(() => window.clearInterval(interval), 90_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.clearTimeout(stop);
+    };
+  }, []);
+
+  return enabled;
+}
+
 export function RegisterForm() {
   const [fields, setFields] = useState<Record<string, string>>({});
   const [captcha, setCaptcha] = useState<string | null>(null);
-  const [google, setGoogle] = useState(false);
+  const google = useGoogleSignInEnabled();
   const [done, setDone] = useState("");
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    void api<{ configured: boolean }>("/auth/google/status")
-      .then((value) => setGoogle(value.configured))
-      .catch(() => setGoogle(false));
-  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -137,19 +166,47 @@ export function RegisterForm() {
   );
 }
 
+function TwoFactorForm({
+  error,
+  onSubmit,
+}: {
+  error: string;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <>
+      <h1>Two-factor code</h1>
+      {error && <p className="banner error">{error}</p>}
+      <form autoComplete="off" onSubmit={onSubmit}>
+        <label className="field">
+          <span>Authenticator code</span>
+          <input
+            name="totpCode"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+          />
+        </label>
+        <label className="field">
+          <span>Or backup code</span>
+          <input name="backupCode" type="text" autoComplete="off" />
+        </label>
+        <button className="primary" type="submit">
+          Continue
+        </button>
+      </form>
+    </>
+  );
+}
+
 export function LoginForm() {
   const { setSession } = useAuth();
   const router = useRouter();
   const [error, setError] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
   const [mfaToken, setMfaToken] = useState("");
-  const [google, setGoogle] = useState(false);
-
-  useEffect(() => {
-    void api<{ configured: boolean }>("/auth/google/status")
-      .then((value) => setGoogle(value.configured))
-      .catch(() => setGoogle(false));
-  }, []);
+  const google = useGoogleSignInEnabled();
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -172,6 +229,7 @@ export function LoginForm() {
         mfaToken?: string;
       }>("/auth/login", { method: "POST", body: JSON.stringify(parsed.data) });
       if (result.mfaRequired && result.mfaToken) {
+        setError("");
         setMfaToken(result.mfaToken);
         return;
       }
@@ -206,21 +264,7 @@ export function LoginForm() {
   if (mfaToken) {
     return (
       <div className="auth-card">
-        <h1>Two-factor code</h1>
-        {error && <p className="banner error">{error}</p>}
-        <form onSubmit={(event) => void onMfa(event)}>
-          <label className="field">
-            <span>Authenticator code</span>
-            <input name="totpCode" inputMode="numeric" autoComplete="one-time-code" />
-          </label>
-          <label className="field">
-            <span>Or backup code</span>
-            <input name="backupCode" autoComplete="off" />
-          </label>
-          <button className="primary" type="submit">
-            Continue
-          </button>
-        </form>
+        <TwoFactorForm key={mfaToken} error={error} onSubmit={(event) => void onMfa(event)} />
       </div>
     );
   }

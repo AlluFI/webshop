@@ -11,7 +11,10 @@ import { OrdersPanel } from "./admin/OrdersPanel";
 import { PickingPanel } from "./admin/PickingPanel";
 import { ProductsPanel } from "./admin/ProductsPanel";
 import { ReviewsPanel } from "./admin/ReviewsPanel";
+import { CustomersPanel } from "./admin/CustomersPanel";
+import { OverviewPanel } from "./admin/OverviewPanel";
 import { SalesPanel } from "./admin/SalesPanel";
+import { PackagesPanel } from "./admin/PackagesPanel";
 import { ShippingPanel } from "./admin/ShippingPanel";
 import { UsersPanel } from "./admin/UsersPanel";
 import { WholesalersPanel } from "./admin/WholesalersPanel";
@@ -20,25 +23,31 @@ type Tab =
   | "products"
   | "categories"
   | "orders"
+  | "overview"
   | "sales"
+  | "customers"
   | "picking"
   | "wholesalers"
   | "users"
   | "reviews"
   | "shipping"
+  | "packages"
   | "bulk"
   | "log";
 
-type GroupId = "product" | "orders" | "admin";
+type GroupId = "product" | "orders" | "reports" | "shipping" | "admin";
 
 const TABS: { id: Tab; permission: AdminPermission; label: string }[] = [
   { id: "products", permission: "products", label: "Products" },
   { id: "categories", permission: "catalog", label: "Categories" },
   { id: "wholesalers", permission: "catalog", label: "Wholesalers" },
-  { id: "shipping", permission: "shipping", label: "Shipping" },
+  { id: "shipping", permission: "shipping", label: "Methods" },
+  { id: "packages", permission: "packages", label: "Packages" },
   { id: "orders", permission: "orders", label: "Orders" },
-  { id: "picking", permission: "picking", label: "Picking" },
+  { id: "picking", permission: "picking", label: "Order handling" },
+  { id: "overview", permission: "sales", label: "Overview" },
   { id: "sales", permission: "sales", label: "Sales" },
+  { id: "customers", permission: "sales", label: "Customers" },
   { id: "users", permission: "users", label: "Users" },
   { id: "reviews", permission: "reviews", label: "Reviews" },
   { id: "bulk", permission: "catalog", label: "Bulk" },
@@ -46,8 +55,10 @@ const TABS: { id: Tab; permission: AdminPermission; label: string }[] = [
 ];
 
 const GROUPS: { id: GroupId; label: string; tabs: Tab[] }[] = [
-  { id: "product", label: "Product", tabs: ["products", "categories", "wholesalers", "shipping"] },
-  { id: "orders", label: "Orders", tabs: ["orders", "picking", "sales"] },
+  { id: "product", label: "Product", tabs: ["products", "categories", "wholesalers"] },
+  { id: "orders", label: "Orders", tabs: ["orders", "picking"] },
+  { id: "reports", label: "Reports", tabs: ["overview", "sales", "customers"] },
+  { id: "shipping", label: "Shipping", tabs: ["shipping", "packages"] },
   { id: "admin", label: "Admin", tabs: ["users", "reviews", "bulk", "log"] },
 ];
 
@@ -147,12 +158,15 @@ export function AdminPage() {
           {tab === "products" && <ProductsPanel token={accessToken} />}
           {tab === "categories" && <CategoriesPanel token={accessToken} />}
           {tab === "orders" && <OrdersPanel token={accessToken} canRefund={can(user.role, "refunds")} />}
+          {tab === "overview" && <OverviewPanel token={accessToken} />}
           {tab === "sales" && <SalesPanel token={accessToken} />}
+          {tab === "customers" && <CustomersPanel token={accessToken} />}
           {tab === "picking" && <PickingPanel token={accessToken} />}
           {tab === "wholesalers" && <WholesalersPanel token={accessToken} />}
           {tab === "users" && <UsersPanel token={accessToken} />}
           {tab === "reviews" && <ReviewsPanel token={accessToken} />}
           {tab === "shipping" && <ShippingPanel token={accessToken} />}
+          {tab === "packages" && <PackagesPanel token={accessToken} />}
           {tab === "bulk" && <BulkPanel token={accessToken} />}
           {tab === "log" && <LogPanel token={accessToken} />}
         </div>

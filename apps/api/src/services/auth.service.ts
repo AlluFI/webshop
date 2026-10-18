@@ -9,6 +9,7 @@ import {
   resetPasswordSchema,
   totpConfirmSchema,
   totpDisableSchema,
+  updateProfileSchema,
   verifyEmailSchema,
 } from "@volt/shared";
 import { prisma } from "../prisma.js";
@@ -21,7 +22,6 @@ import { tokens } from "./tokens.js";
 import { config } from "../config.js";
 import jwt from "jsonwebtoken";
 import { encrypt, revealSecret } from "../lib/crypto.js";
-import { updateProfileSchema } from "@volt/shared";
 
 const VERIFY_TTL_MS = 48 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
@@ -253,6 +253,14 @@ export const authService = {
 
   async updateProfile(userId: string, input: unknown) {
     const dto = updateProfileSchema.parse(input);
+    const current = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: true },
+    });
+    if (!current) throw new HttpError(401, "Sign in to continue");
+    if (isStaffRole(current.role.name)) {
+      throw new HttpError(403, "Ask an admin to change your name from Users.");
+    }
     const user = await prisma.user.update({
       where: { id: userId },
       data: { displayName: dto.displayName },

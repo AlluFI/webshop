@@ -22,7 +22,7 @@ export function ReviewsPanel({ token }: { token: string }) {
 
   return (
     <div className="admin-table-wrap">
-      <table className="admin-table">
+      <table className="admin-table admin-reviews">
         <thead>
           <tr>
             <th scope="col">Stars</th>
@@ -40,7 +40,7 @@ export function ReviewsPanel({ token }: { token: string }) {
               <td>{item.product.name}</td>
               <td>{item.author}</td>
               <td>{item.status}</td>
-              <td>{item.body}</td>
+              <td className="admin-review-body">{item.body}</td>
               <td>
                 <button
                   className="link"

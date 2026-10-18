@@ -8,4 +8,6 @@ export * from "./review.js";
 export * from "./contact.js";
 export * from "./admin.js";
 export * from "./shipping.js";
+export * from "./packages.js";
+export * from "./parcel-label.js";
 export * from "./time.js";

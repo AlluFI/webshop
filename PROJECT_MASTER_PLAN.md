@@ -8,16 +8,16 @@ Living source of truth for the three-part B2C e-commerce platform. Tick checkbox
 | **Current part** | 3 — Experience |
 | **Product category** | Electronics and Technology |
 | **Store name (working)** | Volt & Co |
-| **Architecture** | Modular monolith (API + web + worker; Part 3 adds TLS nginx) |
+| **Architecture** | Modular monolith (API + Next storefront + worker; Part 3 adds TLS nginx) |
 | **Last freeze** | `part-2-freeze` (`i-love-shopping2`) |
 
 ## Current focus (next 3 bites)
 
-1. P3-09 Tests — keep green, add Playwright later if time
-2. P3-10 Load — run k6 in Compose and paste actuals into `docs/PERFORMANCE.md`
-3. Freeze `part-3-freeze` when the demo script is fluent
+1. Part 3 mandatory items are complete (reviews, admin, TLS, k6, Playwright smokes). The Docker storefront is Next.js (`apps/storefront` on 8088 / 8443).
+2. Carrier adapters (Posti, PostNord, Budbee) are mocked; live mode is enabled with env credentials.
+3. `part-3-freeze` is tagged when the demo script is fluent.
 
-Experience work is in this repo (`./scripts/start.sh` → http://localhost:8088 / https://localhost:8443). Do not push Part 3 commits back to `i-love-shopping2`.
+Experience work is kept in this repo (`./scripts/start.sh` → http://localhost:8088 / https://localhost:8443). Part 3 commits are not pushed back to `i-love-shopping2`.
 
 ---
 
@@ -45,15 +45,15 @@ Brand tone: clean, trustworthy, not gimmicky. First impression is “I would act
 | Layer | Choice |
 | --- | --- |
 | API | Express + TypeScript |
-| Web | React 19 + Vite |
+| Web | Next.js 15 App Router (`apps/storefront`) in Docker. Vite (`apps/web`) is retained as a leftover local SPA. |
 | ORM / DB | Prisma + PostgreSQL (ACID transactions) |
 | Sessions / cache | Redis (refresh tokens; later rate limit + search cache) |
 | Queue (Part 2+) | RabbitMQ |
 | Payments (Part 2+) | Stripe sandbox + Stripe.js / Elements (no card data on the server) |
 | Mail | Nodemailer + Mailpit in Docker |
-| Monorepo | pnpm workspaces: `apps/api`, `apps/web` (Part 2 adds `apps/worker`) |
+| Monorepo | pnpm workspaces: `apps/api`, `apps/web`, `apps/storefront`, `apps/worker`, `packages/shared` |
 | Validation | Zod in `packages/shared` (client + server) |
-| Tests | Vitest (unit) + Supertest (API) + later Playwright for critical flows; k6 load tests in Part 3 |
+| Tests | Vitest (unit) + Supertest (API) + Playwright storefront smokes; k6 load tests in Part 3 |
 | Auth hashing | Argon2 |
 | 2FA | TOTP (Google Authenticator / Authy compatible) |
 | CAPTCHA | Google reCAPTCHA (use Google’s published test keys in Docker) |
@@ -71,10 +71,11 @@ Modular monolith, not microservices. Order and Payment are **modules plus worker
 ```mermaid
 flowchart LR
   subgraph clients [Clients]
-    Web[React_SPA]
+    Browser[Browser]
   end
   subgraph docker [Docker_Compose]
     Nginx[Nginx_TLS]
+    Web[Next_storefront]
     Api[Express_API]
     Worker[Order_Payment_Worker]
     Pg[(PostgreSQL)]
@@ -82,8 +83,9 @@ flowchart LR
     Mq[RabbitMQ]
     Mail[Mailpit]
   end
-  Web --> Nginx
-  Nginx --> Api
+  Browser --> Nginx
+  Nginx --> Web
+  Web --> Api
   Api --> Pg
   Api --> Redis
   Api --> Mq
@@ -97,7 +99,7 @@ Notes:
 
 - Part 1 Compose: API, web, Postgres, Redis, Mailpit. **No RabbitMQ, no Nginx TLS, no worker.**
 - Part 2 adds RabbitMQ + `apps/worker`.
-- Part 3 adds Nginx with a self-signed TLS certificate in front of the stack.
+- Part 3 adds Nginx with a self-signed TLS certificate in front of the Next storefront. Parcel-label adapters (Posti, PostNord, Budbee) are included; mock mode is the default.
 
 ### Why this scales (talking points for review)
 
@@ -187,7 +189,8 @@ Part 2 adds:
 Part 3 adds:
 
 ```
-  nginx/                    # TLS terminator, self-signed cert
+  apps/storefront/          # Next.js App Router (Docker web on 8088)
+  nginx/                    # TLS terminator, self-signed cert (proxies to storefront)
   load-tests/               # k6 scenarios
   docs/PERFORMANCE.md       # load-test report for README
 ```
@@ -546,8 +549,8 @@ Only after P1-10 and the Mandatory checklist: freeze and push `i-love-shopping1`
 ### Part 3 build order (in `i-love-shopping3` after freeze)
 
 - [x] **P3-01 Reviews** — create (purchased only), average, helpful votes, sort.
-- [x] **P3-02 Admin 2FA + RBAC** — admin/support/sales; audit log; 2FA required for admins.
-- [x] **P3-03 Admin CRUD** — products, categories, orders, refunds, shipping statuses, users/roles, review moderation, bulk CSV/JSON.
+- [x] **P3-02 Admin 2FA + RBAC** — admin/support/sales/warehouse; audit log; 2FA required for staff.
+- [x] **P3-03 Admin CRUD** — products, categories, orders, refunds, shipping statuses, users/roles, review moderation, bulk CSV/JSON, order handling + mock carrier labels.
 - [x] **P3-04 Remaining pages** — home, about, contact, 404, account polish, optional terms/FAQ.
 - [x] **P3-05 UI chrome** — quick cart, global typeahead, grid/list, pagination, 320/768/1024/1440.
 - [x] **P3-06 Images** — thumbnail + full (and mid if useful).
@@ -745,7 +748,7 @@ Scenarios (at least 3, k6): browse catalog; search + add to cart; checkout; regi
 1. HTTPS with self-signed cert warning accepted; home, PLP grid/list, PDP reviews.
 2. Quick search + quick cart on several pages; 320px and 1440px.
 3. Leave a review on a purchased item; vote helpful; average updates.
-4. Admin with 2FA: CRUD product, bulk CSV, moderate review, update shipment, assign role.
+4. Admin with 2FA: a new two-factor form is shown (login values are not reused). CRUD product, bulk CSV, moderate review, order handling Print label, hand to courier, assign role.
 5. 404, about, contact form → Mailpit.
 6. Show rate-limit 429 after burst; show TLS and encrypted columns.
 7. Open performance report; point at k6 output and bottlenecks.

@@ -27,6 +27,17 @@ const emptyProduct = {
   wholesalerId: "",
   wholesaleSku: "",
   barcode: "",
+  modelCode: "",
+  colorName: "",
+  warrantyMonths: "24",
+  warrantyNote: "Manufacturer warranty",
+  manufacturerUrl: "",
+  brandUrl: "",
+  packageContents: "",
+  highlights: "",
+  releaseYear: "",
+  energyClass: "",
+  attributes: [] as { name: string; value: string }[],
 };
 
 
@@ -105,6 +116,17 @@ export function ProductsPanel({ token }: { token: string }) {
       wholesalerId: item.wholesaler?.id ?? "",
       wholesaleSku: item.wholesaler?.sku ?? "",
       barcode: item.barcode ?? "",
+      modelCode: item.modelCode ?? "",
+      colorName: item.colorName ?? "",
+      warrantyMonths: item.warrantyMonths == null ? "" : String(item.warrantyMonths),
+      warrantyNote: item.warrantyNote ?? "",
+      manufacturerUrl: item.manufacturerUrl ?? "",
+      brandUrl: item.brandUrl ?? "",
+      packageContents: item.packageContents ?? "",
+      highlights: item.highlights ?? "",
+      releaseYear: item.releaseYear == null ? "" : String(item.releaseYear),
+      energyClass: item.energyClass ?? "",
+      attributes: (item.attributes ?? []).map((row) => ({ name: row.name, value: row.value })),
     });
     setOpen(true);
   }
@@ -129,6 +151,17 @@ export function ProductsPanel({ token }: { token: string }) {
       wholesalerId: form.wholesalerId || null,
       wholesaleSku: form.wholesaleSku || null,
       barcode: form.barcode || null,
+      warrantyMonths: form.warrantyMonths === "" ? null : Number(form.warrantyMonths),
+      releaseYear: form.releaseYear === "" ? null : Number(form.releaseYear),
+      manufacturerUrl: form.manufacturerUrl || null,
+      brandUrl: form.brandUrl || null,
+      modelCode: form.modelCode || null,
+      colorName: form.colorName || null,
+      warrantyNote: form.warrantyNote || null,
+      packageContents: form.packageContents || null,
+      highlights: form.highlights || null,
+      energyClass: form.energyClass || null,
+      attributes: form.attributes.filter((row) => row.name.trim() && row.value.trim()),
     });
     try {
       if (editingId) {
@@ -386,6 +419,147 @@ export function ProductsPanel({ token }: { token: string }) {
               placeholder="EAN-13 / UPC / warehouse code"
             />
           </label>
+          <fieldset className="fieldset-block">
+            <legend>Product information</legend>
+            <div className="dims">
+              <label className="field">
+                <span>Model</span>
+                <input
+                  value={form.modelCode}
+                  onChange={(e) => setForm({ ...form, modelCode: e.target.value })}
+                  placeholder="WH-1000XM5"
+                />
+              </label>
+              <label className="field">
+                <span>Color</span>
+                <input
+                  value={form.colorName}
+                  onChange={(e) => setForm({ ...form, colorName: e.target.value })}
+                  placeholder="Black"
+                />
+              </label>
+            </div>
+            <div className="dims">
+              <label className="field">
+                <span>Release year</span>
+                <input
+                  inputMode="numeric"
+                  value={form.releaseYear}
+                  onChange={(e) => setForm({ ...form, releaseYear: e.target.value })}
+                  placeholder="2022"
+                />
+              </label>
+              <label className="field">
+                <span>Energy class</span>
+                <input
+                  value={form.energyClass}
+                  onChange={(e) => setForm({ ...form, energyClass: e.target.value })}
+                  placeholder="A–G"
+                />
+              </label>
+            </div>
+            <div className="dims">
+              <label className="field">
+                <span>Warranty (months)</span>
+                <input
+                  inputMode="numeric"
+                  value={form.warrantyMonths}
+                  onChange={(e) => setForm({ ...form, warrantyMonths: e.target.value })}
+                  placeholder="24"
+                />
+              </label>
+              <label className="field">
+                <span>Warranty note</span>
+                <input
+                  value={form.warrantyNote}
+                  onChange={(e) => setForm({ ...form, warrantyNote: e.target.value })}
+                  placeholder="Manufacturer warranty"
+                />
+              </label>
+            </div>
+            <label className="field">
+              <span>Manufacturer product page</span>
+              <input
+                type="url"
+                value={form.manufacturerUrl}
+                onChange={(e) => setForm({ ...form, manufacturerUrl: e.target.value })}
+                placeholder="https://www.sony.com/..."
+              />
+            </label>
+            <label className="field">
+              <span>Brand website</span>
+              <input
+                type="url"
+                value={form.brandUrl}
+                onChange={(e) => setForm({ ...form, brandUrl: e.target.value })}
+                placeholder="https://www.sony.fi"
+              />
+            </label>
+            <label className="field">
+              <span>Key highlights</span>
+              <textarea
+                value={form.highlights}
+                onChange={(e) => setForm({ ...form, highlights: e.target.value })}
+                placeholder="One highlight per line"
+                rows={4}
+              />
+            </label>
+            <label className="field">
+              <span>What&apos;s in the box</span>
+              <textarea
+                value={form.packageContents}
+                onChange={(e) => setForm({ ...form, packageContents: e.target.value })}
+                placeholder="One item per line"
+                rows={3}
+              />
+            </label>
+            <div className="field">
+              <span>Extra specifications</span>
+              {form.attributes.map((row, index) => (
+                <div className="spec-row" key={`${row.name}-${index}`}>
+                  <input
+                    value={row.name}
+                    onChange={(e) => {
+                      const attributes = form.attributes.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, name: e.target.value } : item,
+                      );
+                      setForm({ ...form, attributes });
+                    }}
+                    placeholder="Name"
+                  />
+                  <input
+                    value={row.value}
+                    onChange={(e) => {
+                      const attributes = form.attributes.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, value: e.target.value } : item,
+                      );
+                      setForm({ ...form, attributes });
+                    }}
+                    placeholder="Value"
+                  />
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        attributes: form.attributes.filter((_, itemIndex) => itemIndex !== index),
+                      })
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => setForm({ ...form, attributes: [...form.attributes, { name: "", value: "" }] })}
+              >
+                Add specification
+              </button>
+            </div>
+          </fieldset>
           <div className="actions">
             <button className="primary" type="submit">
               {editingId ? "Save changes" : "Create"}

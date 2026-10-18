@@ -144,6 +144,16 @@ model Product {
   wholesaler     Wholesaler? @relation(fields: [wholesalerId], references: [id], onDelete: SetNull)
   wholesaleSku   String?
   barcode        String?  @unique
+  modelCode      String?
+  colorName      String?
+  warrantyMonths Int?
+  warrantyNote   String?
+  manufacturerUrl String?
+  brandUrl       String?
+  packageContents String?
+  highlights     String?
+  releaseYear    Int?
+  energyClass    String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   images         ProductImage[]
@@ -472,4 +482,35 @@ model ShippingOption {
   updatedAt     DateTime @updatedAt
 
   @@map("shipping_options")
+}
+
+model PackageSize {
+  id               String         @id @default(uuid())
+  code             String         @unique
+  name             String
+  lengthCm         Decimal        @db.Decimal(8, 2)
+  widthCm          Decimal        @db.Decimal(8, 2)
+  heightCm         Decimal        @db.Decimal(8, 2)
+  maxWeightKg      Decimal        @db.Decimal(8, 3)
+  stockQuantity    Int            @default(0)
+  incomingQuantity Int            @default(0)
+  sortOrder        Int            @default(0)
+  active           Boolean        @default(true)
+  updatedAt        DateTime       @updatedAt
+  orders           PackageOrder[]
+
+  @@map("package_sizes")
+}
+
+model PackageOrder {
+  id            String      @id @default(uuid())
+  reference     String      @unique
+  packageSizeId String
+  packageSize   PackageSize @relation(fields: [packageSizeId], references: [id], onDelete: Cascade)
+  quantity      Int
+  createdAt     DateTime    @default(now())
+
+  @@index([packageSizeId])
+  @@index([createdAt])
+  @@map("package_orders")
 }

@@ -12,10 +12,11 @@ import {
   FREE_STANDARD_THRESHOLD,
   locatorFromIndex,
   netFromInclusive,
+  POSTI_PACKAGE_SIZES,
   roundMoney,
   STANDARD_SHIPPING,
 } from "@volt/shared";
-import { encrypt, encryptJson, encryptOptional, revealSecret } from "../src/lib/crypto.js";
+import { decrypt, encrypt, encryptJson, encryptOptional, revealSecret } from "../src/lib/crypto.js";
 import { writeDerivedImages } from "../src/lib/images.js";
 
 const prisma = new PrismaClient();
@@ -115,8 +116,47 @@ type SeedProduct = {
   color: string;
   featured?: boolean;
   rating: number;
+  modelCode?: string;
+  colorName?: string;
+  warrantyMonths?: number;
+  warrantyNote?: string;
+  manufacturerUrl?: string;
+  brandUrl?: string;
+  packageContents?: string;
+  highlights?: string;
+  releaseYear?: number;
+  energyClass?: string;
   attributes: { name: string; value: string }[];
 };
+
+const BRAND_SITES: Record<string, string> = {
+  sony: "https://www.sony.fi",
+  bose: "https://www.bose.com",
+  apple: "https://www.apple.com/fi",
+  samsung: "https://www.samsung.com/fi",
+  framework: "https://frame.work",
+  google: "https://store.google.com",
+  logitech: "https://www.logitech.com",
+  anker: "https://www.anker.com",
+  keychron: "https://www.keychron.com",
+  philips: "https://www.philips-hue.com",
+  nothing: "https://www.nothing.tech",
+};
+
+function productInformation(product: SeedProduct) {
+  return {
+    modelCode: product.modelCode ?? null,
+    colorName: product.colorName ?? null,
+    warrantyMonths: product.warrantyMonths ?? 24,
+    warrantyNote: product.warrantyNote ?? "Manufacturer warranty",
+    manufacturerUrl: product.manufacturerUrl ?? null,
+    brandUrl: product.brandUrl ?? BRAND_SITES[product.brand] ?? null,
+    packageContents: product.packageContents ?? null,
+    highlights: product.highlights ?? null,
+    releaseYear: product.releaseYear ?? null,
+    energyClass: product.energyClass ?? null,
+  };
+}
 
 const products: SeedProduct[] = [
   {
@@ -135,9 +175,21 @@ const products: SeedProduct[] = [
     color: "#1f3a5f",
     featured: true,
     rating: 4.7,
+    modelCode: "WH-1000XM5",
+    colorName: "Black",
+    releaseYear: 2022,
+    manufacturerUrl: "https://www.sony.com/electronics/headband-headphones/wh-1000xm5",
+    highlights:
+      "8-microphone noise cancellation\nHigh-resolution audio\nPrecise voice pickup\nSmart, intuitive controls\nUp to 30-hour battery",
+    packageContents: "Headphones\nCarrying case\nUSB-C charging cable\n3.5 mm audio cable",
     attributes: [
-      { name: "color", value: "Black" },
-      { name: "wireless", value: "Yes" },
+      { name: "Color", value: "Black" },
+      { name: "Wireless", value: "Yes" },
+      { name: "Noise cancelling", value: "Yes" },
+      { name: "Battery life", value: "Up to 30 hours" },
+      { name: "Connectivity", value: "Bluetooth 5.2" },
+      { name: "Charging", value: "USB-C" },
+      { name: "Driver", value: "30 mm" },
     ],
   },
   {
@@ -156,9 +208,18 @@ const products: SeedProduct[] = [
     color: "#3d3a36",
     featured: true,
     rating: 4.6,
+    modelCode: "QC Ultra",
+    colorName: "Black",
+    releaseYear: 2023,
+    manufacturerUrl: "https://www.bose.com/p/headphones/bose-quietcomfort-ultra-headphones",
+    highlights: "Immersive spatial audio\nCustomTune noise cancellation\nComfort-first ear cushions\nUp to 24-hour battery",
+    packageContents: "Headphones\nCarry case\nUSB-C cable\n3.5 mm audio cable",
     attributes: [
-      { name: "color", value: "Black" },
-      { name: "wireless", value: "Yes" },
+      { name: "Color", value: "Black" },
+      { name: "Wireless", value: "Yes" },
+      { name: "Noise cancelling", value: "Yes" },
+      { name: "Battery life", value: "Up to 24 hours" },
+      { name: "Connectivity", value: "Bluetooth 5.3" },
     ],
   },
   {
@@ -176,9 +237,18 @@ const products: SeedProduct[] = [
     h: 2.2,
     color: "#6e7c7a",
     rating: 4.8,
+    modelCode: "MTJV3",
+    colorName: "White",
+    releaseYear: 2022,
+    manufacturerUrl: "https://www.apple.com/airpods-pro/",
+    highlights: "Adaptive Audio\nActive Noise Cancellation\nMagSafe charging case\nSeamless Apple pairing",
+    packageContents: "AirPods Pro\nMagSafe Charging Case\nSilicone ear tips (4 sizes)\nUSB-C cable",
     attributes: [
-      { name: "color", value: "White" },
-      { name: "wireless", value: "Yes" },
+      { name: "Color", value: "White" },
+      { name: "Wireless", value: "Yes" },
+      { name: "Noise cancelling", value: "Yes" },
+      { name: "Battery life", value: "Up to 6 hours" },
+      { name: "Charging", value: "USB-C / MagSafe" },
     ],
   },
   {
@@ -197,9 +267,18 @@ const products: SeedProduct[] = [
     color: "#2c4a3e",
     featured: true,
     rating: 4.5,
+    modelCode: "FW13-DIY",
+    colorName: "Silver",
+    releaseYear: 2023,
+    energyClass: "C",
+    manufacturerUrl: "https://frame.work/laptop13",
+    highlights: "Repairable 13.5-inch design\nSwappable expansion cards\nUpgradeable RAM and storage\nMatte 3:2 display",
+    packageContents: "Laptop\nUSB-C power adapter\nQuick start guide",
     attributes: [
-      { name: "screen", value: "13.5 inch" },
-      { name: "storage", value: "512 GB" },
+      { name: "Screen", value: "13.5 inch" },
+      { name: "Storage", value: "512 GB" },
+      { name: "Memory", value: "16 GB" },
+      { name: "Ports", value: "4 expansion cards" },
     ],
   },
   {
@@ -218,9 +297,18 @@ const products: SeedProduct[] = [
     color: "#5a6b7a",
     featured: true,
     rating: 4.8,
+    modelCode: "M3 Air 15",
+    colorName: "Midnight",
+    releaseYear: 2024,
+    energyClass: "B",
+    manufacturerUrl: "https://www.apple.com/macbook-air-15/",
+    highlights: "Fanless 15-inch notebook\nApple M3 chip\nLiquid Retina display\nAll-day battery",
+    packageContents: "MacBook Air\nUSB-C power adapter\nUSB-C charge cable",
     attributes: [
-      { name: "screen", value: "15.3 inch" },
-      { name: "storage", value: "256 GB" },
+      { name: "Screen", value: "15.3 inch" },
+      { name: "Storage", value: "256 GB" },
+      { name: "Chip", value: "Apple M3" },
+      { name: "Memory", value: "8 GB" },
     ],
   },
   {
@@ -238,9 +326,18 @@ const products: SeedProduct[] = [
     h: 0.76,
     color: "#3b4d63",
     rating: 4.4,
+    modelCode: "SM-S921B",
+    colorName: "Onyx Black",
+    releaseYear: 2024,
+    energyClass: "B",
+    manufacturerUrl: "https://www.samsung.com/fi/smartphones/galaxy-s24/",
+    highlights: "Compact flagship Android\nBright AMOLED display\nTriple camera\nSeven years of OS updates",
+    packageContents: "Phone\nUSB-C cable\nSIM tool\nQuick start guide",
     attributes: [
-      { name: "color", value: "Onyx Black" },
-      { name: "storage", value: "128 GB" },
+      { name: "Color", value: "Onyx Black" },
+      { name: "Storage", value: "128 GB" },
+      { name: "Display", value: "6.2 inch AMOLED" },
+      { name: "SIM", value: "Dual SIM / eSIM" },
     ],
   },
   {
@@ -258,9 +355,18 @@ const products: SeedProduct[] = [
     h: 0.89,
     color: "#6a5340",
     rating: 4.5,
+    modelCode: "GZPF0",
+    colorName: "Hazel",
+    releaseYear: 2023,
+    energyClass: "B",
+    manufacturerUrl: "https://store.google.com/product/pixel_8",
+    highlights: "Computational photography\nSeven years of updates\nSmooth 120 Hz display\nCompact flagship body",
+    packageContents: "Phone\nUSB-C cable\nSIM tool",
     attributes: [
-      { name: "color", value: "Hazel" },
-      { name: "storage", value: "128 GB" },
+      { name: "Color", value: "Hazel" },
+      { name: "Storage", value: "128 GB" },
+      { name: "Display", value: "6.2 inch OLED" },
+      { name: "Chip", value: "Google Tensor G3" },
     ],
   },
   {
@@ -278,9 +384,17 @@ const products: SeedProduct[] = [
     h: 0.96,
     color: "#8a8f7a",
     rating: 4.6,
+    modelCode: "A2997",
+    colorName: "Silver",
+    releaseYear: 2024,
+    manufacturerUrl: "https://www.apple.com/watch/",
+    highlights: "Thinner aluminum case\nBrighter always-on display\nSleep tracking\nFast charging",
+    packageContents: "Apple Watch\nSport Band\nUSB-C magnetic charger",
     attributes: [
-      { name: "size", value: "42 mm" },
-      { name: "color", value: "Silver" },
+      { name: "Size", value: "42 mm" },
+      { name: "Color", value: "Silver" },
+      { name: "Case", value: "Aluminum" },
+      { name: "Water resistance", value: "50 m" },
     ],
   },
   {
@@ -298,9 +412,17 @@ const products: SeedProduct[] = [
     h: 5.1,
     color: "#3f3f3f",
     rating: 4.7,
+    modelCode: "MX Master 3S",
+    colorName: "Graphite",
+    releaseYear: 2022,
+    manufacturerUrl: "https://www.logitech.com/products/mice/mx-master-3s.html",
+    highlights: "Quiet MagSpeed scrolling\nUSB-C charging\nSculpted all-day shape\nWorks across three computers",
+    packageContents: "Mouse\nUSB-C cable\nLogi Bolt receiver",
     attributes: [
-      { name: "color", value: "Graphite" },
-      { name: "wireless", value: "Yes" },
+      { name: "Color", value: "Graphite" },
+      { name: "Wireless", value: "Yes" },
+      { name: "Buttons", value: "7" },
+      { name: "Sensor", value: "8000 DPI" },
     ],
   },
   {
@@ -318,9 +440,16 @@ const products: SeedProduct[] = [
     h: 4.9,
     color: "#1c1c1c",
     rating: 4.6,
+    modelCode: "A1289",
+    colorName: "Black",
+    releaseYear: 2022,
+    manufacturerUrl: "https://www.anker.com/products/a1289",
+    highlights: "24,000 mAh capacity\n140W USB-C output\nStatus screen\nLaptop-ready headroom",
+    packageContents: "Power bank\nUSB-C to USB-C cable\nTravel pouch",
     attributes: [
-      { name: "capacity", value: "24000 mAh" },
-      { name: "output", value: "140W" },
+      { name: "Capacity", value: "24000 mAh" },
+      { name: "Output", value: "140W" },
+      { name: "Ports", value: "2× USB-C, 1× USB-A" },
     ],
   },
   {
@@ -338,9 +467,17 @@ const products: SeedProduct[] = [
     h: 4.2,
     color: "#5c4033",
     rating: 4.7,
+    modelCode: "Q1 Max",
+    colorName: "Carbon Black",
+    releaseYear: 2023,
+    manufacturerUrl: "https://www.keychron.com/products/keychron-q1-max-qmk-via-wireless-custom-mechanical-keyboard",
+    highlights: "Wireless gasket-mounted 75%\nCNC aluminum case\nHot-swap switches\nQMK/VIA support",
+    packageContents: "Keyboard\nUSB-C cable\nSwitch puller\nKeycap puller",
     attributes: [
-      { name: "layout", value: "75%" },
-      { name: "wireless", value: "Yes" },
+      { name: "Layout", value: "75%" },
+      { name: "Wireless", value: "Yes" },
+      { name: "Switches", value: "Hot-swap" },
+      { name: "Case", value: "Aluminum" },
     ],
   },
   {
@@ -359,9 +496,17 @@ const products: SeedProduct[] = [
     color: "#c9a227",
     featured: true,
     rating: 4.4,
+    modelCode: "Hue Starter",
+    colorName: "Full color",
+    releaseYear: 2023,
+    energyClass: "F",
+    manufacturerUrl: "https://www.philips-hue.com/en-fi/p/hue-white-and-color-ambiance-starter-kit/8718696725382",
+    highlights: "Three color bulbs\nHue Bridge included\nSchedules and scenes\nApp and voice control",
+    packageContents: "3 color bulbs\nHue Bridge\nEthernet cable\nPower adapter",
     attributes: [
-      { name: "bulbs", value: "3" },
-      { name: "color", value: "Full color" },
+      { name: "Bulbs", value: "3" },
+      { name: "Color", value: "Full color" },
+      { name: "Protocol", value: "Zigbee / Bluetooth" },
     ],
   },
   {
@@ -379,9 +524,18 @@ const products: SeedProduct[] = [
     h: 42.3,
     color: "#243044",
     rating: 4.3,
+    modelCode: "LS27CG552EUXEN",
+    colorName: "Black",
+    releaseYear: 2022,
+    energyClass: "F",
+    manufacturerUrl: "https://www.samsung.com/monitor/gaming/odyssey-g5/",
+    highlights: "1000R curved 1440p panel\n165 Hz refresh\nAMD FreeSync\nThin three-sided bezel",
+    packageContents: "Monitor\nStand\nPower cable\nHDMI cable",
     attributes: [
-      { name: "screen", value: "27 inch" },
-      { name: "refresh", value: "165 Hz" },
+      { name: "Screen", value: "27 inch" },
+      { name: "Refresh", value: "165 Hz" },
+      { name: "Resolution", value: "2560 × 1440" },
+      { name: "Panel", value: "VA" },
     ],
   },
   {
@@ -399,9 +553,17 @@ const products: SeedProduct[] = [
     h: 2.2,
     color: "#e8e4d9",
     rating: 4.2,
+    modelCode: "Ear (a)",
+    colorName: "White",
+    releaseYear: 2024,
+    manufacturerUrl: "https://www.nothing.tech/products/ear-a",
+    highlights: "Transparent-stem design\nActive noise cancellation\nLight charging case\nClean companion app",
+    packageContents: "Earbuds\nCharging case\nEar tips\nUSB-C cable",
     attributes: [
-      { name: "color", value: "White" },
-      { name: "wireless", value: "Yes" },
+      { name: "Color", value: "White" },
+      { name: "Wireless", value: "Yes" },
+      { name: "Noise cancelling", value: "Yes" },
+      { name: "Battery life", value: "Up to 5.5 hours" },
     ],
   },
 ];
@@ -512,6 +674,54 @@ async function assignMissingBarcodes() {
   }
 }
 
+async function removeEphemeralTestProducts() {
+  const leftovers = await prisma.product.findMany({
+    where: {
+      OR: [{ name: { startsWith: "Volt Test Dongle" } }, { name: { startsWith: "Volt Bulk Cable" } }],
+    },
+    select: { id: true },
+  });
+  const ids = leftovers.map((row) => row.id);
+  if (!ids.length) return 0;
+  await prisma.cartItem.deleteMany({ where: { productId: { in: ids } } });
+  await prisma.purchaseOrderItem.deleteMany({ where: { productId: { in: ids } } });
+  const orderRows = await prisma.orderItem.findMany({
+    where: { productId: { in: ids } },
+    select: { orderId: true },
+  });
+  const orderIds = [...new Set(orderRows.map((row) => row.orderId))];
+  if (orderIds.length) {
+    await prisma.order.deleteMany({ where: { id: { in: orderIds } } });
+  }
+  await prisma.inventoryReservation.deleteMany({ where: { productId: { in: ids } } });
+  await prisma.product.deleteMany({ where: { id: { in: ids } } });
+  return ids.length;
+}
+
+async function assignProductInformation() {
+  for (const product of products) {
+    const row = await prisma.product.findFirst({
+      where: { OR: [{ slug: product.slug }, { name: product.name }] },
+      select: { id: true },
+    });
+    if (!row) continue;
+    await prisma.product.update({
+      where: { id: row.id },
+      data: productInformation(product),
+    });
+    await prisma.productAttribute.deleteMany({ where: { productId: row.id } });
+    if (product.attributes.length) {
+      await prisma.productAttribute.createMany({
+        data: product.attributes.map((attribute) => ({
+          productId: row.id,
+          name: attribute.name,
+          value: attribute.value,
+        })),
+      });
+    }
+  }
+}
+
 async function assignMissingWholesalePrices() {
   const products = await prisma.product.findMany({ where: { wholesalePrice: null } });
   for (const product of products) {
@@ -537,6 +747,36 @@ async function assignProductWholesalers(
       data: {
         wholesalerId,
         wholesaleSku: product.wholesaleSku || wholesaleSkuFromSlug(product.slug),
+      },
+    });
+  }
+}
+
+async function ensurePackageSizes() {
+  for (const box of POSTI_PACKAGE_SIZES) {
+    const stockQuantity = box.code === "XXL" ? 8 : 24;
+    await prisma.packageSize.upsert({
+      where: { code: box.code },
+      update: {
+        name: box.name,
+        lengthCm: box.lengthCm,
+        widthCm: box.widthCm,
+        heightCm: box.heightCm,
+        maxWeightKg: box.maxWeightKg,
+        sortOrder: box.sortOrder,
+        active: true,
+      },
+      create: {
+        code: box.code,
+        name: box.name,
+        lengthCm: box.lengthCm,
+        widthCm: box.widthCm,
+        heightCm: box.heightCm,
+        maxWeightKg: box.maxWeightKg,
+        stockQuantity,
+        incomingQuantity: 0,
+        sortOrder: box.sortOrder,
+        active: true,
       },
     });
   }
@@ -634,6 +874,38 @@ async function ensureDemoTotpReadable(email: string) {
   }
 }
 
+async function ensureDemoAddressesReadable() {
+  const user = await prisma.user.findUnique({ where: { email: "customer@volt.test" } });
+  if (!user) return;
+  const rows = await prisma.address.findMany({ where: { userId: user.id } });
+  let readable = 0;
+  for (const row of rows) {
+    try {
+      decrypt(row.recipientNameEnc);
+      decrypt(row.line1Enc);
+      decrypt(row.cityEnc);
+      decrypt(row.postalEnc);
+      readable += 1;
+    } catch {
+      await prisma.address.delete({ where: { id: row.id } });
+    }
+  }
+  if (readable > 0) return;
+  await prisma.address.create({
+    data: {
+      userId: user.id,
+      label: "Home",
+      isDefault: true,
+      recipientNameEnc: encrypt("Demo Customer"),
+      line1Enc: encrypt("Mannerheimintie 12"),
+      cityEnc: encrypt("Helsinki"),
+      postalEnc: encrypt("00100"),
+      country: "FI",
+      phoneEnc: encryptOptional("+358401234567"),
+    },
+  });
+}
+
 async function main() {
   mkdirSync(uploadDir, { recursive: true });
 
@@ -645,17 +917,21 @@ async function main() {
   const warehouseRole = roleRecords.get("warehouse")!;
 
   const wholesalers = await ensureWholesalers();
+  const removedTests = await removeEphemeralTestProducts();
   const existing = await prisma.product.count();
   if (existing > 0) {
     await assignProductWholesalers(wholesalers);
     await assignMissingBarcodes();
     await assignMissingWholesalePrices();
+    await assignProductInformation();
     await ensureMissingStaffUser("warehouse@volt.test", "Volt Warehouse", warehouseRole.id);
+    await ensurePackageSizes();
     for (const email of DEMO_STAFF_EMAILS) {
       await ensureDemoTotpReadable(email);
     }
+    await ensureDemoAddressesReadable();
     console.log(
-      `Catalog already has ${existing} products; attached missing wholesalers, barcodes, wholesale prices, and warehouse staff and left demo addresses and readable 2FA intact.`,
+      `Catalog already has ${existing} products; removed ${removedTests} leftover test SKUs, attached missing wholesalers, barcodes, wholesale prices, product information, warehouse staff, and Posti package sizes and left readable 2FA and demo addresses intact.`,
     );
     return;
   }
@@ -730,6 +1006,7 @@ async function main() {
         wholesalerId: wholesalerIdForCategory(product.category, wholesalers),
         wholesaleSku: wholesaleSkuFromSlug(product.slug),
         barcode: ean13FromIndex(index),
+        ...productInformation(product),
         ...locator,
       },
       create: {
@@ -756,6 +1033,7 @@ async function main() {
         wholesalerId: wholesalerIdForCategory(product.category, wholesalers),
         wholesaleSku: wholesaleSkuFromSlug(product.slug),
         barcode: ean13FromIndex(index),
+        ...productInformation(product),
         ...locator,
       },
     });
@@ -867,6 +1145,7 @@ async function main() {
       sortOrder: 1,
     },
   });
+  await ensurePackageSizes();
 
   const headphones = await prisma.product.findUnique({ where: { slug: "sony-wh-1000xm5" } });
   const bose = await prisma.product.findUnique({ where: { slug: "bose-quietcomfort-ultra" } });
