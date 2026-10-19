@@ -7,7 +7,8 @@ import { ProductGallery } from "@/components/product-gallery";
 import { ProductJsonLd } from "@/components/product-json-ld";
 import { ProductReviews } from "@/components/reviews";
 import { ApiError } from "@/lib/api";
-import { money, stars, type Product } from "@/lib/product";
+import { ProductPrice } from "@/components/product-price";
+import { stars, type Product } from "@/lib/product";
 import { serverApi } from "@/lib/server-api";
 import { pageMetadata } from "@/lib/seo";
 
@@ -49,9 +50,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             {stars(product.averageRating)}{" "}
             <span className="muted">({product.reviewCount} reviews)</span>
           </p>
-          <p className="price" style={{ fontSize: "1.4rem" }}>
-            {money(product.price)}
-          </p>
+          <ProductPrice product={product} />
           <p>{product.description}</p>
           <p className="muted">
             {product.stockQuantity > 0 ? `${product.stockQuantity} in stock` : "Currently unavailable"}

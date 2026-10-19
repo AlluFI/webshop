@@ -4,7 +4,8 @@ import { formatStoreDate } from "@volt/shared";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth";
 import { AddToCartButton } from "../cart";
-import { ProductCard, money, stars, type Product } from "../product";
+import { ProductCard, stars, type Product } from "../product";
+import { ProductPrice } from "../product-price";
 import { ProductFacts } from "../product-facts";
 import { PageMeta } from "../seo";
 
@@ -141,9 +142,7 @@ export function ProductPage() {
             {stars(product.averageRating)}{" "}
             <span className="muted">({product.reviewCount} reviews)</span>
           </p>
-          <p className="price" style={{ fontSize: "1.4rem" }}>
-            {money(product.price)}
-          </p>
+          <ProductPrice product={product} />
           <p>{product.description}</p>
           <p className="muted">
             {product.stockQuantity > 0 ? `${product.stockQuantity} in stock` : "Currently unavailable"}

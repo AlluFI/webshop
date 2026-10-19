@@ -62,6 +62,10 @@ describeLive("catalog API", () => {
     expect(res.body.highlights).toMatch(/noise cancellation/i);
     expect(res.body.packageContents).toMatch(/carrying case/i);
     expect(res.body.attributes.length).toBeGreaterThan(2);
+    expect(res.body.onPromotion).toBe(true);
+    expect(res.body.sellingPrice).toBe(299.99);
+    expect(res.body.lowestPrice30d).toBe(349.99);
+    expect(res.body.promotions).toBeUndefined();
   });
 
   it("returns typeahead suggestions", async () => {

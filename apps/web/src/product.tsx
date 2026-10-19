@@ -2,12 +2,30 @@ import { Link } from "react-router-dom";
 import { STORE_CURRENCY } from "@volt/shared";
 import { AddToCartButton } from "./cart";
 
+export type PromotionPeriod = {
+  id: string;
+  regularPrice: number;
+  promoPrice: number;
+  startsAt: string;
+  endsAt: string;
+  lowestPriceBeforePromo: number;
+};
+
 export type Product = {
   id: string;
   name: string;
   slug: string;
   description: string;
   price: number;
+  sellingPrice?: number;
+  onPromotion?: boolean;
+  promoPrice?: number | null;
+  promoStartsAt?: string | null;
+  promoEndsAt?: string | null;
+  lowestPrice30d?: number | null;
+  lowestPriceBeforePromo?: number | null;
+  priceHistory30d?: { price: number; recordedAt: string }[] | null;
+  promotions?: PromotionPeriod[] | null;
   wholesalePrice?: number | null;
   vatRate?: number;
   pricing?: {
@@ -95,7 +113,14 @@ export function ProductCard({ product }: { product: Product }) {
         {product.description ? <p className="card-excerpt">{product.description}</p> : null}
       </div>
       <div className="card-actions">
-        <p className="price">{money(product.price)}</p>
+        {product.onPromotion ? (
+          <div className="price-block">
+            <p className="price price-now">{money(product.sellingPrice ?? product.price)}</p>
+            <p className="price-was">{money(product.price)}</p>
+          </div>
+        ) : (
+          <p className="price">{money(product.sellingPrice ?? product.price)}</p>
+        )}
         <AddToCartButton productId={product.id} stockQuantity={product.stockQuantity} compact />
       </div>
     </article>

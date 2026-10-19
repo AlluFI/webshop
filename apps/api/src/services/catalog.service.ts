@@ -3,6 +3,7 @@ import { catalogQuerySchema, formatLocatorCode, suggestQuerySchema } from "@volt
 import { prisma } from "../prisma.js";
 import { redis } from "../redis.js";
 import { HttpError } from "../http-error.js";
+import { promoPublicFields } from "../lib/product-promo.js";
 
 const FACET_TTL_SEC = 45;
 
@@ -93,6 +94,10 @@ function mapProduct(product: {
   highlights?: string | null;
   releaseYear?: number | null;
   energyClass?: string | null;
+  promoPrice?: Prisma.Decimal | number | null;
+  promoStartsAt?: Date | null;
+  promoEndsAt?: Date | null;
+  lowestPriceBeforePromo?: Prisma.Decimal | number | null;
   category: { id: string; name: string; slug: string };
   brand: { id: string; name: string; slug: string };
   images: { path: string; thumbPath: string | null; altText: string; sortOrder: number }[];
@@ -103,7 +108,7 @@ function mapProduct(product: {
     name: product.name,
     slug: product.slug,
     description: product.description,
-    price: money(product.price),
+    ...promoPublicFields(product),
     stockQuantity: product.stockQuantity,
     category: product.category,
     brand: product.brand,

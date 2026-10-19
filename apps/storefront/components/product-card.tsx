@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { money, stars, type Product } from "@/lib/product";
+import { stars, type Product } from "@/lib/product";
+import { ProductPrice } from "./product-price";
 import { AddToCartButton } from "./cart";
 
 export function ProductCard({ product }: { product: Product }) {
@@ -29,7 +30,7 @@ export function ProductCard({ product }: { product: Product }) {
         {product.description ? <p className="card-excerpt">{product.description}</p> : null}
       </div>
       <div className="card-actions">
-        <p className="price">{money(product.price)}</p>
+        <ProductPrice product={product} />
         <AddToCartButton productId={product.id} stockQuantity={product.stockQuantity} compact />
       </div>
     </article>

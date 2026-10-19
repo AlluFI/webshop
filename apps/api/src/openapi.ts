@@ -35,6 +35,8 @@ const publicUser = {
     displayName: { type: "string", nullable: true },
     totpEnabled: { type: "boolean" },
     emailVerifiedAt: { type: "string", format: "date-time", nullable: true },
+    marketingOptIn: { type: "boolean" },
+    deletedAt: { type: "string", format: "date-time", nullable: true },
     role: { type: "string", example: "customer" },
   },
 } satisfies OpenAPIV3.SchemaObject;
@@ -65,6 +67,12 @@ const product = {
     slug: { type: "string" },
     description: { type: "string" },
     price: { type: "number", example: 129.0 },
+    sellingPrice: { type: "number", example: 99.0 },
+    onPromotion: { type: "boolean" },
+    promoPrice: { type: "number", nullable: true },
+    promoStartsAt: { type: "string", format: "date-time", nullable: true },
+    promoEndsAt: { type: "string", format: "date-time", nullable: true },
+    lowestPrice30d: { type: "number", nullable: true },
     stockQuantity: { type: "integer" },
     category: {
       type: "object",
@@ -152,10 +160,10 @@ export const openApiDocument: OpenAPIV3.Document = {
     title: "Volt & Co API",
     version: "1.0.0",
     description:
-      "Part 3 storefront API: accounts, JWT sessions, TOTP (required for staff), Google OAuth, catalog, reviews, carts, checkout, and admin CRUD.\n\n" +
+      "Part 3 storefront API: accounts, JWT sessions, TOTP (required for staff), Google OAuth, catalog, reviews, carts, checkout, admin CRUD, and machine integrations.\n\n" +
       "Demo customer: `customer@volt.test` / `Shopping123`.\n" +
       "Demo admin: `admin@volt.test` / `Shopping123` plus TOTP secret `DEMOADMIN2FASECRETKEYAA`.\n\n" +
-      "Access tokens live 15 minutes. After **Authorize**, paste an `accessToken` from `/auth/login` (staff also need `/auth/mfa/complete`).",
+      "Access tokens live 15 minutes. After **Authorize**, paste an `accessToken` from `/auth/login` (staff also need `/auth/mfa/complete`). Integration exports use an `X-Api-Key` (`volt_test_…` / `volt_live_…`) from Admin → Integrations.",
   },
   servers: [
     { url: "/", description: "This host (API :3000 or storefront proxy :8088)" },
@@ -173,6 +181,7 @@ export const openApiDocument: OpenAPIV3.Document = {
     { name: "Contact" },
     { name: "Shipping" },
     { name: "Admin" },
+    { name: "Integrations" },
   ],
   components: {
     securitySchemes: {
@@ -181,6 +190,13 @@ export const openApiDocument: OpenAPIV3.Document = {
         scheme: "bearer",
         bearerFormat: "JWT",
         description: "Access token from login, MFA complete, or refresh.",
+      },
+      integrationKey: {
+        type: "apiKey",
+        in: "header",
+        name: "X-Api-Key",
+        description:
+          "Machine key from Admin → Integrations (`volt_test_…` or `volt_live_…`). Authorization: Bearer volt_… is also accepted.",
       },
     },
     schemas: {
@@ -308,6 +324,7 @@ export const openApiDocument: OpenAPIV3.Document = {
                     description: "At least 8 characters, one upper, one lower, one digit.",
                   },
                   displayName: { type: "string", maxLength: 80 },
+                  marketingOptIn: { type: "boolean", default: false },
                   captchaToken: { type: "string" },
                 },
               },
@@ -536,7 +553,7 @@ export const openApiDocument: OpenAPIV3.Document = {
       },
       patch: {
         tags: ["Auth"],
-        summary: "Update the current customer's display name. Staff names are changed from Admin → Users.",
+        summary: "Update the current customer's display name and marketing consent. Staff names are changed from Admin → Users.",
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -545,7 +562,10 @@ export const openApiDocument: OpenAPIV3.Document = {
               schema: {
                 type: "object",
                 required: ["displayName"],
-                properties: { displayName: { type: "string", minLength: 1, maxLength: 80 } },
+                properties: {
+                  displayName: { type: "string", minLength: 1, maxLength: 80 },
+                  marketingOptIn: { type: "boolean" },
+                },
               },
             },
           },
@@ -559,6 +579,32 @@ export const openApiDocument: OpenAPIV3.Document = {
           },
           "403": { description: "Staff cannot change their own name" },
           "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+    },
+    "/api/v1/account/deletion": {
+      post: {
+        tags: ["Auth"],
+        summary: "Customer self-service account deletion. Paid order snapshots are retained until 31 Dec of year + 6.",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          "200": {
+            description: "Account deactivated and profile data erased",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    message: { type: "string" },
+                    retained: { type: "boolean" },
+                    retainUntil: { type: "string", format: "date-time", nullable: true },
+                  },
+                },
+              },
+            },
+          },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "403": { description: "Staff cannot delete from Profile" },
         },
       },
     },
@@ -1633,6 +1679,15 @@ export const openApiDocument: OpenAPIV3.Document = {
         responses: { "201": { description: "Created" } },
       },
     },
+    "/api/v1/admin/products/{id}/promotions": {
+      get: {
+        tags: ["Admin"],
+        summary: "Promotion periods for a product",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Promotion history" }, "404": { description: "Not found" } },
+      },
+    },
     "/api/v1/admin/products/bulk": {
       post: {
         tags: ["Admin"],
@@ -1718,10 +1773,51 @@ export const openApiDocument: OpenAPIV3.Document = {
         },
       },
     },
+    "/api/v1/admin/customers": {
+      get: {
+        tags: ["Admin"],
+        summary: "List customer accounts (name, email, created, last edited)",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Customers" } },
+      },
+    },
+    "/api/v1/admin/customers/{id}": {
+      get: {
+        tags: ["Admin"],
+        summary: "Customer directory detail: addresses, phone, marketing consent, status, orders",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "Customer" },
+          "404": { description: "Customer not found" },
+        },
+      },
+    },
+    "/api/v1/admin/orders/{id}/deviation": {
+      post: {
+        tags: ["Admin"],
+        summary: "Toggle the order deviation warning without changing status",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["hasDeviation"],
+                properties: { hasDeviation: { type: "boolean" } },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Updated order" } },
+      },
+    },
     "/api/v1/admin/users": {
       get: {
         tags: ["Admin"],
-        summary: "List users, optionally filtered by one role or all staff (role=staff)",
+        summary: "List staff users only, optionally filtered by one staff role or all staff (role=staff)",
         security: [{ bearerAuth: [] }],
         responses: { "200": { description: "Users" } },
       },
@@ -1791,6 +1887,123 @@ export const openApiDocument: OpenAPIV3.Document = {
           "201": { description: "Purchase order emailed" },
           "400": { description: "No lines or product not supplied by this wholesaler" },
         },
+      },
+    },
+    "/api/v1/admin/integrations/keys": {
+      get: {
+        tags: ["Admin"],
+        summary: "List integration API keys (token is never returned again)",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Keys" }, "403": { description: "Admin only" } },
+      },
+      post: {
+        tags: ["Admin"],
+        summary: "Create an integration API key. The plaintext token is shown once.",
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["name"],
+                properties: {
+                  name: { type: "string" },
+                  scopes: { type: "array", items: { type: "string", enum: ["orders", "catalog", "customers", "pii"] } },
+                },
+              },
+            },
+          },
+        },
+        responses: { "201": { description: "Created key plus one-time token" } },
+      },
+    },
+    "/api/v1/admin/integrations/keys/{id}/revoke": {
+      post: {
+        tags: ["Admin"],
+        summary: "Revoke an integration API key",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Revoked" }, "404": { description: "Not found" } },
+      },
+    },
+    "/api/v1/admin/integrations/webhooks": {
+      get: {
+        tags: ["Admin"],
+        summary: "List outbound webhook endpoints",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Webhooks" } },
+      },
+      post: {
+        tags: ["Admin"],
+        summary: "Create a signed webhook. The signing secret is shown once.",
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["name", "url", "events"],
+                properties: {
+                  name: { type: "string" },
+                  url: { type: "string", format: "uri" },
+                  events: {
+                    type: "array",
+                    items: { type: "string", enum: ["order.updated", "order.paid", "customer.deleted"] },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: { "201": { description: "Created webhook plus one-time secret" } },
+      },
+    },
+    "/api/v1/admin/integrations/webhooks/{id}": {
+      delete: {
+        tags: ["Admin"],
+        summary: "Delete a webhook endpoint",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Deleted" }, "404": { description: "Not found" } },
+      },
+    },
+    "/api/v1/integrations/v1/orders": {
+      get: {
+        tags: ["Integrations"],
+        summary: "Cursor export of orders for BI / iPaaS (no encrypted contact fields)",
+        security: [{ integrationKey: [] }],
+        parameters: [
+          { name: "updatedSince", in: "query", schema: { type: "string", format: "date-time" } },
+          { name: "cursor", in: "query", schema: { type: "string" } },
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 200 } },
+        ],
+        responses: { "200": { description: "Orders page" }, "401": { description: "Missing or revoked key" } },
+      },
+    },
+    "/api/v1/integrations/v1/order-items": {
+      get: {
+        tags: ["Integrations"],
+        summary: "Cursor export of order lines",
+        security: [{ integrationKey: [] }],
+        responses: { "200": { description: "Order items page" } },
+      },
+    },
+    "/api/v1/integrations/v1/products": {
+      get: {
+        tags: ["Integrations"],
+        summary: "Cursor export of catalog products",
+        security: [{ integrationKey: [] }],
+        responses: { "200": { description: "Products page" }, "403": { description: "Key lacks catalog scope" } },
+      },
+    },
+    "/api/v1/integrations/v1/customers": {
+      get: {
+        tags: ["Integrations"],
+        summary: "Cursor export of customer accounts. Email and name only when the key has the pii scope.",
+        security: [{ integrationKey: [] }],
+        responses: { "200": { description: "Customers page" } },
       },
     },
   },

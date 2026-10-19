@@ -14,16 +14,21 @@ import { useAuth } from "./auth";
 type SavedAddress = AddressInput & { id: string; label?: string | null; isDefault?: boolean };
 
 export function AccountPage() {
-  const { user, accessToken, ready, reloadUser } = useAuth();
+  const { user, accessToken, ready, reloadUser, logout } = useAuth();
   const router = useRouter();
   const [setup, setSetup] = useState<{ qrDataUrl: string; otpauth: string } | null>(null);
   const [backup, setBackup] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    if (user) setDisplayName(user.displayName || "");
+    if (user) {
+      setDisplayName(user.displayName || "");
+      setMarketingOptIn(Boolean(user.marketingOptIn));
+    }
   }, [user]);
 
   useEffect(() => {
@@ -107,7 +112,7 @@ export function AccountPage() {
             void api("/auth/me", {
               method: "PATCH",
               token: accessToken,
-              body: JSON.stringify({ displayName }),
+              body: JSON.stringify({ displayName, marketingOptIn }),
             })
               .then(async () => {
                 setMessage("Profile updated.");
@@ -122,6 +127,14 @@ export function AccountPage() {
           <label className="field">
             <span>Display name</span>
             <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required />
+          </label>
+          <label className="field choice">
+            <input
+              type="checkbox"
+              checked={marketingOptIn}
+              onChange={(event) => setMarketingOptIn(event.target.checked)}
+            />
+            <span>Email me offers and product news</span>
           </label>
           <button className="primary" type="submit">
             Save profile
@@ -178,6 +191,44 @@ export function AccountPage() {
       )}
       {user.totpEnabled && isStaffRole(user.role) && (
         <p className="muted">Staff accounts must keep two-factor authentication on.</p>
+      )}
+      {!isStaffRole(user.role) && (
+        <div className="panel">
+          <h2>Delete account</h2>
+          <p className="muted">
+            This signs you out, turns off marketing, and erases your profile. Paid order records are
+            kept until 31 December six years after the last paid order, as required for Finnish
+            bookkeeping.
+          </p>
+          {!confirmDelete ? (
+            <button className="ghost" type="button" onClick={() => setConfirmDelete(true)}>
+              Delete my account
+            </button>
+          ) : (
+            <div className="row-actions">
+              <button
+                className="primary"
+                type="button"
+                onClick={() => {
+                  setError("");
+                  void api("/account/deletion", { method: "POST", token: accessToken })
+                    .then(async () => {
+                      await logout();
+                      router.replace("/");
+                    })
+                    .catch((err) => {
+                      setError(err instanceof ApiError ? err.message : "Could not delete account");
+                    });
+                }}
+              >
+                Yes, delete my account
+              </button>
+              <button className="ghost" type="button" onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
       )}
       {!isStaffRole(user.role) && <AddressBook token={accessToken} />}
     </section>

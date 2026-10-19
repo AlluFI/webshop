@@ -5,6 +5,8 @@ import {
   adminAuditQuerySchema,
   adminCategorySchema,
   adminCreateEmployeeSchema,
+  adminCustomerListQuerySchema,
+  adminOrderDeviationSchema,
   adminOrderStatusSchema,
   createShipmentSchema,
   comparePickingPriority,
@@ -21,12 +23,15 @@ import {
   formatOrderReference,
   parcelLabelHtml,
   formatRefundNote,
+  isDeviationStatus,
   isStaffRole,
   LOW_STOCK_THRESHOLD,
   orderListQuerySchema,
   pickOrderSchema,
   FINLAND_VAT_RATE,
+  isOnPromotion,
   productPricing,
+  sellingPriceOf,
   slugify,
   staffRefundRequestSchema,
   STAFF_ROLES,
@@ -51,6 +56,9 @@ import { orderService } from "./order.service.js";
 import { reviewService } from "./review.service.js";
 import { shippingService } from "./shipping.service.js";
 import { packageService } from "./package.service.js";
+import { listPromotions, syncProductPromo } from "../lib/product-promo.js";
+import { addressService } from "./address.service.js";
+import { emitOrderChange } from "../lib/integration-events.js";
 
 function shippingSnapshot(enc: string | null | undefined) {
   if (!enc) return null;
@@ -92,11 +100,22 @@ function locatorOf(input: {
   };
 }
 
+function promoOf(input: { promoPrice?: number | null; promoStartsAt?: Date | null; promoEndsAt?: Date | null }) {
+  return {
+    promoPrice: input.promoPrice ?? null,
+    promoStartsAt: input.promoStartsAt ?? null,
+    promoEndsAt: input.promoEndsAt ?? null,
+  };
+}
+
 function productAuditFields(input: {
   name: string;
   slug: string;
   description: string;
   price: number;
+  promoPrice?: number | null;
+  promoStartsAt?: Date | null;
+  promoEndsAt?: Date | null;
   wholesalePrice?: number | null;
   vatRate?: number | null;
   stockQuantity: number;
@@ -125,6 +144,9 @@ function productAuditFields(input: {
     name: input.name,
     slug: input.slug,
     price: input.price,
+    promoPrice: input.promoPrice ?? "—",
+    promoStartsAt: input.promoStartsAt?.toISOString() ?? "—",
+    promoEndsAt: input.promoEndsAt?.toISOString() ?? "—",
     wholesalePrice: input.wholesalePrice ?? "—",
     vatRate: input.vatRate ?? FINLAND_VAT_RATE,
     stock: input.stockQuantity,
@@ -346,6 +368,7 @@ export const adminService = {
         sortOrder: 0,
       },
     });
+    await syncProductPromo(prisma, product.id, dto.price, promoOf(dto));
     await writeAudit({
       actorId,
       action: "product.create",
@@ -417,6 +440,12 @@ export const adminService = {
           });
         }
       }
+      await syncProductPromo(tx, id, dto.price, promoOf(dto), {
+        regularPrice: Number(existing.price),
+        promoPrice: existing.promoPrice == null ? null : Number(existing.promoPrice),
+        promoStartsAt: existing.promoStartsAt,
+        promoEndsAt: existing.promoEndsAt,
+      });
     });
     const changes = diffRecords(
       productAuditFields({
@@ -424,6 +453,9 @@ export const adminService = {
         slug: existing.slug,
         description: existing.description,
         price: Number(existing.price),
+        promoPrice: existing.promoPrice == null ? null : Number(existing.promoPrice),
+        promoStartsAt: existing.promoStartsAt,
+        promoEndsAt: existing.promoEndsAt,
         wholesalePrice: existing.wholesalePrice == null ? null : Number(existing.wholesalePrice),
         vatRate: Number(existing.vatRate),
         stockQuantity: existing.stockQuantity,
@@ -453,6 +485,9 @@ export const adminService = {
         slug,
         description: dto.description,
         price: dto.price,
+        promoPrice: dto.promoPrice,
+        promoStartsAt: dto.promoStartsAt,
+        promoEndsAt: dto.promoEndsAt,
         wholesalePrice: dto.wholesalePrice,
         vatRate: dto.vatRate,
         stockQuantity: dto.stockQuantity,
@@ -477,6 +512,12 @@ export const adminService = {
     }
     await bumpFacetCache();
     return catalogService.byIdOrSlug(id);
+  },
+
+  async listProductPromotions(id: string) {
+    const product = await prisma.product.findUnique({ where: { id }, select: { id: true } });
+    if (!product) throw new HttpError(404, "Product not found");
+    return listPromotions(id);
   },
 
   async deleteProduct(actorId: string, id: string) {
@@ -613,10 +654,10 @@ export const adminService = {
 
   async listUsers(rawQuery: unknown) {
     const query = adminUserListQuerySchema.parse(rawQuery);
-    const where: Prisma.UserWhereInput = {};
-    if (query.role === "staff") {
-      where.role = { name: { in: [...STAFF_ROLES] } };
-    } else if (query.role) {
+    const where: Prisma.UserWhereInput = {
+      role: { name: { in: [...STAFF_ROLES] } },
+    };
+    if (query.role && query.role !== "staff") {
       where.role = { name: query.role };
     }
     if (query.q) {
@@ -648,6 +689,103 @@ export const adminService = {
         totpEnabled: user.totpEnabled,
         emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
         createdAt: user.createdAt.toISOString(),
+      })),
+    };
+  },
+
+  async listCustomers(rawQuery: unknown) {
+    const query = adminCustomerListQuerySchema.parse(rawQuery);
+    const where: Prisma.UserWhereInput = { role: { name: "customer" } };
+    if (query.q) {
+      where.OR = [
+        { email: { contains: query.q, mode: "insensitive" } },
+        { displayName: { contains: query.q, mode: "insensitive" } },
+      ];
+    }
+    const skip = (query.page - 1) * query.pageSize;
+    const [total, items] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        orderBy: { updatedAt: "desc" },
+        skip,
+        take: query.pageSize,
+      }),
+    ]);
+    return {
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+      items: items.map((user) => ({
+        id: user.id,
+        displayName: user.deletedAt ? "Deleted account" : user.displayName,
+        email: user.deletedAt ? null : user.email,
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
+        deletedAt: user.deletedAt?.toISOString() ?? null,
+        marketingOptIn: user.marketingOptIn,
+        retainUntil: user.retainUntil?.toISOString() ?? null,
+      })),
+    };
+  },
+
+  async getCustomer(id: string) {
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: {
+        role: true,
+        orders: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            payment: { select: { status: true } },
+            items: {
+              select: {
+                id: true,
+                productName: true,
+                quantity: true,
+                unitPrice: true,
+                lineTotal: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!user || user.role.name !== "customer") {
+      throw new HttpError(404, "Customer not found");
+    }
+    const { items: addresses } = user.deletedAt
+      ? { items: [] as Awaited<ReturnType<typeof addressService.list>>["items"] }
+      : await addressService.list(user.id);
+    const phone = addresses.find((row) => row.isDefault)?.phone || addresses[0]?.phone || "";
+    return {
+      id: user.id,
+      displayName: user.deletedAt ? "Deleted account" : user.displayName,
+      email: user.deletedAt ? null : user.email,
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+      deletedAt: user.deletedAt?.toISOString() ?? null,
+      retainUntil: user.retainUntil?.toISOString() ?? null,
+      marketingOptIn: user.marketingOptIn,
+      status: user.deletedAt ? "deleted" : "active",
+      phone: phone || null,
+      addresses,
+      orders: user.orders.map((order) => ({
+        id: order.id,
+        reference: formatOrderReference(order.id),
+        status: order.status,
+        hasDeviation: order.hasDeviation,
+        paymentStatus: order.payment?.status ?? "REQUIRES_PAYMENT",
+        total: Number(order.total),
+        currency: order.currency,
+        createdAt: order.createdAt.toISOString(),
+        items: order.items.map((item) => ({
+          id: item.id,
+          name: item.productName,
+          quantity: item.quantity,
+          unitPrice: Number(item.unitPrice),
+          lineTotal: Number(item.lineTotal),
+        })),
       })),
     };
   },
@@ -833,6 +971,7 @@ export const adminService = {
           summary: order.items.map((item) => item.productName).join(", "),
           customerName,
           email: order.user?.email || email,
+          hasDeviation: order.hasDeviation,
           shipping: shippingSnapshot(order.shippingAddressEnc),
           shippingMethod: order.shippingMethod,
           trackingCarrier: order.trackingCarrier,
@@ -919,6 +1058,7 @@ export const adminService = {
           itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
           summary: items.map((item) => item.name).join(", "),
           customerName: decryptOrEmpty(order.contactNameEnc),
+          hasDeviation: order.hasDeviation,
           shipping: shippingSnapshot(order.shippingAddressEnc),
           shippingMethod: order.shippingMethod,
           trackingCarrier: order.trackingCarrier,
@@ -1183,6 +1323,7 @@ export const adminService = {
           shippedAt: becomingWithCourier ? new Date() : order.shippedAt,
           estimatedDeliveryFrom: estimatedFrom,
           estimatedDeliveryTo: estimatedTo,
+          hasDeviation: isDeviationStatus(dto.status) ? true : order.hasDeviation,
         },
       }),
       prisma.orderStatusEvent.create({
@@ -1208,6 +1349,32 @@ export const adminService = {
     if (becomingWithCourier) {
       await sendOrderShippedMail(orderId);
     }
+    emitOrderChange(dto.status, {
+      id: orderId,
+      reference: formatOrderReference(orderId),
+      status: dto.status,
+    });
+    return orderService.adminGet(orderId);
+  },
+
+  async setOrderDeviation(actorId: string, orderId: string, input: unknown) {
+    const dto = adminOrderDeviationSchema.parse(input);
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new HttpError(404, "Order not found");
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { hasDeviation: dto.hasDeviation },
+    });
+    await writeAudit({
+      actorId,
+      action: "order.deviation",
+      entity: "order",
+      entityId: orderId,
+      meta: {
+        target: formatOrderReference(orderId),
+        changes: [{ field: "hasDeviation", from: String(order.hasDeviation), to: String(dto.hasDeviation) }],
+      },
+    });
     return orderService.adminGet(orderId);
   },
 
@@ -1297,6 +1464,10 @@ export const adminService = {
         wholesaleSku: true,
         wholesalePrice: true,
         vatRate: true,
+        promoPrice: true,
+        promoStartsAt: true,
+        promoEndsAt: true,
+        lowestPriceBeforePromo: true,
         wholesaler: { select: { id: true, name: true, email: true } },
       },
     });
@@ -1305,11 +1476,19 @@ export const adminService = {
       ...data,
       items: data.items.map((item) => {
         const extra = byId.get(item.id);
+        const promoPrice = extra?.promoPrice == null ? null : Number(extra.promoPrice);
         return {
           ...item,
           barcode: extra?.barcode ?? null,
           wholesalePrice: extra?.wholesalePrice == null ? null : Number(extra.wholesalePrice),
           vatRate: extra?.vatRate == null ? FINLAND_VAT_RATE : Number(extra.vatRate),
+          promoPrice,
+          promoStartsAt: extra?.promoStartsAt?.toISOString() ?? null,
+          promoEndsAt: extra?.promoEndsAt?.toISOString() ?? null,
+          lowestPriceBeforePromo:
+            extra?.lowestPriceBeforePromo == null ? null : Number(extra.lowestPriceBeforePromo),
+          onPromotion: isOnPromotion(item.price, promoPrice, extra?.promoStartsAt, extra?.promoEndsAt),
+          sellingPrice: sellingPriceOf(item.price, promoPrice, extra?.promoStartsAt, extra?.promoEndsAt),
           pricing: productPricing(
             item.price,
             extra?.wholesalePrice == null ? null : Number(extra.wholesalePrice),

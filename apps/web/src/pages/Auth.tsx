@@ -105,6 +105,7 @@ export function RegisterPage() {
       email: String(form.get("email") || ""),
       password: String(form.get("password") || ""),
       displayName: String(form.get("displayName") || "") || undefined,
+      marketingOptIn: form.get("marketingOptIn") === "on",
       captchaToken: captcha || "",
     };
     const parsed = registerSchema.safeParse(payload);
@@ -154,6 +155,10 @@ export function RegisterPage() {
           <span>Password</span>
           <input name="password" type="password" autoComplete="new-password" required />
           <FieldError message={fields.password} />
+        </label>
+        <label className="field choice">
+          <input name="marketingOptIn" type="checkbox" />
+          <span>Email me offers and product news</span>
         </label>
         <div className="field">
           <ReCAPTCHA sitekey={siteKey} onChange={setCaptcha} />

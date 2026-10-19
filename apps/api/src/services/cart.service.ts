@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { addCartItemSchema, updateCartItemSchema } from "@volt/shared";
+import { addCartItemSchema, sellingPriceOf, updateCartItemSchema } from "@volt/shared";
 import { prisma } from "../prisma.js";
 import { HttpError } from "../http-error.js";
 import { decryptJson } from "../lib/crypto.js";
@@ -31,7 +31,12 @@ function money(value: Prisma.Decimal | number | string) {
 
 function toDto(cart: CartRecord, warnings: { productId: string; message: string }[] = []) {
   const items = cart.items.map((item) => {
-    const price = money(item.product.price);
+    const price = sellingPriceOf(
+      money(item.product.price),
+      item.product.promoPrice == null ? null : money(item.product.promoPrice),
+      item.product.promoStartsAt,
+      item.product.promoEndsAt,
+    );
     const image = item.product.images[0];
     return {
       id: item.id,

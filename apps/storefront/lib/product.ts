@@ -1,11 +1,29 @@
 import { STORE_CURRENCY } from "@volt/shared";
 
+export type PromotionPeriod = {
+  id: string;
+  regularPrice: number;
+  promoPrice: number;
+  startsAt: string;
+  endsAt: string;
+  lowestPriceBeforePromo: number;
+};
+
 export type Product = {
   id: string;
   name: string;
   slug: string;
   description: string;
   price: number;
+  sellingPrice?: number;
+  onPromotion?: boolean;
+  promoPrice?: number | null;
+  promoStartsAt?: string | null;
+  promoEndsAt?: string | null;
+  lowestPrice30d?: number | null;
+  lowestPriceBeforePromo?: number | null;
+  priceHistory30d?: { price: number; recordedAt: string }[] | null;
+  promotions?: PromotionPeriod[] | null;
   wholesalePrice?: number | null;
   vatRate?: number;
   pricing?: {

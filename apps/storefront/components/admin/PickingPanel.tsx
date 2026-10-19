@@ -47,6 +47,7 @@ type PickOrder = {
   summary: string;
   customerName?: string;
   shipping?: ShippingAddress | null;
+  hasDeviation?: boolean;
   shippingMethod?: string;
   trackingCarrier?: string | null;
   trackingCode?: string | null;
@@ -98,6 +99,14 @@ function ExpressMark() {
     <span className="express-flag" title="Express delivery — handle first">
       <span aria-hidden="true">!</span>
       Express
+    </span>
+  );
+}
+
+function DeviationMark() {
+  return (
+    <span className="express-flag" title="Order has a deviation">
+      <span aria-hidden="true">!</span>
     </span>
   );
 }
@@ -529,6 +538,7 @@ export function PickingPanel({ token }: { token: string }) {
                   onClick={() => openOrder(item)}
                 >
                   <td>
+                    {item.hasDeviation ? <DeviationMark /> : null}
                     {isExpressShipping(item.shippingMethod) ? <ExpressMark /> : null}
                     <button className="link" type="button">
                       {item.reference}

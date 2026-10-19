@@ -6,6 +6,7 @@ import { mkdirSync } from "node:fs";
 import { config } from "./config.js";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
+import { accountRouter } from "./routes/account.js";
 import { catalogRouter } from "./routes/catalog.js";
 import { cartRouter } from "./routes/cart.js";
 import { addressRouter } from "./routes/addresses.js";
@@ -18,6 +19,7 @@ import { reviewsRouter } from "./routes/reviews.js";
 import { contactRouter } from "./routes/contact.js";
 import { shippingRouter } from "./routes/shipping.js";
 import { adminRouter } from "./routes/admin.js";
+import { integrationsRouter } from "./routes/integrations.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { setPaymentStatusHandler } from "./lib/queue.js";
 import { handlePaymentStatus } from "./services/order-fulfillment.js";
@@ -63,6 +65,7 @@ export function createApp() {
 
   app.use("/api/v1/health", healthRouter);
   app.use("/api/v1/auth", authRouter);
+  app.use("/api/v1/account", accountRouter);
   app.use("/api/v1", catalogRouter);
   app.use("/api/v1/cart", cartRouter);
   app.use("/api/v1/addresses", addressRouter);
@@ -73,6 +76,7 @@ export function createApp() {
   app.use("/api/v1/contact", contactRouter);
   app.use("/api/v1/shipping", shippingRouter);
   app.use("/api/v1/admin", adminRouter);
+  app.use("/api/v1/integrations/v1", integrationsRouter);
   app.use("/api/v1", docsRouter);
 
   app.use((_req, res) => {

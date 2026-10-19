@@ -11,11 +11,13 @@ import { PickingPanel } from "./admin/PickingPanel";
 import { ProductsPanel } from "./admin/ProductsPanel";
 import { ReviewsPanel } from "./admin/ReviewsPanel";
 import { CustomersPanel } from "./admin/CustomersPanel";
+import { CustomerDirectoryPanel } from "./admin/CustomerDirectoryPanel";
 import { OverviewPanel } from "./admin/OverviewPanel";
 import { SalesPanel } from "./admin/SalesPanel";
 import { PackagesPanel } from "./admin/PackagesPanel";
 import { ShippingPanel } from "./admin/ShippingPanel";
 import { UsersPanel } from "./admin/UsersPanel";
+import { IntegrationsPanel } from "./admin/IntegrationsPanel";
 import { WholesalersPanel } from "./admin/WholesalersPanel";
 
 type Tab =
@@ -25,6 +27,7 @@ type Tab =
   | "overview"
   | "sales"
   | "customers"
+  | "customer-sales"
   | "picking"
   | "wholesalers"
   | "users"
@@ -32,7 +35,8 @@ type Tab =
   | "shipping"
   | "packages"
   | "bulk"
-  | "log";
+  | "log"
+  | "integrations";
 
 type GroupId = "product" | "orders" | "reports" | "shipping" | "admin";
 
@@ -46,19 +50,21 @@ const TABS: { id: Tab; permission: AdminPermission; label: string }[] = [
   { id: "picking", permission: "picking", label: "Order handling" },
   { id: "overview", permission: "sales", label: "Overview" },
   { id: "sales", permission: "sales", label: "Sales" },
-  { id: "customers", permission: "sales", label: "Customers" },
+  { id: "customer-sales", permission: "sales", label: "Customer sales" },
   { id: "users", permission: "users", label: "Users" },
+  { id: "customers", permission: "customers", label: "Customers" },
   { id: "reviews", permission: "reviews", label: "Reviews" },
   { id: "bulk", permission: "catalog", label: "Bulk" },
   { id: "log", permission: "audit", label: "Log" },
+  { id: "integrations", permission: "integrations", label: "Integrations" },
 ];
 
 const GROUPS: { id: GroupId; label: string; tabs: Tab[] }[] = [
   { id: "product", label: "Product", tabs: ["products", "categories", "wholesalers"] },
   { id: "orders", label: "Orders", tabs: ["orders", "picking"] },
-  { id: "reports", label: "Reports", tabs: ["overview", "sales", "customers"] },
+  { id: "reports", label: "Reports", tabs: ["overview", "sales", "customer-sales"] },
   { id: "shipping", label: "Shipping", tabs: ["shipping", "packages"] },
-  { id: "admin", label: "Admin", tabs: ["users", "reviews", "bulk", "log"] },
+  { id: "admin", label: "Admin", tabs: ["users", "customers", "reviews", "bulk", "log", "integrations"] },
 ];
 
 const TAB_BY_ID = new Map(TABS.map((item) => [item.id, item]));
@@ -108,7 +114,7 @@ export function AdminPage() {
     <section>
       <PageMeta
         title="Admin — Volt & Co"
-        description="Staff tools for catalog, wholesalers, orders, reports, users, reviews, shipping, and the change log at Volt & Co."
+        description="Staff tools for catalog, wholesalers, orders, reports, users, reviews, shipping, integrations, and the change log at Volt & Co."
       />
       <p className="kicker">Staff · {user.role}</p>
       <h1>Admin</h1>
@@ -158,7 +164,8 @@ export function AdminPage() {
           {tab === "orders" && <OrdersPanel token={accessToken} canRefund={can(user.role, "refunds")} />}
           {tab === "overview" && <OverviewPanel token={accessToken} />}
           {tab === "sales" && <SalesPanel token={accessToken} />}
-          {tab === "customers" && <CustomersPanel token={accessToken} />}
+          {tab === "customer-sales" && <CustomersPanel token={accessToken} />}
+          {tab === "customers" && <CustomerDirectoryPanel token={accessToken} />}
           {tab === "picking" && <PickingPanel token={accessToken} />}
           {tab === "wholesalers" && <WholesalersPanel token={accessToken} />}
           {tab === "users" && <UsersPanel token={accessToken} />}
@@ -167,6 +174,7 @@ export function AdminPage() {
           {tab === "packages" && <PackagesPanel token={accessToken} />}
           {tab === "bulk" && <BulkPanel token={accessToken} />}
           {tab === "log" && <LogPanel token={accessToken} />}
+          {tab === "integrations" && <IntegrationsPanel token={accessToken} />}
         </div>
       </div>
     </section>

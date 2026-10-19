@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { PaymentStatusMessage } from "@volt/shared";
-import { carrierName, carrierTrackingUrl, SHIPPING_CARRIER_META } from "@volt/shared";
+import { carrierName, carrierTrackingUrl, formatOrderReference, SHIPPING_CARRIER_META } from "@volt/shared";
+import { emitOrderChange } from "../lib/integration-events.js";
 import { prisma } from "../prisma.js";
 import { config } from "../config.js";
 import { encryptJson, decryptJson, decryptOrEmpty } from "../lib/crypto.js";
@@ -175,6 +176,13 @@ export async function handlePaymentStatus(message: PaymentStatusMessage) {
       total: moneyNumber(payment.order.total),
       currency: payment.order.currency,
       shipping: shippingForEmail(payment.order.shippingAddressEnc),
+    });
+    emitOrderChange("PAID", {
+      id: payment.orderId,
+      reference: formatOrderReference(payment.orderId),
+      status: "PAID",
+      total: moneyNumber(payment.order.total),
+      currency: payment.order.currency,
     });
     return { status: "PAID" as const };
   }

@@ -30,6 +30,30 @@ function zoneParts(date: Date) {
   };
 }
 
+export function storeClockTime(value: Date | string | number = new Date()) {
+  const date = asDate(value);
+  if (!date) return "00:00";
+  const part = zoneParts(date);
+  return `${String(part.hour).padStart(2, "0")}:${String(part.minute).padStart(2, "0")}`;
+}
+
+export function toDateTimeLocal(value: Date | string | number | null | undefined) {
+  if (value == null || value === "") return "";
+  const ymd = storeCalendarDate(value);
+  return ymd ? `${ymd}T${storeClockTime(value)}` : "";
+}
+
+export function parseStoreDateTimeInput(value: string | Date | null | undefined) {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const match = String(value)
+    .trim()
+    .match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::(\d{2}))?/);
+  if (match) return storeDateTime(match[1], `${match[2]}:${match[3] ?? "00"}`);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function storeCalendarDate(value: Date | string | number = new Date()) {
   const date = asDate(value);
   if (!date) return "";
@@ -58,6 +82,13 @@ export function storeDayStart(ymd: string) {
 
 export function storeDayEnd(ymd: string) {
   return new Date(storeDateTime(ymd, "23:59:59").getTime() + 999);
+}
+
+/** Finnish voucher retention: 31 Dec of (Helsinki year of last money-moving order + 6). */
+export function bookkeepingRetainUntil(lastOrderAt: Date | string | number) {
+  const year = Number(storeCalendarDate(lastOrderAt).slice(0, 4));
+  if (!Number.isFinite(year) || year < 1) return storeDayEnd(storeCalendarDate());
+  return storeDayEnd(`${year + 6}-12-31`);
 }
 
 export function addStoreDays(from: Date | string | number, days: number) {

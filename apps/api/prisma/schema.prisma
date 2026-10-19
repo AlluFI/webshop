@@ -22,6 +22,9 @@ model User {
   passwordHash    String?
   emailVerifiedAt DateTime?
   totpEnabled     Boolean   @default(false)
+  marketingOptIn  Boolean   @default(false)
+  deletedAt       DateTime?
+  retainUntil     DateTime?
   roleId          String
   role            Role      @relation(fields: [roleId], references: [id])
   createdAt       DateTime  @default(now())
@@ -118,6 +121,10 @@ model Product {
   slug           String   @unique
   description    String
   price          Decimal  @db.Decimal(10, 2)
+  promoPrice     Decimal? @db.Decimal(10, 2)
+  promoStartsAt  DateTime?
+  promoEndsAt    DateTime?
+  lowestPriceBeforePromo Decimal? @db.Decimal(10, 2)
   wholesalePrice Decimal? @db.Decimal(10, 2)
   vatRate        Decimal  @default(25.5) @db.Decimal(5, 2)
   stockQuantity  Int
@@ -163,13 +170,42 @@ model Product {
   reservations   InventoryReservation[]
   reviews        Review[]
   purchaseOrderItems PurchaseOrderItem[]
+  priceHistory   ProductPriceHistory[]
+  promotions     ProductPromotion[]
 
   @@index([categoryId])
   @@index([brandId])
   @@index([wholesalerId])
   @@index([price])
   @@index([averageRating])
+  @@index([updatedAt])
   @@map("products")
+}
+
+model ProductPriceHistory {
+  id         String   @id @default(uuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  price      Decimal  @db.Decimal(10, 2)
+  recordedAt DateTime @default(now())
+
+  @@index([productId, recordedAt])
+  @@map("product_price_history")
+}
+
+model ProductPromotion {
+  id                     String   @id @default(uuid())
+  productId              String
+  product                Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  regularPrice           Decimal  @db.Decimal(10, 2)
+  promoPrice             Decimal  @db.Decimal(10, 2)
+  startsAt               DateTime
+  endsAt                 DateTime
+  lowestPriceBeforePromo Decimal  @db.Decimal(10, 2)
+  createdAt              DateTime @default(now())
+
+  @@index([productId, startsAt])
+  @@map("product_promotions")
 }
 
 model Wholesaler {
@@ -254,6 +290,7 @@ enum OrderStatus {
   DELIVERED
   CANCELLED
   REFUNDED
+  CLAIMS
 }
 
 enum PaymentStatus {
@@ -321,6 +358,7 @@ model Order {
   userId              String?
   user                User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   status              OrderStatus   @default(PENDING_PAYMENT)
+  hasDeviation        Boolean       @default(false)
   currency            String        @default("EUR")
   subtotal            Decimal       @db.Decimal(10, 2)
   shippingCost        Decimal       @db.Decimal(10, 2)
@@ -349,6 +387,7 @@ model Order {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([updatedAt])
   @@map("orders")
 }
 
@@ -513,4 +552,33 @@ model PackageOrder {
   @@index([packageSizeId])
   @@index([createdAt])
   @@map("package_orders")
+}
+
+model IntegrationApiKey {
+  id          String    @id @default(uuid())
+  name        String
+  keyPrefix   String
+  keyHash     String    @unique
+  scopes      String[]
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  createdById String?
+
+  @@map("integration_api_keys")
+}
+
+model IntegrationEndpoint {
+  id         String    @id @default(uuid())
+  name       String
+  url        String
+  secretEnc  String
+  events     String[]
+  active     Boolean   @default(true)
+  lastStatus Int?
+  lastError  String?
+  lastSentAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("integration_endpoints")
 }

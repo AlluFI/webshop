@@ -16,11 +16,13 @@ export const ADMIN_PERMISSIONS = {
   picking: ["admin", "support", "sales", "warehouse"],
   sales: ["admin", "support", "sales"],
   refunds: ["admin", "support"],
+  customers: ["admin", "support", "sales"],
   users: ["admin"],
   reviews: ["admin", "support"],
   shipping: ["admin", "sales"],
   packages: ["admin", "support", "sales", "warehouse"],
   audit: ["admin", "support", "sales"],
+  integrations: ["admin"],
 } as const;
 
 export type AdminPermission = keyof typeof ADMIN_PERMISSIONS;

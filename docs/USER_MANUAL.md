@@ -15,9 +15,9 @@ Admin is opened at http://localhost:8088/admin (or https://localhost:8443/admin)
 
 - **Product:** products, categories, wholesalers
 - **Orders:** orders, order handling
-- **Reports:** overview, sales, customers
+- **Reports:** overview, sales, customer sales
 - **Shipping:** methods, packages
-- **Admin:** users, reviews, bulk, log
+- **Admin:** users, customers, reviews, bulk, log, integrations
 
 Order numbers are formatted as **`VC-` plus eight uppercase characters** (for example `VC-23AAA1B2`). The same reference is shown on Orders, Order handling, the customer order page, and Mailpit emails.
 
@@ -42,6 +42,7 @@ After a successful password check, a separate two-factor form is mounted. Authen
 | shipping | yes | yes | — | — |
 | bulk | yes | yes | — | — |
 | log | yes | yes | yes | — |
+| integrations | yes | — | — | — |
 
 Refunds on the **orders** tab are limited to **admin** and **support**. Status changes and courier hand-off are allowed for sales and warehouse. Refunds are not allowed for those roles.
 
@@ -56,10 +57,11 @@ Admin access is not granted to customer accounts.
 The catalog of products sold in the shop is managed here.
 
 - Table: name, retail price, wholesale price, margin, stock, category, warehouse locator (`01|02|2|1`), barcode, wholesaler
-- **Add product** / **Edit**: name, description, retail price (25.5% Finnish VAT included), wholesale price, VAT %, live net/VAT/margin, stock, category slug, brand, featured flag, locator (station, block, shelf, place), wholesaler, wholesale SKU, barcode (EAN-13 / UPC / warehouse code)
+- **Add product** / **Edit**: name, description, retail price (25.5% Finnish VAT included), promotion price with a start and end date, wholesale price, VAT %, live net/VAT/margin, stock, category slug, brand, featured flag, locator (station, block, shelf, place), wholesaler, wholesale SKU, barcode (EAN-13 / UPC / warehouse code)
 - **Product information**: model, color, release year, energy class, warranty months and note, manufacturer product page, brand website, key highlights, what’s in the box, and extra name/value specifications
 - The shop product page shows those fields as highlights, warranty, manufacturer/brand links, and a product information table
-- The retail price is shown on the shop. VAT is listed as its own included row on confirmation, checkout, and the paid email.
+- A promotion is charged only while the current time is inside the start and end dates. The shop then shows the promotion price, the regular price, and the lowest consumer price from the 30 days before the promotion started (EU price-indication rule). **History** is staff-only: open a product on the Products tab to see past promotion periods.
+- The retail price is shown on the shop when no promotion is live. VAT is listed as its own included row on confirmation, checkout, and the paid email.
 - **Receive stock**: a barcode is scanned or typed once, then the arrived quantity is entered (each unit is not scanned)
 - A product photo may be uploaded
 - A product may be deleted
@@ -99,7 +101,7 @@ Statuses in order:
 5. With the courier (after tracking is saved)
 6. Delivered
 
-Cancelled and Refunded are end states.
+Cancelled and Refunded are end states. **Claims** pauses warehouse picking until staff move the order back to Paid or Processing; a written reason is required. Claims, Cancelled, and Refunded automatically show a red **!** deviation mark. Staff can also toggle that mark without changing status.
 
 ---
 
@@ -132,7 +134,7 @@ Product and category sales for paid-through-delivered orders on the Helsinki cal
 
 ---
 
-## customers
+## customer sales
 
 **Who:** admin, support, sales
 
@@ -149,7 +151,7 @@ Buyers on paid-through-delivered orders in the selected time frame. Signed-in sh
 
 Warehouse pick and ship work is listed here.
 
-- **Paid**, **Processing**, and **Shipping** orders are listed with **express first** (oldest to newest), then standard (oldest to newest). Express rows show a red **! Express** mark
+- **Paid**, **Processing**, and **Shipping** orders are listed with **express first** (oldest to newest), then standard (oldest to newest). Express rows show a red **! Express** mark. **Claims**, Cancelled, and Refunded orders are not in this queue. A red **!** also appears when the order is marked as a deviation.
 - A row is opened for locator codes, barcodes, quantities, and the delivery address
 - Lines stay locked until **Process** (status becomes **Processing**)
 - Each line is ticked by hand, or a barcode is scanned (USB scanner, or Use camera on a phone). A scan only ticks a matching line; checkboxes remain available
@@ -181,13 +183,25 @@ Seeded suppliers: ElectroNordic Oy (audio, wearables, phones), Baltic IT Wholesa
 
 **Who:** admin
 
-Accounts and roles are managed here.
+Staff accounts and roles are managed here. Shopper profiles are under **Customers**.
 
 - Table: name, email, 2FA on/off, role
-- Filter by role: all accounts, **All employees** (admin, support, sales, warehouse), or one role
+- Filter by role: **All employees** (admin, support, sales, warehouse), or one staff role
 - **Add employee**: name, work email, staff role, temporary password. The account is verified and 2FA is enabled immediately. After save, the QR / authenticator secret and backup codes are copied once and given to the new person with the password
 - Customer roles cannot be changed. New staff are created with **Add employee**
 - Staff role changes (admin, support, sales, warehouse, or back to customer) ask for confirmation first
+
+---
+
+## customers
+
+**Who:** admin, support, sales
+
+Shopper directory (not the sales report).
+
+- Table: name, email, created, last edited
+- Click a name for saved addresses, phone, marketing consent, account status, and orders
+- Deleted accounts stay listed when Finnish bookkeeping still requires the order snapshots (until 31 December of the year of the last paid/refunded order + 6 years)
 
 ---
 
@@ -234,11 +248,25 @@ Many products are created at once.
 
 Staff change history is listed (who changed what, old value → new value).
 
-- Filter by entity: product, category, order, review, shipping, wholesaler, purchase order
+- Filter by entity: product, category, order, review, shipping, wholesaler, purchase order, integration key, integration webhook
 - Paginated list with time, actor, and field diffs
+
+---
+
+## integrations
+
+**Who:** admin
+
+Machine API keys and signed webhooks for BI tools and SaaS platforms.
+
+- **Add API key**: name and scopes (`orders`, `catalog`, `customers`, optional `pii`). The token (`volt_test_…` locally, `volt_live_…` in production) is copied once
+- **Revoke** stops that key immediately
+- **Add webhook**: HTTPS URL (localhost HTTP is allowed in development) and events `order.paid`, `order.updated`, `customer.deleted`. The signing secret is copied once
+- Last delivery status is listed on each webhook
+- Warehouse dashboards can also read the `analytics_*` SQL views on a replica. Cutover notes: [INTEGRATIONS.md](INTEGRATIONS.md)
 
 ---
 
 ## Storefront (not Admin tabs)
 
-The public site is used by customers: Home, Catalog, product pages, Cart, Checkout, Profile, Orders, About, Contact, FAQ, Terms. Catalog and product pages may be opened by staff (admin, sales, support, warehouse) to see the customer view. Cart, Checkout, Add to cart, and customer Orders are hidden or disabled so staff cannot buy from the shop. Signed-in customers open **Profile** and **Orders** from their name in the header. Staff 2FA is set under **Profile**. Contact form and order mail are delivered to Mailpit.
+The public site is used by customers: Home, Catalog, product pages, Cart, Checkout, Profile, Orders, About, Contact, FAQ, Terms. Catalog and product pages may be opened by staff (admin, sales, support, warehouse) to see the customer view. Cart, Checkout, Add to cart, and customer Orders are hidden or disabled so staff cannot buy from the shop. Signed-in customers open **Profile** and **Orders** from their name in the header. Profile includes marketing opt-in and account deletion. Register also offers marketing consent (off by default). Deletion erases the live profile, addresses, cart, OAuth, and sessions; if the customer has a paid or refunded order, encrypted order snapshots are kept until 31 December of (that year + 6). Staff 2FA is set under **Profile**. Contact form and order mail are delivered to Mailpit.

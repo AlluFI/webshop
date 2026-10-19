@@ -34,7 +34,7 @@ export function ProductJsonLd({ product }: { product: Product }) {
     offers: {
       "@type": "Offer",
       priceCurrency: STORE_CURRENCY,
-      price: product.price.toFixed(2),
+      price: (product.sellingPrice ?? product.price).toFixed(2),
       availability:
         product.stockQuantity > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
     },

@@ -14,6 +14,7 @@ type User = {
   email: string;
   displayName: string | null;
   totpEnabled: boolean;
+  marketingOptIn?: boolean;
   role: string;
 };
 

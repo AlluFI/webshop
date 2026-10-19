@@ -11,3 +11,4 @@ export * from "./shipping.js";
 export * from "./packages.js";
 export * from "./parcel-label.js";
 export * from "./time.js";
+export * from "./integrations.js";

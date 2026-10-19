@@ -22,6 +22,7 @@ import { tokens } from "./tokens.js";
 import { config } from "../config.js";
 import jwt from "jsonwebtoken";
 import { encrypt, revealSecret } from "../lib/crypto.js";
+import { rejectDeletedAccount, requestCustomerDeletion } from "../lib/customer-account.js";
 
 const VERIFY_TTL_MS = 48 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
@@ -35,6 +36,8 @@ function publicUser(user: {
   displayName: string | null;
   totpEnabled: boolean;
   emailVerifiedAt: Date | null;
+  marketingOptIn?: boolean;
+  deletedAt?: Date | null;
   role: { name: string };
 }) {
   return {
@@ -43,6 +46,8 @@ function publicUser(user: {
     displayName: user.displayName,
     totpEnabled: user.totpEnabled,
     emailVerifiedAt: user.emailVerifiedAt,
+    marketingOptIn: Boolean(user.marketingOptIn),
+    deletedAt: user.deletedAt?.toISOString() ?? null,
     role: user.role.name,
   };
 }
@@ -77,6 +82,7 @@ export const authService = {
         email: dto.email,
         displayName: dto.displayName ?? null,
         passwordHash: await hashPassword(dto.password),
+        marketingOptIn: dto.marketingOptIn ?? false,
         roleId: await customerRoleId(),
       },
     });
@@ -128,6 +134,7 @@ export const authService = {
     if (!valid) {
       throw new HttpError(401, "Invalid email or password.");
     }
+    rejectDeletedAccount(user);
     if (!user.emailVerifiedAt) {
       throw new HttpError(401, "Please verify your email before signing in.");
     }
@@ -171,6 +178,7 @@ export const authService = {
     if (!user?.totpEnabled || !user.totpSecret?.secret) {
       throw new HttpError(400, "Two-factor authentication is not active.");
     }
+    rejectDeletedAccount(user);
     if (dto.totpCode) {
       let secret: string;
       try {
@@ -221,6 +229,7 @@ export const authService = {
       include: { role: true },
     });
     if (!user) throw new HttpError(401, "Invalid refresh token");
+    rejectDeletedAccount(user);
     const rotated = await tokens.rotate(refreshToken, user.email, user.role.name);
     return {
       userId: user.id,
@@ -248,6 +257,7 @@ export const authService = {
       include: { role: true },
     });
     if (!user) throw new HttpError(401, "Sign in to continue");
+    rejectDeletedAccount(user);
     return publicUser(user);
   },
 
@@ -258,21 +268,29 @@ export const authService = {
       include: { role: true },
     });
     if (!current) throw new HttpError(401, "Sign in to continue");
+    rejectDeletedAccount(current);
     if (isStaffRole(current.role.name)) {
       throw new HttpError(403, "Ask an admin to change your name from Users.");
     }
     const user = await prisma.user.update({
       where: { id: userId },
-      data: { displayName: dto.displayName },
+      data: {
+        displayName: dto.displayName,
+        ...(dto.marketingOptIn === undefined ? {} : { marketingOptIn: dto.marketingOptIn }),
+      },
       include: { role: true },
     });
     return publicUser(user);
   },
 
+  async requestDeletion(userId: string) {
+    return requestCustomerDeletion(userId);
+  },
+
   async forgotPassword(input: unknown) {
     const { email } = forgotPasswordSchema.parse(input);
     const user = await prisma.user.findUnique({ where: { email } });
-    if (user) {
+    if (user && !user.deletedAt) {
       await prisma.passwordResetToken.updateMany({
         where: { userId: user.id, usedAt: null },
         data: { usedAt: new Date() },
@@ -304,6 +322,8 @@ export const authService = {
     if (!record) {
       throw new HttpError(400, "Invalid or expired reset token.");
     }
+    const owner = await prisma.user.findUnique({ where: { id: record.userId } });
+    rejectDeletedAccount(owner);
     await prisma.$transaction([
       prisma.user.update({
         where: { id: record.userId },
@@ -412,6 +432,7 @@ export const authService = {
         where: { id: existingLink.userId },
         include: { role: true },
       });
+      rejectDeletedAccount(user);
       return user;
     }
     let user = await prisma.user.findUnique({
@@ -435,6 +456,7 @@ export const authService = {
         include: { role: true },
       });
     } else {
+      rejectDeletedAccount(user);
       await prisma.oAuthIdentity.create({
         data: {
           userId: user.id,

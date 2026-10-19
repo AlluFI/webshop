@@ -313,6 +313,18 @@ describeLive("admin API", () => {
       .send({ role: "support" });
     expect(blockedRole.status).toBe(409);
     expect(blockedRole.body.error).toMatch(/customer accounts cannot change role/i);
+    const directory = await request(app)
+      .get("/api/v1/admin/customers?pageSize=50")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(directory.status).toBe(200);
+    expect(directory.body.items.some((row: { email: string | null }) => row.email === customerEmail)).toBe(true);
+    const detail = await request(app)
+      .get(`/api/v1/admin/customers/${customer.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.status).toBe("active");
+    expect(detail.body.marketingOptIn).toBe(false);
+    expect(Array.isArray(detail.body.orders)).toBe(true);
 
     const catalogProduct = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
     const shipOrder = await prisma.order.create({
@@ -368,6 +380,29 @@ describeLive("admin API", () => {
       "https://www.posti.fi/en/tracking/JJFI66012700410158170/32109367922",
     );
     expect(shipped.body.estimatedDelivery.from).toBe("2026-09-17");
+    const claimsMissing = await request(app)
+      .post(`/api/v1/admin/orders/${shipOrder.id}/status`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ status: "CLAIMS" });
+    expect(claimsMissing.status).toBe(400);
+    const claims = await request(app)
+      .post(`/api/v1/admin/orders/${shipOrder.id}/status`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ status: "CLAIMS", note: "Customer reported damage" });
+    expect(claims.status).toBe(200);
+    expect(claims.body.status).toBe("CLAIMS");
+    expect(claims.body.hasDeviation).toBe(true);
+    const pickingAfterClaims = await request(app)
+      .get("/api/v1/admin/orders/picking")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(pickingAfterClaims.status).toBe(200);
+    expect((pickingAfterClaims.body.items as { id: string }[]).some((row) => row.id === shipOrder.id)).toBe(false);
+    const unmarked = await request(app)
+      .post(`/api/v1/admin/orders/${shipOrder.id}/deviation`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ hasDeviation: false });
+    expect(unmarked.status).toBe(200);
+    expect(unmarked.body.hasDeviation).toBe(false);
     await prisma.order.delete({ where: { id: shipOrder.id } });
 
     const olderPick = await prisma.order.create({
@@ -633,6 +668,35 @@ describeLive("admin API", () => {
     await prisma.purchaseOrder.deleteMany({ where: { wholesalerId } });
     await prisma.wholesaler.delete({ where: { id: wholesalerId } }).catch(() => undefined);
 
+    const promoted = await request(app)
+      .patch(`/api/v1/admin/products/${productId}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        name: productName,
+        description: "USB-C hub used only in automated tests.",
+        price: 31,
+        promoPrice: 24.5,
+        promoStartsAt: "2026-10-01T00:00",
+        promoEndsAt: "2026-12-31T23:59",
+        stockQuantity: 10,
+        category: "accessories",
+        brand: "volt",
+        weightKg: 0.08,
+        lengthCm: 8,
+        widthCm: 3,
+        heightCm: 1.2,
+      });
+    expect(promoted.status).toBe(200);
+    expect(promoted.body.onPromotion).toBe(true);
+    expect(promoted.body.sellingPrice).toBe(24.5);
+    expect(promoted.body.lowestPrice30d).toBeGreaterThan(0);
+
+    const history = await request(app)
+      .get(`/api/v1/admin/products/${productId}/promotions`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(history.status).toBe(200);
+    expect(history.body.items[0]).toMatchObject({ promoPrice: 24.5, regularPrice: 31 });
+
     await request(app)
       .delete(`/api/v1/admin/products/${productId}`)
       .set("Authorization", `Bearer ${accessToken}`);
@@ -693,12 +757,17 @@ describeLive("admin API", () => {
     expect(sales.body.items.every((row: { role: string }) => row.role === "sales")).toBe(true);
     expect(sales.body.items.some((row: { email: string }) => row.email === employeeEmail)).toBe(true);
 
-    const customers = await request(app)
+    const customersOnUsers = await request(app)
       .get("/api/v1/admin/users?role=customer&pageSize=50")
       .set("Authorization", `Bearer ${accessToken}`);
-    expect(customers.status).toBe(200);
-    expect(customers.body.items.every((row: { role: string }) => row.role === "customer")).toBe(true);
-    expect(customers.body.items.some((row: { email: string }) => row.email === employeeEmail)).toBe(false);
+    expect(customersOnUsers.status).toBe(400);
+    const staffOnly = await request(app)
+      .get("/api/v1/admin/users?pageSize=50")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(staffOnly.status).toBe(200);
+    expect(staffOnly.body.items.every((row: { role: string }) => ["admin", "support", "sales", "warehouse"].includes(row.role))).toBe(
+      true,
+    );
 
     const login = await request(app).post("/api/v1/auth/login").send({
       email: employeeEmail,
@@ -815,6 +884,8 @@ describeLive("admin API", () => {
     ).toBe(403);
     expect((await request(app).get("/api/v1/admin/audit").set("Authorization", `Bearer ${token}`)).status).toBe(403);
     expect((await request(app).get("/api/v1/admin/users").set("Authorization", `Bearer ${token}`)).status).toBe(403);
+    expect((await request(app).get("/api/v1/admin/customers").set("Authorization", `Bearer ${token}`)).status).toBe(403);
+    expect((await request(app).get("/api/v1/admin/integrations/keys").set("Authorization", `Bearer ${token}`)).status).toBe(403);
     expect(
       (
         await request(app)

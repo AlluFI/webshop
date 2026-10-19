@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adminOrderStatusSchema,
   adminProductSchema,
   comparePickingPriority,
   ean13FromIndex,
@@ -123,10 +124,23 @@ describe("product data model", () => {
     expect(parsed.warrantyMonths).toBe(24);
     expect(parsed.manufacturerUrl).toContain("sony.com");
     expect(adminProductSchema.safeParse({ ...parsed, manufacturerUrl: "sony.com" }).success).toBe(false);
+    expect(adminProductSchema.safeParse({ ...parsed, promoPrice: 299.99 }).success).toBe(false);
+    const promo = adminProductSchema.parse({
+      ...parsed,
+      promoPrice: 299.99,
+      promoStartsAt: "2026-10-01T08:00",
+      promoEndsAt: "2026-10-15T23:59",
+    });
+    expect(promo.promoPrice).toBe(299.99);
+    expect(promo.promoStartsAt).toBeInstanceOf(Date);
+    expect(adminProductSchema.safeParse({ ...parsed, promoPrice: 400, promoStartsAt: "2026-10-01T08:00", promoEndsAt: "2026-10-15T23:59" }).success).toBe(false);
   });
 
   it("labels warehouse and courier statuses for staff", () => {
     expect(formatOrderStatus("SHIPPING")).toBe("Shipping");
     expect(formatOrderStatus("WITH_COURIER")).toBe("With the courier");
+    expect(formatOrderStatus("CLAIMS")).toBe("Claims");
+    expect(adminOrderStatusSchema.safeParse({ status: "CLAIMS" }).success).toBe(false);
+    expect(adminOrderStatusSchema.safeParse({ status: "CLAIMS", note: "Damaged on arrival" }).success).toBe(true);
   });
 });

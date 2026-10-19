@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import * as argon2 from "argon2";
 import {
+  addStoreDays,
   DEMO_ADMIN_TOTP_SECRET,
   ean13FromIndex,
   EXPRESS_SHIPPING,
@@ -722,6 +723,62 @@ async function assignProductInformation() {
   }
 }
 
+async function ensureSonyPromotion() {
+  const product = await prisma.product.findUnique({ where: { slug: "sony-wh-1000xm5" } });
+  if (!product) return;
+  const existing = await prisma.productPromotion.count({ where: { productId: product.id } });
+  if (existing > 0 && product.promoPrice != null) return;
+
+  const startsAt = addStoreDays(new Date(), -3);
+  const endsAt = addStoreDays(new Date(), 14);
+  const pastStart = addStoreDays(startsAt, -90);
+  const pastEnd = addStoreDays(startsAt, -75);
+  const regular = 349.99;
+  const promo = 299.99;
+  const lowest = 349.99;
+
+  await prisma.productPriceHistory.deleteMany({ where: { productId: product.id } });
+  await prisma.productPromotion.deleteMany({ where: { productId: product.id } });
+  await prisma.productPriceHistory.createMany({
+    data: [
+      { productId: product.id, price: 379.99, recordedAt: addStoreDays(startsAt, -40) },
+      { productId: product.id, price: 359.99, recordedAt: addStoreDays(startsAt, -20) },
+      { productId: product.id, price: 349.99, recordedAt: addStoreDays(startsAt, -5) },
+      { productId: product.id, price: 299.99, recordedAt: startsAt },
+    ],
+  });
+  await prisma.productPromotion.createMany({
+    data: [
+      {
+        productId: product.id,
+        regularPrice: 379.99,
+        promoPrice: 319.99,
+        startsAt: pastStart,
+        endsAt: pastEnd,
+        lowestPriceBeforePromo: 379.99,
+      },
+      {
+        productId: product.id,
+        regularPrice: regular,
+        promoPrice: promo,
+        startsAt,
+        endsAt,
+        lowestPriceBeforePromo: lowest,
+      },
+    ],
+  });
+  await prisma.product.update({
+    where: { id: product.id },
+    data: {
+      price: regular,
+      promoPrice: promo,
+      promoStartsAt: startsAt,
+      promoEndsAt: endsAt,
+      lowestPriceBeforePromo: lowest,
+    },
+  });
+}
+
 async function assignMissingWholesalePrices() {
   const products = await prisma.product.findMany({ where: { wholesalePrice: null } });
   for (const product of products) {
@@ -924,6 +981,7 @@ async function main() {
     await assignMissingBarcodes();
     await assignMissingWholesalePrices();
     await assignProductInformation();
+    await ensureSonyPromotion();
     await ensureMissingStaffUser("warehouse@volt.test", "Volt Warehouse", warehouseRole.id);
     await ensurePackageSizes();
     for (const email of DEMO_STAFF_EMAILS) {
@@ -1058,6 +1116,7 @@ async function main() {
       });
     }
   }
+  await ensureSonyPromotion();
 
   const demoEmail = "customer@volt.test";
   const demoUser = await prisma.user.upsert({

@@ -39,6 +39,7 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
       email?: string;
       createdAt: string;
       paidAt?: string | null;
+      hasDeviation?: boolean;
       shippingMethod?: string;
       trackingCarrier?: string | null;
       trackingCode?: string | null;
@@ -57,6 +58,8 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
     }[]
   >([]);
   const [error, setError] = useState("");
+  const [claimsOrder, setClaimsOrder] = useState<(typeof items)[number] | null>(null);
+  const [claimsNote, setClaimsNote] = useState("");
   const [shipOrder, setShipOrder] = useState<(typeof items)[number] | null>(null);
   const [refundOrder, setRefundOrder] = useState<(typeof items)[number] | null>(null);
   const [refundBusy, setRefundBusy] = useState(false);
@@ -99,6 +102,14 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
     if (status === "WITH_COURIER") {
       const row = items.find((item) => item.id === id);
       if (row) openShip(row);
+      return;
+    }
+    if (status === "CLAIMS") {
+      const row = items.find((item) => item.id === id);
+      if (row) {
+        setClaimsOrder(row);
+        setClaimsNote("");
+      }
       return;
     }
     setError("");
@@ -187,6 +198,52 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
           }}
           onSubmit={(body) => void refund(body)}
         />
+      </Modal>
+      <Modal
+        open={Boolean(claimsOrder)}
+        title="Mark as claims"
+        onClose={() => setClaimsOrder(null)}
+      >
+        {error && <p className="banner error">{error}</p>}
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!claimsOrder) return;
+            setError("");
+            void api(`/admin/orders/${claimsOrder.id}/status`, {
+              method: "POST",
+              token,
+              body: JSON.stringify({ status: "CLAIMS", note: claimsNote.trim() }),
+            })
+              .then(async () => {
+                setClaimsOrder(null);
+                await load();
+              })
+              .catch((err) => {
+                setError(err instanceof ApiError ? err.message : "Could not update order");
+              });
+          }}
+        >
+          <p className="muted">Claims pauses warehouse picking until the order is moved back to Paid or Processing.</p>
+          <label className="field">
+            <span>Reason</span>
+            <textarea
+              value={claimsNote}
+              onChange={(event) => setClaimsNote(event.target.value)}
+              required
+              maxLength={240}
+              rows={3}
+            />
+          </label>
+          <div className="row-actions">
+            <button className="primary" type="submit">
+              Set claims
+            </button>
+            <button className="ghost" type="button" onClick={() => setClaimsOrder(null)}>
+              Cancel
+            </button>
+          </div>
+        </form>
       </Modal>
       <Modal
         open={Boolean(shipOrder)}
@@ -304,6 +361,11 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
                     </td>
                     <td className="admin-order-cell">
                       <div className="admin-order-id">
+                        {item.hasDeviation ? (
+                          <span className="express-flag" title="Order has a deviation">
+                            <span aria-hidden="true">!</span>
+                          </span>
+                        ) : null}
                         <span className="locator-code">{reference}</span>
                         <span>{customer}</span>
                       </div>
@@ -346,6 +408,27 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
                           <p>
                             <span className="kicker">Paid</span>
                             <span>{item.paidAt ? formatStoreDateTime(item.paidAt) : "—"}</span>
+                          </p>
+                          <p>
+                            <span className="kicker">Deviation</span>
+                            <label className="field choice">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(item.hasDeviation)}
+                                onChange={() => {
+                                  void api(`/admin/orders/${item.id}/deviation`, {
+                                    method: "POST",
+                                    token,
+                                    body: JSON.stringify({ hasDeviation: !item.hasDeviation }),
+                                  })
+                                    .then(() => load())
+                                    .catch((err) => {
+                                      setError(err instanceof ApiError ? err.message : "Could not update warning");
+                                    });
+                                }}
+                              />
+                              <span>Show warning</span>
+                            </label>
                           </p>
                           <div>
                             <span className="kicker">Ordered</span>

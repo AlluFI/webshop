@@ -176,6 +176,12 @@ h1, h2, .serif { font-family: Fraunces, Georgia, serif; }
 }
 .card-actions .price { margin: 0; }
 .price { font-weight: 600; }
+.price-block { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.price-block .price { margin: 0; }
+.price-now { color: var(--danger); }
+.price-was { margin: 0; color: var(--muted); text-decoration: line-through; font-weight: 500; }
+.price-note { width: 100%; margin: 0; color: var(--muted); font-size: 0.92rem; }
+.price-history-list { margin: 8px 0 0; padding-left: 1.1rem; }
 .muted { color: var(--muted); }
 .stars { color: var(--gold); letter-spacing: 0.08em; }
 .layout-split {
@@ -765,7 +771,85 @@ button.link {
   box-shadow: var(--shadow);
 }
 .modal.wide {
-  width: min(44rem, calc(100vw - 2rem));
+  width: min(48rem, calc(100vw - 2rem));
+}
+.customer-detail {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.customer-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+.customer-detail-facts p,
+.customer-detail-section {
+  margin: 0;
+  min-width: 0;
+}
+.customer-detail-facts span:not(.kicker),
+.customer-detail-section > .kicker + * {
+  overflow-wrap: anywhere;
+}
+.customer-detail-section .kicker {
+  display: block;
+  margin-bottom: 8px;
+}
+.customer-detail-addresses {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.customer-order-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.customer-order {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7f3ea;
+}
+.customer-order-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.customer-order-toggle:hover .locator-code {
+  text-decoration: underline;
+}
+.customer-order-meta {
+  color: var(--muted);
+}
+.customer-order-items {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 10px;
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+@media (max-width: 720px) {
+  .customer-detail-facts,
+  .customer-detail-addresses {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .modal::backdrop {
   background: rgba(27, 36, 31, 0.45);

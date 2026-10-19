@@ -152,6 +152,19 @@ export const ORDER_STATUSES = [
   "DELIVERED",
   "CANCELLED",
   "REFUNDED",
+  "CLAIMS",
+] as const;
+
+export const DEVIATION_STATUSES = ["CLAIMS", "CANCELLED", "REFUNDED"] as const;
+
+export const MONEY_MOVING_ORDER_STATUSES = [
+  "PAID",
+  "PROCESSING",
+  "SHIPPING",
+  "WITH_COURIER",
+  "DELIVERED",
+  "REFUNDED",
+  "CLAIMS",
 ] as const;
 
 export const STAFF_REFUNDABLE_STATUSES = [
@@ -172,7 +185,16 @@ export const ORDER_STATUS_LABELS: Record<(typeof ORDER_STATUSES)[number], string
   DELIVERED: "Delivered",
   CANCELLED: "Cancelled",
   REFUNDED: "Refunded",
+  CLAIMS: "Claims",
 };
+
+export function isDeviationStatus(status?: string | null) {
+  return (DEVIATION_STATUSES as readonly string[]).includes(status ?? "");
+}
+
+export function isMoneyMovingOrderStatus(status?: string | null) {
+  return (MONEY_MOVING_ORDER_STATUSES as readonly string[]).includes(status ?? "");
+}
 
 export function formatOrderStatus(status: string) {
   return ORDER_STATUS_LABELS[status as (typeof ORDER_STATUSES)[number]] ?? status.replaceAll("_", " ");

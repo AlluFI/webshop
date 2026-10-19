@@ -20,6 +20,7 @@ export const registerSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
   displayName: z.string().trim().min(1).max(80).optional(),
+  marketingOptIn: z.boolean().optional().default(false),
   captchaToken: z.string().min(1, "Complete the CAPTCHA to create an account"),
 });
 
@@ -66,6 +67,7 @@ export const totpDisableSchema = z.object({
 
 export const updateProfileSchema = z.object({
   displayName: z.string().trim().min(1, "Name is required").max(80, "Name is too long"),
+  marketingOptIn: z.boolean().optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

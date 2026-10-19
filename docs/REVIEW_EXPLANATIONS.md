@@ -130,13 +130,14 @@ Demo: “sony” is typed in the header; Catalog is filtered to Audio + min rati
 | Unit — JWT | `apps/api/src/lib/jwt.test.ts` | Three-part token, payload claims, wrong secret, expired token, refresh cannot be used as access |
 | Unit — rotation | `apps/api/src/lib/tokens.test.ts` | New refresh issued, old refresh rejected, access denylist |
 | Unit — validation | `apps/api/src/lib/validation.test.ts` | Email/password/CAPTCHA field errors |
-| Unit — product model | `apps/api/src/lib/product-model.test.ts` | Required fields, dual-unit dimensions, rejects bad price/images |
+| Unit — product model | `apps/api/src/lib/product-model.test.ts` | Required fields, dual-unit dimensions, rejects bad price/images, promotion needs a date frame below retail |
+| Unit — pricing | `apps/api/src/lib/pricing.test.ts` | Finnish VAT split and promotion price only inside the date frame |
 | Unit — cart math | `apps/api/src/lib/cart-math.test.ts` | Line totals, free-shipping threshold, clamp to stock, euros → integer cents for Stripe |
 | Unit — encryption | `apps/api/src/lib/crypto.test.ts` | AES-256-GCM round-trip, unique ciphertext, reject tampered bytes |
 | Unit — order email | `apps/api/src/lib/order-email.test.ts` | Confirmation HTML/text includes items, totals, shipping, status |
 | Unit — carriers | `apps/api/src/lib/carriers/*-mock.test.ts` | Posti / PostNord / Budbee request mapping plus mock labels and tracking |
 | API + DB | `apps/api/test/auth.api.test.ts` | Register, verify, login, persist user, refresh reuse, logout revoke |
-| API + DB | `apps/api/test/catalog.api.test.ts` | Required product shape, facets, sort, suggestions, image bytes |
+| API + DB | `apps/api/test/catalog.api.test.ts` | Required product shape, facets, sort, suggestions, image bytes, live Sony promotion and 30-day lowest price (no public promotion history) |
 | API + DB | `apps/api/test/cart.api.test.ts` | Guest add/persist/update, stock 409, merge on login, logged-in cart across sessions |
 | API + DB | `apps/api/test/checkout.api.test.ts` | Empty-cart quote, field errors, Finnish postcode, prefill, encrypted address column |
 | API + DB | `apps/api/test/payment.api.test.ts` | Stripe place + webhook, decline restores stock, timeout holds nothing, last-unit race |
@@ -209,6 +210,7 @@ A **modular monolith** is used, not a distributed set of microservices.
 - The API is stateless aside from Redis, so more API containers can be run when traffic grows.
 - `apps/worker` consumes RabbitMQ **without** splitting the catalog database. Payment webhooks publish `payment.status`; the order is updated, email is sent, and inventory is restored by the worker. If payment volume later needs its own process, that module is already a boundary.
 - Carrier integrations are isolated under `apps/api/src/lib/carriers/`. Mock adapters return Volt labels; live adapters (Posti OAuth, PostNord OAuth, Budbee Basic auth) are selected with `*_MODE=live`.
+- BI and SaaS integrations are already in the codebase: `analytics_*` SQL views for a replica warehouse, hashed `volt_test_` / `volt_live_` API keys on `/api/v1/integrations/v1/*`, and HMAC-signed webhooks. Production cutover is replica access plus Admin → Integrations keys — see [INTEGRATIONS.md](INTEGRATIONS.md).
 
 **What is not done yet:** a separate “User Service” and “Product Service” with two databases. Joining products to brands/categories and to order lines is exactly what one relational database is for.
 

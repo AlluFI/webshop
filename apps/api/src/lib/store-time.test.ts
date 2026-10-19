@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   addStoreDays,
+  bookkeepingRetainUntil,
   formatStoreDateTime,
+  parseStoreDateTimeInput,
   storeCalendarDate,
   storeDateTime,
   storeDayEnd,
   storeDayStart,
+  toDateTimeLocal,
 } from "@volt/shared";
 
 describe("Helsinki store clock", () => {
@@ -29,5 +32,16 @@ describe("Helsinki store clock", () => {
   it("adds delivery days on the Helsinki calendar", () => {
     const from = storeDateTime("2026-10-11", "23:30:00");
     expect(storeCalendarDate(addStoreDays(from, 1))).toBe("2026-10-12");
+  });
+
+  it("round-trips datetime-local values on the Helsinki clock", () => {
+    expect(toDateTimeLocal("2026-10-01T07:00:00.000Z")).toBe("2026-10-01T10:00");
+    expect(parseStoreDateTimeInput("2026-10-01T10:00")?.toISOString()).toBe("2026-10-01T07:00:00.000Z");
+    expect(parseStoreDateTimeInput("")).toBeNull();
+  });
+
+  it("keeps Finnish voucher snapshots until 31 Dec of year plus 6", () => {
+    const until = bookkeepingRetainUntil("2026-03-15T10:00:00.000Z");
+    expect(storeCalendarDate(until)).toBe("2032-12-31");
   });
 });

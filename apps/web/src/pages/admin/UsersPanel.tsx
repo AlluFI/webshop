@@ -3,7 +3,7 @@ import { ALL_ROLES, STAFF_ROLES, adminCreateEmployeeSchema, isStaffRole, updateP
 import { api, ApiError } from "../../api";
 import { Modal } from "./Modal";
 
-type RoleFilter = "" | "staff" | (typeof ALL_ROLES)[number];
+type RoleFilter = "" | "staff" | (typeof STAFF_ROLES)[number];
 
 type UserRow = {
   id: string;
@@ -181,9 +181,8 @@ export function UsersPanel({ token }: { token: string }) {
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
             >
-              <option value="">All</option>
-              <option value="staff">All employees</option>
-              {ALL_ROLES.map((role) => (
+              <option value="">All employees</option>
+              {STAFF_ROLES.map((role) => (
                 <option key={role} value={role}>
                   {role}
                 </option>
@@ -196,7 +195,8 @@ export function UsersPanel({ token }: { token: string }) {
         </div>
       </div>
       <p className="muted">
-        Add staff with <strong>Add employee</strong>. Customer roles cannot be changed. Changing a
+        Staff accounts only. Customer profiles live under <strong>Customers</strong>. Add staff with{" "}
+        <strong>Add employee</strong>. Customer roles cannot be changed. Changing a
         staff role asks for confirmation. Only admins can change employee names.
       </p>
       <Modal

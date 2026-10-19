@@ -34,7 +34,7 @@ export function CustomersPanel({ token }: { token: string }) {
     <div>
       {error && <p className="banner error">{error}</p>}
       <div className="toolbar">
-        <h2>Customers</h2>
+        <h2>Customer sales</h2>
         {report && (
           <p className="muted">
             {report.from} to {report.to}

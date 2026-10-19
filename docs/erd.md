@@ -20,6 +20,8 @@ erDiagram
   Product ||--o{ PurchaseOrderItem : restocked
   Product ||--o{ ProductImage : has
   Product ||--o{ ProductAttribute : has
+  Product ||--o{ ProductPriceHistory : priced
+  Product ||--o{ ProductPromotion : promoted
 
   Role {
     uuid id PK
@@ -31,6 +33,9 @@ erDiagram
     string passwordHash
     uuid roleId FK
     boolean totpEnabled
+    boolean marketingOptIn
+    datetime deletedAt
+    datetime retainUntil
   }
   TotpSecret {
     uuid id PK
@@ -73,6 +78,10 @@ erDiagram
     uuid id PK
     string slug UK
     decimal price
+    decimal promoPrice
+    datetime promoStartsAt
+    datetime promoEndsAt
+    decimal lowestPriceBeforePromo
     decimal wholesalePrice
     decimal vatRate
     int stockQuantity
@@ -103,6 +112,21 @@ erDiagram
     uuid productId FK
     string path
     string altText
+  }
+  ProductPriceHistory {
+    uuid id PK
+    uuid productId FK
+    decimal price
+    datetime recordedAt
+  }
+  ProductPromotion {
+    uuid id PK
+    uuid productId FK
+    decimal regularPrice
+    decimal promoPrice
+    datetime startsAt
+    datetime endsAt
+    decimal lowestPriceBeforePromo
   }
 ```
 
@@ -152,6 +176,7 @@ erDiagram
     uuid id PK
     uuid userId FK
     string status
+    boolean hasDeviation
     decimal total
     string shippingMethod
     string shippingAddressEnc
@@ -216,4 +241,18 @@ erDiagram
     int minDays
     int maxDays
   }
+  IntegrationApiKey {
+    uuid id PK
+    string keyHash UK
+    string scopes
+    datetime revokedAt
+  }
+  IntegrationEndpoint {
+    uuid id PK
+    string url
+    string secretEnc
+    string events
+  }
 ```
+
+Read-only warehouse views (`analytics_orders`, `analytics_order_items`, `analytics_products`, `analytics_customers`, `analytics_order_events`) sit on top of these tables and omit encrypted contact columns. Machine keys and webhooks are created in Admin → Integrations. See [INTEGRATIONS.md](INTEGRATIONS.md).

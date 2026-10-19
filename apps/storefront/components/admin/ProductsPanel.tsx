@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { FINLAND_VAT_RATE, formatLocatorCode, normalizeBarcode, productPricing } from "@volt/shared";
+import { FINLAND_VAT_RATE, formatLocatorCode, normalizeBarcode, productPricing, toDateTimeLocal } from "@volt/shared";
 import { api, ApiError } from "@/lib/api";
-import { money, type Product } from "@/lib/product";
+import { money, type Product, type PromotionPeriod } from "@/lib/product";
+import { PromotionHistoryModal } from "@/components/product-price";
 import { BarcodeScanField } from "./BarcodeScanField";
 import { Modal } from "./Modal";
 
@@ -10,6 +11,9 @@ const emptyProduct = {
   name: "",
   description: "",
   price: "99",
+  promoPrice: "",
+  promoStartsAt: "",
+  promoEndsAt: "",
   wholesalePrice: "",
   vatRate: String(FINLAND_VAT_RATE),
   stockQuantity: "10",
@@ -57,6 +61,9 @@ export function ProductsPanel({ token }: { token: string }) {
   const [receiveQty, setReceiveQty] = useState("1");
   const [form, setForm] = useState(emptyProduct);
   const [openRows, setOpenRows] = useState<string[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyTitle, setHistoryTitle] = useState("");
+  const [historyRows, setHistoryRows] = useState<PromotionPeriod[]>([]);
 
   function toggleRow(id: string) {
     setOpenRows((current) =>
@@ -99,6 +106,9 @@ export function ProductsPanel({ token }: { token: string }) {
       name: item.name,
       description: item.description,
       price: String(item.price),
+      promoPrice: item.promoPrice == null ? "" : String(item.promoPrice),
+      promoStartsAt: toDateTimeLocal(item.promoStartsAt),
+      promoEndsAt: toDateTimeLocal(item.promoEndsAt),
       wholesalePrice: item.wholesalePrice == null ? "" : String(item.wholesalePrice),
       vatRate: String(item.vatRate ?? FINLAND_VAT_RATE),
       stockQuantity: String(item.stockQuantity),
@@ -137,6 +147,9 @@ export function ProductsPanel({ token }: { token: string }) {
     const body = JSON.stringify({
       ...form,
       price: Number(form.price),
+      promoPrice: form.promoPrice === "" ? null : Number(form.promoPrice),
+      promoStartsAt: form.promoStartsAt || null,
+      promoEndsAt: form.promoEndsAt || null,
       wholesalePrice: form.wholesalePrice === "" ? null : Number(form.wholesalePrice),
       vatRate: Number(form.vatRate || FINLAND_VAT_RATE),
       stockQuantity: Number(form.stockQuantity),
@@ -173,6 +186,18 @@ export function ProductsPanel({ token }: { token: string }) {
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save product");
+    }
+  }
+
+  async function openHistory(item: Product) {
+    setError("");
+    try {
+      const data = await api<{ items: PromotionPeriod[] }>(`/admin/products/${item.id}/promotions`, { token });
+      setHistoryTitle(item.name);
+      setHistoryRows(data.items);
+      setHistoryOpen(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not load promotion history");
     }
   }
 
@@ -297,6 +322,50 @@ export function ProductsPanel({ token }: { token: string }) {
               />
             </label>
           </div>
+          <div className="dims">
+            <label className="field">
+              <span>Promotion price</span>
+              <input
+                value={form.promoPrice}
+                onChange={(e) => setForm({ ...form, promoPrice: e.target.value })}
+                placeholder="Leave empty for no promotion"
+              />
+            </label>
+            <label className="field">
+              <span>Promotion starts</span>
+              <input
+                type="datetime-local"
+                value={form.promoStartsAt}
+                onChange={(e) => setForm({ ...form, promoStartsAt: e.target.value })}
+              />
+            </label>
+            <label className="field">
+              <span>Promotion ends</span>
+              <input
+                type="datetime-local"
+                value={form.promoEndsAt}
+                onChange={(e) => setForm({ ...form, promoEndsAt: e.target.value })}
+              />
+            </label>
+          </div>
+          <p className="muted">
+            A promotion is live only inside this date frame. The lowest shop price from the 30 days before
+            the start is stored when you save. Clear all three fields to remove the promotion.
+          </p>
+          {editingId ? (
+            <p>
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => {
+                  const item = items.find((row) => row.id === editingId);
+                  if (item) void openHistory(item);
+                }}
+              >
+                History
+              </button>
+            </p>
+          ) : null}
           <div className="dims">
             <label className="field">
               <span>VAT %</span>
@@ -655,7 +724,16 @@ export function ProductsPanel({ token }: { token: string }) {
                     <td>
                       <Link href={`/products/${item.slug}`}>{item.name}</Link>
                     </td>
-                    <td className="num">{money(item.price)}</td>
+                    <td className="num">
+                      {item.onPromotion ? (
+                        <>
+                          <strong>{money(item.sellingPrice ?? item.price)}</strong>
+                          <div className="muted">{money(item.price)}</div>
+                        </>
+                      ) : (
+                        money(item.price)
+                      )}
+                    </td>
                     <td className="num">{item.wholesalePrice == null ? "—" : money(item.wholesalePrice)}</td>
                     <td className="num">
                       {item.pricing?.margin == null ? "—" : money(item.pricing.margin)}
@@ -705,6 +783,12 @@ export function ProductsPanel({ token }: { token: string }) {
           </tbody>
         </table>
       </div>
+      <PromotionHistoryModal
+        open={historyOpen}
+        title={historyTitle}
+        periods={historyRows}
+        onClose={() => setHistoryOpen(false)}
+      />
     </div>
   );
 }

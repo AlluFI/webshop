@@ -8,6 +8,8 @@ import {
   receiveStockSchema,
   restockOrderSchema,
   staffRefundRequestSchema,
+  createIntegrationKeySchema,
+  createIntegrationWebhookSchema,
 } from "@volt/shared";
 import { HttpError } from "../http-error.js";
 import { config } from "../config.js";
@@ -20,6 +22,7 @@ import { salesService } from "../services/sales.service.js";
 import { reviewService } from "../services/review.service.js";
 import { shippingService } from "../services/shipping.service.js";
 import { packageService } from "../services/package.service.js";
+import { integrationService } from "../services/integration.service.js";
 
 export const adminRouter = Router();
 const upload = multer({
@@ -78,6 +81,14 @@ adminRouter.patch(
   asyncHandler(async (req, res) => {
     const user = (req as AuthedRequest).user;
     res.json(await adminService.updateProduct(user.id, String(req.params.id), req.body));
+  }),
+);
+
+adminRouter.get(
+  "/products/:id/promotions",
+  requirePermission("products"),
+  asyncHandler(async (req, res) => {
+    res.json(await adminService.listProductPromotions(String(req.params.id)));
   }),
 );
 
@@ -248,12 +259,87 @@ adminRouter.post(
 );
 
 adminRouter.post(
+  "/orders/:id/deviation",
+  requirePermission("orders"),
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.json(await adminService.setOrderDeviation(user.id, String(req.params.id), req.body));
+  }),
+);
+
+adminRouter.post(
   "/orders/:id/refund",
   requirePermission("refunds"),
   validate(staffRefundRequestSchema),
   asyncHandler(async (req, res) => {
     const user = (req as AuthedRequest).user;
     res.json(await adminService.refund(user.id, String(req.params.id), req.body));
+  }),
+);
+
+adminRouter.get(
+  "/integrations/keys",
+  requirePermission("integrations"),
+  asyncHandler(async (_req, res) => {
+    res.json(await integrationService.listKeys());
+  }),
+);
+
+adminRouter.post(
+  "/integrations/keys",
+  requirePermission("integrations"),
+  validate(createIntegrationKeySchema),
+  asyncHandler(async (req, res) => {
+    res.status(201).json(await integrationService.createKey((req as AuthedRequest).user.id, req.body));
+  }),
+);
+
+adminRouter.post(
+  "/integrations/keys/:id/revoke",
+  requirePermission("integrations"),
+  asyncHandler(async (req, res) => {
+    res.json(await integrationService.revokeKey((req as AuthedRequest).user.id, String(req.params.id)));
+  }),
+);
+
+adminRouter.get(
+  "/integrations/webhooks",
+  requirePermission("integrations"),
+  asyncHandler(async (_req, res) => {
+    res.json(await integrationService.listWebhooks());
+  }),
+);
+
+adminRouter.post(
+  "/integrations/webhooks",
+  requirePermission("integrations"),
+  validate(createIntegrationWebhookSchema),
+  asyncHandler(async (req, res) => {
+    res.status(201).json(await integrationService.createWebhook((req as AuthedRequest).user.id, req.body));
+  }),
+);
+
+adminRouter.delete(
+  "/integrations/webhooks/:id",
+  requirePermission("integrations"),
+  asyncHandler(async (req, res) => {
+    res.json(await integrationService.deleteWebhook((req as AuthedRequest).user.id, String(req.params.id)));
+  }),
+);
+
+adminRouter.get(
+  "/customers",
+  requirePermission("customers"),
+  asyncHandler(async (req, res) => {
+    res.json(await adminService.listCustomers(req.query));
+  }),
+);
+
+adminRouter.get(
+  "/customers/:id",
+  requirePermission("customers"),
+  asyncHandler(async (req, res) => {
+    res.json(await adminService.getCustomer(String(req.params.id)));
   }),
 );
 

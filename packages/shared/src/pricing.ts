@@ -31,6 +31,35 @@ export function vatIncludedLabel(rate = FINLAND_VAT_RATE) {
   return `VAT ${rate}% (included)`;
 }
 
+export function isOnPromotion(
+  regularPrice: number,
+  promoPrice?: number | null,
+  startsAt?: Date | string | null,
+  endsAt?: Date | string | null,
+  now: Date = new Date(),
+) {
+  if (promoPrice == null || !Number.isFinite(promoPrice) || promoPrice <= 0 || promoPrice >= regularPrice) {
+    return false;
+  }
+  if (!startsAt || !endsAt) return false;
+  const start = startsAt instanceof Date ? startsAt : new Date(startsAt);
+  const end = endsAt instanceof Date ? endsAt : new Date(endsAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+  return now.getTime() >= start.getTime() && now.getTime() <= end.getTime();
+}
+
+export function sellingPriceOf(
+  regularPrice: number,
+  promoPrice?: number | null,
+  startsAt?: Date | string | null,
+  endsAt?: Date | string | null,
+  now: Date = new Date(),
+) {
+  return isOnPromotion(regularPrice, promoPrice, startsAt, endsAt, now)
+    ? roundMoney(Number(promoPrice))
+    : roundMoney(regularPrice);
+}
+
 export const SALES_RANGES = [
   "last_7_days",
   "last_30_days",

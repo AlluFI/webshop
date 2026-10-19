@@ -28,6 +28,7 @@ import { randomToken, sha256Hex } from "../lib/hash.js";
 import { orderTotal, taxAmount, toCents } from "../lib/cart-math.js";
 import { requireStripe, stripeConfigured, stripePublishableKey } from "../lib/stripe.js";
 import { publishPaymentStatus } from "../lib/queue.js";
+import { emitOrderChange } from "../lib/integration-events.js";
 import { cartService, type CartContext } from "./cart.service.js";
 import { addressService } from "./address.service.js";
 import { shippingService } from "./shipping.service.js";
@@ -152,6 +153,7 @@ async function publicOrder(order: NonNullable<Awaited<ReturnType<typeof loadOrde
     id: order.id,
     reference: formatOrderReference(order.id),
     status,
+    hasDeviation: order.hasDeviation,
     paymentStatus: (order.payment?.status ?? "REQUIRES_PAYMENT") as PaymentStatus,
     currency: order.currency,
     subtotal,
@@ -302,7 +304,7 @@ async function closePendingCheckout(
     });
     await tx.order.update({
       where: { id: order.id },
-      data: { status: "CANCELLED" },
+      data: { status: "CANCELLED", hasDeviation: true },
     });
     await tx.orderStatusEvent.create({
       data: { orderId: order.id, status: "CANCELLED", note },
@@ -419,7 +421,7 @@ export const orderService = {
                 productId: item.productId,
                 productName: product.name,
                 quantity: item.quantity,
-                unitPrice: product.price,
+                unitPrice: item.price,
                 lineTotal: new Prisma.Decimal(item.lineTotal),
                 thumbnailPath: product.images[0]?.thumbPath || product.images[0]?.path || null,
                 locatorCode: formatLocatorCode(
@@ -638,6 +640,11 @@ export const orderService = {
       throw new HttpError(409, "Only unprocessed orders can be cancelled.");
     }
     await closePendingCheckout(order, "Cancelled before payment completed.");
+    emitOrderChange("CANCELLED", {
+      id: order.id,
+      reference: formatOrderReference(order.id),
+      status: "CANCELLED",
+    });
     const loaded = await loadOrder(orderId);
     if (!loaded) throw new HttpError(404, "Order not found");
     return await publicOrder(loaded);
@@ -695,7 +702,7 @@ export const orderService = {
       });
       await tx.order.update({
         where: { id: orderId },
-        data: { status: "REFUNDED" },
+        data: { status: "REFUNDED", hasDeviation: true },
       });
       await tx.orderStatusEvent.create({
         data: { orderId, status: "REFUNDED", note },
@@ -703,6 +710,11 @@ export const orderService = {
     });
     const loaded = await loadOrder(orderId);
     if (!loaded) throw new HttpError(404, "Order not found");
+    emitOrderChange("REFUNDED", {
+      id: orderId,
+      reference: formatOrderReference(orderId),
+      status: "REFUNDED",
+    });
     return await publicOrder(loaded);
   },
 

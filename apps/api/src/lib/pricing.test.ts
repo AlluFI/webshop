@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   FINLAND_VAT_RATE,
+  isOnPromotion,
   netFromInclusive,
   productPricing,
+  sellingPriceOf,
   vatFromInclusive,
   vatIncludedLabel,
 } from "@volt/shared";
@@ -20,5 +22,14 @@ describe("Finnish inclusive VAT pricing", () => {
     expect(pricing.vat).toBe(25.5);
     expect(pricing.margin).toBe(30);
     expect(pricing.marginPct).toBe(30);
+  });
+
+  it("uses the promotion price only inside the date frame", () => {
+    const start = new Date("2026-10-01T00:00:00.000Z");
+    const end = new Date("2026-10-15T23:59:59.000Z");
+    expect(isOnPromotion(349.99, 299.99, start, end, new Date("2026-10-08T12:00:00.000Z"))).toBe(true);
+    expect(isOnPromotion(349.99, 299.99, start, end, new Date("2026-09-30T12:00:00.000Z"))).toBe(false);
+    expect(sellingPriceOf(349.99, 299.99, start, end, new Date("2026-10-08T12:00:00.000Z"))).toBe(299.99);
+    expect(sellingPriceOf(349.99, 299.99, start, end, new Date("2026-10-16T12:00:00.000Z"))).toBe(349.99);
   });
 });

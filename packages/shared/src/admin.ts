@@ -5,6 +5,7 @@ import { ORDER_STATUSES } from "./checkout.js";
 import { barcodeSchema, locatorPartSchema, normalizeBarcode } from "./product.js";
 import { FINLAND_VAT_RATE, SALES_GROUPS, SALES_RANGES } from "./pricing.js";
 import { SHIPPING_CARRIERS } from "./shipping.js";
+import { parseStoreDateTimeInput } from "./time.js";
 
 const dimension = z.coerce.number().positive("Must be a positive number");
 
@@ -44,6 +45,12 @@ export const adminProductSchema = z.object({
   slug: z.string().trim().min(1).max(80).optional(),
   description: z.string().trim().min(1).max(8000),
   price: z.coerce.number().positive("Retail price must be greater than 0"),
+  promoPrice: z.preprocess(
+    (value) => (value === "" || value == null ? null : value),
+    z.coerce.number().positive("Promotion price must be greater than 0").nullable(),
+  ),
+  promoStartsAt: z.preprocess((value) => parseStoreDateTimeInput(value as string | Date | null), z.date().nullable()),
+  promoEndsAt: z.preprocess((value) => parseStoreDateTimeInput(value as string | Date | null), z.date().nullable()),
   wholesalePrice: z.preprocess(
     (value) => (value === "" || value == null ? null : value),
     z.coerce.number().min(0).nullable(),
@@ -92,6 +99,31 @@ export const adminProductSchema = z.object({
       }),
     )
     .optional(),
+}).superRefine((value, ctx) => {
+  const hasPromo = value.promoPrice != null || value.promoStartsAt != null || value.promoEndsAt != null;
+  if (!hasPromo) return;
+  if (value.promoPrice == null || value.promoStartsAt == null || value.promoEndsAt == null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["promoPrice"],
+      message: "Set a promotion price and a start and end date",
+    });
+    return;
+  }
+  if (value.promoPrice >= value.price) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["promoPrice"],
+      message: "Promotion price must be lower than the regular retail price",
+    });
+  }
+  if (value.promoEndsAt.getTime() <= value.promoStartsAt.getTime()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["promoEndsAt"],
+      message: "Promotion must end after it starts",
+    });
+  }
 });
 
 export const adminCategorySchema = z.object({
@@ -117,13 +149,33 @@ const isoDate = z
   .optional()
   .or(z.literal(""));
 
-export const adminOrderStatusSchema = z.object({
-  status: z.enum(ORDER_STATUSES),
-  note: z.string().trim().max(240).optional().or(z.literal("")),
-  carrier: z.enum(SHIPPING_CARRIERS).optional(),
-  trackingCode: z.string().trim().max(120).optional().or(z.literal("")),
-  estimatedDeliveryFrom: isoDate,
-  estimatedDeliveryTo: isoDate,
+export const adminOrderStatusSchema = z
+  .object({
+    status: z.enum(ORDER_STATUSES),
+    note: z.string().trim().max(240).optional().or(z.literal("")),
+    carrier: z.enum(SHIPPING_CARRIERS).optional(),
+    trackingCode: z.string().trim().max(120).optional().or(z.literal("")),
+    estimatedDeliveryFrom: isoDate,
+    estimatedDeliveryTo: isoDate,
+  })
+  .superRefine((value, ctx) => {
+    if (value.status === "CLAIMS" && !value.note?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["note"],
+        message: "Write a reason when marking an order as claims",
+      });
+    }
+  });
+
+export const adminOrderDeviationSchema = z.object({
+  hasDeviation: z.boolean(),
+});
+
+export const adminCustomerListQuerySchema = z.object({
+  q: z.string().trim().max(80).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(20),
 });
 
 export const pickOrderSchema = z.object({
@@ -152,7 +204,7 @@ export const adminShippingSchema = z.object({
   active: z.boolean().optional(),
 });
 
-export const USER_ROLE_FILTERS = ["staff", ...ALL_ROLES] as const;
+export const USER_ROLE_FILTERS = ["staff", ...STAFF_ROLES] as const;
 
 export const adminUserListQuerySchema = z.object({
   q: z.string().trim().max(80).optional(),
@@ -231,6 +283,8 @@ export const AUDIT_ENTITIES = [
   "wholesaler",
   "purchase_order",
   "user",
+  "integration_key",
+  "integration_webhook",
 ] as const;
 
 export const adminSalesQuerySchema = z.object({
