@@ -23,6 +23,7 @@ export const ADMIN_PERMISSIONS = {
   packages: ["admin", "support", "sales", "warehouse"],
   audit: ["admin", "support", "sales"],
   integrations: ["admin"],
+  tickets: ["admin", "support"],
 } as const;
 
 export type AdminPermission = keyof typeof ADMIN_PERMISSIONS;

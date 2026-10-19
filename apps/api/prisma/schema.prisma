@@ -40,6 +40,8 @@ model User {
   reviews                 Review[]
   reviewVotes             ReviewVote[]
   auditLogs               AuditLog[]
+  supportTickets          SupportTicket[]
+  assistantThreads        AssistantThread[]
 
   @@map("users")
 }
@@ -383,6 +385,7 @@ model Order {
   events              OrderStatusEvent[]
   payment             Payment?
   reservations        InventoryReservation[]
+  supportTickets      SupportTicket[]
 
   @@index([userId])
   @@index([status])
@@ -581,4 +584,65 @@ model IntegrationEndpoint {
   createdAt  DateTime  @default(now())
 
   @@map("integration_endpoints")
+}
+
+enum SupportTicketKind {
+  ENQUIRY
+  CLAIM
+}
+
+enum SupportTicketStatus {
+  OPEN
+  PENDING
+  DONE
+}
+
+model SupportTicket {
+  id             String              @id @default(uuid())
+  reference      String              @unique
+  externalKey    String              @unique
+  kind           SupportTicketKind
+  status         SupportTicketStatus @default(OPEN)
+  subject        String
+  message        String
+  customerName   String
+  customerEmail  String
+  userId         String?
+  user           User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orderId        String?
+  order          Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  payloadJson    String
+  lastError      String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([userId])
+  @@map("support_tickets")
+}
+
+model AssistantThread {
+  id        String              @id @default(uuid())
+  userId    String?
+  user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  messages  AssistantMessage[]
+
+  @@index([userId])
+  @@map("assistant_threads")
+}
+
+model AssistantMessage {
+  id        String          @id @default(uuid())
+  threadId  String
+  thread    AssistantThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  uiBlocks  Json?
+  createdAt DateTime        @default(now())
+
+  @@index([threadId, createdAt])
+  @@map("assistant_messages")
 }

@@ -16,6 +16,7 @@ A B2C electronics shop is provided: accounts, a PostgreSQL catalog, faceted sear
 - **Load:** k6 (`load-tests/shop.js`) — report in [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
 - **Staff Admin:** tab-by-tab guide and roles in [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - **BI / integrations:** SQL views + machine API keys + signed webhooks — [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
+- **Voltie:** customer shop assistant + mock Jira tickets — [docs/VOLTIE.md](docs/VOLTIE.md)
 - **Monorepo:** pnpm workspaces (`apps/api`, `apps/web`, `apps/storefront`, `apps/worker`, `packages/shared`)
 
 ## Entity relationship diagram

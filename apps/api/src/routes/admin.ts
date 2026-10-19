@@ -23,6 +23,7 @@ import { reviewService } from "../services/review.service.js";
 import { shippingService } from "../services/shipping.service.js";
 import { packageService } from "../services/package.service.js";
 import { integrationService } from "../services/integration.service.js";
+import { listSupportTickets } from "../lib/tickets.js";
 
 export const adminRouter = Router();
 const upload = multer({
@@ -324,6 +325,14 @@ adminRouter.delete(
   requirePermission("integrations"),
   asyncHandler(async (req, res) => {
     res.json(await integrationService.deleteWebhook((req as AuthedRequest).user.id, String(req.params.id)));
+  }),
+);
+
+adminRouter.get(
+  "/tickets",
+  requirePermission("tickets"),
+  asyncHandler(async (_req, res) => {
+    res.json(await listSupportTickets());
   }),
 );
 

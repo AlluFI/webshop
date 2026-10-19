@@ -40,7 +40,7 @@ export function ContactForm() {
   return (
     <section className="auth-card" style={{ maxWidth: 560 }}>
       <h1>Contact</h1>
-      <p className="muted">Questions about an order, a spec, or a review? We read every note.</p>
+      <p className="muted">Questions about an order, a spec, or a review? We read every note. Voltie (bottom right) can search the shop and open the same support ticket without Jira.</p>
       {done && <p className="banner ok">{done} Check Mailpit on port 8025 in Docker.</p>}
       {error && <p className="banner error">{error}</p>}
       {!done && (

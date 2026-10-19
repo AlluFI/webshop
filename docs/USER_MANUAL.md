@@ -17,7 +17,7 @@ Admin is opened at http://localhost:8088/admin (or https://localhost:8443/admin)
 - **Orders:** orders, order handling
 - **Reports:** overview, sales, customer sales
 - **Shipping:** methods, packages
-- **Admin:** users, customers, reviews, bulk, log, integrations
+- **Admin:** users, customers, reviews, tickets, bulk, log, integrations
 
 Order numbers are formatted as **`VC-` plus eight uppercase characters** (for example `VC-23AAA1B2`). The same reference is shown on Orders, Order handling, the customer order page, and Mailpit emails.
 
@@ -43,6 +43,7 @@ After a successful password check, a separate two-factor form is mounted. Authen
 | bulk | yes | yes | — | — |
 | log | yes | yes | yes | — |
 | integrations | yes | — | — | — |
+| tickets | yes | — | yes | — |
 
 Refunds on the **orders** tab are limited to **admin** and **support**. Status changes and courier hand-off are allowed for sales and warehouse. Refunds are not allowed for those roles.
 
@@ -250,6 +251,14 @@ Staff change history is listed (who changed what, old value → new value).
 
 - Filter by entity: product, category, order, review, shipping, wholesaler, purchase order, integration key, integration webhook
 - Paginated list with time, actor, and field diffs
+
+---
+
+## tickets
+
+**Who:** admin, support
+
+Inbox for Voltie enquiries and claims. Default `TICKET_MODE=mock` stores the ticket and emails a Jira-shaped payload to Mailpit (`support@localhost`) so the demo works without Jira. See [VOLTIE.md](VOLTIE.md).
 
 ---
 

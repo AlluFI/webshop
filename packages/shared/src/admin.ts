@@ -285,6 +285,7 @@ export const AUDIT_ENTITIES = [
   "user",
   "integration_key",
   "integration_webhook",
+  "support_ticket",
 ] as const;
 
 export const adminSalesQuerySchema = z.object({

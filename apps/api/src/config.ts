@@ -72,6 +72,12 @@ export const config = {
   budbeeApiSecret: process.env.BUDBEE_API_SECRET ?? "",
   budbeeBaseUrl: process.env.BUDBEE_BASE_URL ?? "https://api.staging.budbee.com",
   budbeeCollectionId: number("BUDBEE_COLLECTION_ID", 0),
+  ticketMode: process.env.TICKET_MODE === "live" ? "live" : "mock",
+  ticketWebhookUrl: process.env.TICKET_WEBHOOK_URL ?? "",
+  assistantLlmProvider: (process.env.ASSISTANT_LLM_PROVIDER ?? "").toLowerCase(),
+  openaiApiKey: process.env.OPENAI_API_KEY ?? "",
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  assistantModel: process.env.ASSISTANT_MODEL ?? "",
 };
 
 if (config.jwtAccessSecret.length < 32 || config.jwtRefreshSecret.length < 32) {

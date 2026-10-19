@@ -886,6 +886,7 @@ describeLive("admin API", () => {
     expect((await request(app).get("/api/v1/admin/users").set("Authorization", `Bearer ${token}`)).status).toBe(403);
     expect((await request(app).get("/api/v1/admin/customers").set("Authorization", `Bearer ${token}`)).status).toBe(403);
     expect((await request(app).get("/api/v1/admin/integrations/keys").set("Authorization", `Bearer ${token}`)).status).toBe(403);
+    expect((await request(app).get("/api/v1/admin/tickets").set("Authorization", `Bearer ${token}`)).status).toBe(403);
     expect(
       (
         await request(app)

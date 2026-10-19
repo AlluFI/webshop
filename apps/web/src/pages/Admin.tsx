@@ -18,6 +18,7 @@ import { PackagesPanel } from "./admin/PackagesPanel";
 import { ShippingPanel } from "./admin/ShippingPanel";
 import { UsersPanel } from "./admin/UsersPanel";
 import { IntegrationsPanel } from "./admin/IntegrationsPanel";
+import { TicketsPanel } from "./admin/TicketsPanel";
 import { WholesalersPanel } from "./admin/WholesalersPanel";
 
 type Tab =
@@ -36,7 +37,8 @@ type Tab =
   | "packages"
   | "bulk"
   | "log"
-  | "integrations";
+  | "integrations"
+  | "tickets";
 
 type GroupId = "product" | "orders" | "reports" | "shipping" | "admin";
 
@@ -57,6 +59,7 @@ const TABS: { id: Tab; permission: AdminPermission; label: string }[] = [
   { id: "bulk", permission: "catalog", label: "Bulk" },
   { id: "log", permission: "audit", label: "Log" },
   { id: "integrations", permission: "integrations", label: "Integrations" },
+  { id: "tickets", permission: "tickets", label: "Tickets" },
 ];
 
 const GROUPS: { id: GroupId; label: string; tabs: Tab[] }[] = [
@@ -64,7 +67,7 @@ const GROUPS: { id: GroupId; label: string; tabs: Tab[] }[] = [
   { id: "orders", label: "Orders", tabs: ["orders", "picking"] },
   { id: "reports", label: "Reports", tabs: ["overview", "sales", "customer-sales"] },
   { id: "shipping", label: "Shipping", tabs: ["shipping", "packages"] },
-  { id: "admin", label: "Admin", tabs: ["users", "customers", "reviews", "bulk", "log", "integrations"] },
+  { id: "admin", label: "Admin", tabs: ["users", "customers", "reviews", "tickets", "bulk", "log", "integrations"] },
 ];
 
 const TAB_BY_ID = new Map(TABS.map((item) => [item.id, item]));
@@ -175,6 +178,7 @@ export function AdminPage() {
           {tab === "bulk" && <BulkPanel token={accessToken} />}
           {tab === "log" && <LogPanel token={accessToken} />}
           {tab === "integrations" && <IntegrationsPanel token={accessToken} />}
+          {tab === "tickets" && <TicketsPanel token={accessToken} />}
         </div>
       </div>
     </section>

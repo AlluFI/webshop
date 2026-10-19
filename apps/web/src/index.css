@@ -1412,3 +1412,70 @@ button.link {
   .page { padding: 20px 12px 48px; }
   .header-inner { padding: 12px; }
 }
+
+.voltie {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+}
+.voltie-fab {
+  width: 64px;
+  height: 64px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--forest);
+  color: #fffdf8;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+.voltie-panel {
+  width: min(400px, calc(100vw - 24px));
+  height: min(540px, calc(100vh - 40px));
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.voltie-head, .voltie-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.voltie-form { border-bottom: 0; border-top: 1px solid var(--line); }
+.voltie-form input { flex: 1; min-width: 0; }
+.voltie-log {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.voltie-bubble {
+  max-width: 92%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #efe8d8;
+}
+.voltie-bubble.user {
+  justify-self: end;
+  background: #e4eee8;
+}
+.voltie-bubble p { margin: 0; white-space: pre-wrap; }
+.voltie-products {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.voltie-products li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}

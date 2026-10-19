@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Providers } from "@/components/providers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { VoltieChat } from "@/components/voltie-chat";
 import { fitMetaDescription, fitPageTitle } from "@/lib/seo";
 import "./globals.css";
 
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             {children}
           </main>
           <SiteFooter />
+          <VoltieChat />
         </Providers>
       </body>
     </html>

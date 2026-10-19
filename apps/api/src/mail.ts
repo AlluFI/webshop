@@ -87,4 +87,38 @@ export const mail = {
       `From: ${input.name} <${input.email}>\n\n${input.message}\n`,
     );
   },
+
+  async sendSupportTicket(input: {
+    reference: string;
+    externalKey: string;
+    mode: string;
+    lastError: string | null;
+    payload: {
+      fields: {
+        project: { key: string };
+        issuetype: { name: string };
+        summary: string;
+        description: string;
+        labels: string[];
+      };
+    };
+  }) {
+    const body = [
+      `Ticketing mode: ${input.mode} (mock writes here instead of Jira)`,
+      `Volt ticket: ${input.reference}`,
+      `Would-be Jira key: ${input.externalKey}`,
+      `Project: ${input.payload.fields.project.key}`,
+      `Issue type: ${input.payload.fields.issuetype.name}`,
+      `Labels: ${input.payload.fields.labels.join(", ")}`,
+      input.lastError ? `Live delivery error: ${input.lastError}` : null,
+      "",
+      input.payload.fields.summary,
+      "",
+      input.payload.fields.description,
+      "",
+    ]
+      .filter((line) => line !== null)
+      .join("\n");
+    await send("support@localhost", `Voltie ticket ${input.externalKey}: ${input.payload.fields.summary}`, body);
+  },
 };

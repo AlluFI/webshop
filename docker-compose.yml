@@ -89,6 +89,7 @@ services:
       BUDBEE_API_SECRET: ${BUDBEE_API_SECRET:-}
       BUDBEE_BASE_URL: ${BUDBEE_BASE_URL:-https://api.staging.budbee.com}
       BUDBEE_COLLECTION_ID: ${BUDBEE_COLLECTION_ID:-0}
+      TICKET_MODE: ${TICKET_MODE:-mock}
     volumes:
       - uploads_data:/data/uploads
     depends_on:

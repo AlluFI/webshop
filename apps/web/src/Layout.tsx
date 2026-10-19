@@ -5,6 +5,7 @@ import { api } from "./api";
 import { useAuth } from "./auth";
 import { useCart } from "./cart";
 import { money } from "./product";
+import { VoltieChat } from "./voltie-chat";
 
 type Suggest = {
   products: { name: string; slug: string; href: string }[];
@@ -227,6 +228,7 @@ export function Layout() {
         </nav>
         <p>Volt &amp; Co — electronics, chosen with care.</p>
       </footer>
+      <VoltieChat />
     </>
   );
 }

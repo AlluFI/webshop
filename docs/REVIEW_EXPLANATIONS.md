@@ -211,6 +211,7 @@ A **modular monolith** is used, not a distributed set of microservices.
 - `apps/worker` consumes RabbitMQ **without** splitting the catalog database. Payment webhooks publish `payment.status`; the order is updated, email is sent, and inventory is restored by the worker. If payment volume later needs its own process, that module is already a boundary.
 - Carrier integrations are isolated under `apps/api/src/lib/carriers/`. Mock adapters return Volt labels; live adapters (Posti OAuth, PostNord OAuth, Budbee Basic auth) are selected with `*_MODE=live`.
 - BI and SaaS integrations are already in the codebase: `analytics_*` SQL views for a replica warehouse, hashed `volt_test_` / `volt_live_` API keys on `/api/v1/integrations/v1/*`, and HMAC-signed webhooks. Production cutover is replica access plus Admin → Integrations keys — see [INTEGRATIONS.md](INTEGRATIONS.md).
+- **Voltie** is the customer shop assistant. Guests get catalog/FAQ only; signed-in customers can see their own orders and confirm a claim. Tickets use a Jira-shaped payload stored locally and emailed to Mailpit (`TICKET_MODE=mock`) so the demo does not need Jira — see [VOLTIE.md](VOLTIE.md).
 
 **What is not done yet:** a separate “User Service” and “Product Service” with two databases. Joining products to brands/categories and to order lines is exactly what one relational database is for.
 

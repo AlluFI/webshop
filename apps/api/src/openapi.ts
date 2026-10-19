@@ -182,6 +182,7 @@ export const openApiDocument: OpenAPIV3.Document = {
     { name: "Shipping" },
     { name: "Admin" },
     { name: "Integrations" },
+    { name: "Assistant" },
   ],
   components: {
     securitySchemes: {
@@ -2004,6 +2005,56 @@ export const openApiDocument: OpenAPIV3.Document = {
         summary: "Cursor export of customer accounts. Email and name only when the key has the pii scope.",
         security: [{ integrationKey: [] }],
         responses: { "200": { description: "Customers page" } },
+      },
+    },
+    "/api/v1/assistant/threads": {
+      post: {
+        tags: ["Assistant"],
+        summary: "Start a Voltie chat thread (guest or signed-in customer)",
+        security: [{ bearerAuth: [] }, {}],
+        responses: { "201": { description: "Thread id" } },
+      },
+    },
+    "/api/v1/assistant/threads/{id}/messages": {
+      get: {
+        tags: ["Assistant"],
+        summary: "List Voltie messages for a thread the caller owns",
+        security: [{ bearerAuth: [] }, {}],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Messages" }, "404": { description: "Not this caller’s thread" } },
+      },
+      post: {
+        tags: ["Assistant"],
+        summary: "Send a shopper message. Guests get catalog/FAQ only; customers can see their own orders.",
+        security: [{ bearerAuth: [] }, {}],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "201": { description: "Assistant reply" } },
+      },
+    },
+    "/api/v1/assistant/threads/{id}/enquiry": {
+      post: {
+        tags: ["Assistant"],
+        summary: "Open a support ticket (mock Jira payload + Mailpit)",
+        security: [{ bearerAuth: [] }, {}],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "201": { description: "Ticket" } },
+      },
+    },
+    "/api/v1/assistant/threads/{id}/claim": {
+      post: {
+        tags: ["Assistant"],
+        summary: "Customer-confirmed claim: order → CLAIMS and a claim ticket",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "201": { description: "Claim opened" }, "409": { description: "Order not claimable" } },
+      },
+    },
+    "/api/v1/admin/tickets": {
+      get: {
+        tags: ["Admin"],
+        summary: "Voltie ticket inbox (mock Jira queue)",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Tickets" }, "403": { description: "Admin or support only" } },
       },
     },
   },

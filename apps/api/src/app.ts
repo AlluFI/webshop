@@ -20,6 +20,7 @@ import { contactRouter } from "./routes/contact.js";
 import { shippingRouter } from "./routes/shipping.js";
 import { adminRouter } from "./routes/admin.js";
 import { integrationsRouter } from "./routes/integrations.js";
+import { assistantRouter } from "./routes/assistant.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { setPaymentStatusHandler } from "./lib/queue.js";
 import { handlePaymentStatus } from "./services/order-fulfillment.js";
@@ -77,6 +78,7 @@ export function createApp() {
   app.use("/api/v1/shipping", shippingRouter);
   app.use("/api/v1/admin", adminRouter);
   app.use("/api/v1/integrations/v1", integrationsRouter);
+  app.use("/api/v1/assistant", assistantRouter);
   app.use("/api/v1", docsRouter);
 
   app.use((_req, res) => {

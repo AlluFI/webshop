@@ -16,6 +16,8 @@ describe("staff role permissions", () => {
     expect(can("warehouse", "packages")).toBe(true);
     expect(can("warehouse", "audit")).toBe(false);
     expect(can("warehouse", "integrations")).toBe(false);
+    expect(can("warehouse", "tickets")).toBe(false);
+    expect(can("support", "tickets")).toBe(true);
   });
 
   it("keeps sales on catalog and reporting, without refunds", () => {
