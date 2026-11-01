@@ -19,6 +19,7 @@ export const assistantEnquirySchema = z.object({
 export const assistantClaimSchema = z.object({
   orderId: z.string().uuid(),
   reason: z.string().trim().min(8, "Describe the problem").max(1000),
+  productName: z.string().trim().max(160).optional(),
 });
 
 export function formatTicketReference(id: string) {

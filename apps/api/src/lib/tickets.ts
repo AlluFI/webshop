@@ -12,6 +12,7 @@ export type TicketDraft = {
   userId?: string | null;
   orderId?: string | null;
   orderReference?: string | null;
+  productName?: string | null;
 };
 
 export type JiraShapedIssue = {
@@ -36,6 +37,7 @@ export function jiraPayload(draft: TicketDraft, reference: string, externalKey: 
         "",
         `Customer: ${draft.customerName} <${draft.customerEmail}>`,
         draft.orderReference ? `Order: ${draft.orderReference}` : null,
+        draft.productName ? `Product: ${draft.productName}` : null,
         `Volt ticket: ${reference}`,
         `External key: ${externalKey}`,
       ]

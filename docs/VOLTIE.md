@@ -10,7 +10,7 @@ Voltie is the customer-facing assistant on the storefront (bottom-right). Staff 
 | Signed-in customer | That plus **their** orders, a confirmed claim | Other people’s orders |
 | Staff using the shop widget | Catalog + enquiry | Customer order lookup (use Admin for that) |
 
-Order lookup is never done by email alone.
+Order lookup is never done by email alone. If a shopper needs help with an order (missing parts, ripped parcel, “the product is not working”), Voltie asks which order and shows tap rows. When that order has more than one product, Voltie asks which product (or the whole order) before offering a confirmed claim, so the support ticket already names the item.
 
 ## Tickets without Jira
 
@@ -24,7 +24,7 @@ A signed-in customer can ask Voltie to open a claim. Voltie shows **Confirm clai
 
 ## Demo
 
-1. Open http://localhost:8088 and click **Voltie**.
+1. Open http://localhost:8088 and click **Voltie**. **New chat** starts a fresh thread so the previous order context is dropped.
 2. Guest: “Do you sell Sony headphones?”, “How long is shipping?”, “Please email support … reply to you@example.com”.
 3. Sign in as `customer@volt.test` and ask about a damaged order; confirm the claim.
 4. Mailpit + Admin → Tickets show the mock Jira payload.

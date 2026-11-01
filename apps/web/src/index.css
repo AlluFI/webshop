@@ -1447,6 +1447,7 @@ button.link {
   padding: 12px 14px;
   border-bottom: 1px solid var(--line);
 }
+.voltie-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .voltie-form { border-bottom: 0; border-top: 1px solid var(--line); }
 .voltie-form input { flex: 1; min-width: 0; }
 .voltie-log {
@@ -1478,4 +1479,25 @@ button.link {
   justify-content: space-between;
   gap: 8px;
   padding: 4px 0;
+}
+.voltie-picker {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.voltie-picker button {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fffdf8;
+}
+.voltie-picker button span {
+  color: var(--muted, #5c584f);
+  font-size: 0.9em;
 }

@@ -22,9 +22,21 @@ export type AssistantActor = {
 
 export type AssistantUiBlock =
   | { type: "products"; items: { name: string; slug: string; href: string; price: number }[] }
-  | { type: "confirm_claim"; orderId: string; reference: string; reason: string }
+  | { type: "confirm_claim"; orderId: string; reference: string; reason: string; productName?: string }
   | { type: "ticket"; reference: string; externalKey: string }
-  | { type: "did_you_mean"; suggestion: string };
+  | { type: "did_you_mean"; suggestion: string }
+  | {
+      type: "order_picker";
+      problem: string;
+      items: { n: number; orderId: string; reference: string; statusLabel: string; summary: string }[];
+    }
+  | {
+      type: "product_picker";
+      problem: string;
+      orderId: string;
+      reference: string;
+      items: { n: number; productId: string; name: string; quantity: number }[];
+    };
 
 function shopInfo(topic: string) {
   if (topic === "shipping") {
@@ -167,6 +179,12 @@ export async function toolShopInfo(topic: string) {
   };
 }
 
+export type VisibleOrderItem = {
+  productId: string;
+  name: string;
+  quantity: number;
+};
+
 export type VisibleOrder = {
   id: string;
   reference: string;
@@ -175,7 +193,18 @@ export type VisibleOrder = {
   claimable: boolean;
   total: number;
   summary: string;
+  items: VisibleOrderItem[];
 };
+
+export function uniqueOrderProducts(items: VisibleOrderItem[]) {
+  const seen = new Map<string, VisibleOrderItem>();
+  for (const item of items) {
+    const current = seen.get(item.productId);
+    if (current) current.quantity += item.quantity;
+    else seen.set(item.productId, { ...item });
+  }
+  return [...seen.values()];
+}
 
 export async function toolMyOrders(actor: AssistantActor, reference?: string | null) {
   if (!actor.id || isStaffRole(actor.role ?? "")) {
@@ -187,7 +216,7 @@ export async function toolMyOrders(actor: AssistantActor, reference?: string | n
   }
   const rows = await prisma.order.findMany({
     where: { userId: actor.id },
-    include: { items: { select: { productName: true, quantity: true } }, payment: { select: { status: true } } },
+    include: { items: { select: { productId: true, productName: true, quantity: true } }, payment: { select: { status: true } } },
     orderBy: { createdAt: "desc" },
     take: 12,
   });
@@ -200,6 +229,13 @@ export async function toolMyOrders(actor: AssistantActor, reference?: string | n
       claimable: isCustomerClaimableStatus(order.status),
       total: Number(order.total),
       summary: order.items.map((item) => `${item.quantity}× ${item.productName}`).join(", "),
+      items: uniqueOrderProducts(
+        order.items.map((item) => ({
+          productId: item.productId,
+          name: item.productName,
+          quantity: item.quantity,
+        })),
+      ),
     }))
     .filter((order) => !reference || order.reference === reference);
   return {
@@ -242,7 +278,7 @@ export async function toolCreateEnquiry(
   return ticket;
 }
 
-export async function toolConfirmClaim(actor: AssistantActor, orderId: string, reason: string) {
+export async function toolConfirmClaim(actor: AssistantActor, orderId: string, reason: string, productName?: string | null) {
   if (!actor.id || isStaffRole(actor.role ?? "")) {
     throw new HttpError(401, "Sign in as the customer who owns this order.");
   }
@@ -273,15 +309,17 @@ export async function toolConfirmClaim(actor: AssistantActor, orderId: string, r
       changes: [{ field: "status", from: order.status, to: "CLAIMS" }],
     },
   });
+  const product = productName?.trim() || null;
   const ticket = await createSupportTicket({
     kind: "CLAIM",
-    subject: `Claim ${reference}`,
-    message: reason,
+    subject: product ? `Claim ${reference} — ${product}` : `Claim ${reference}`,
+    message: product && !reason.toLowerCase().includes(product.toLowerCase()) ? `${reason}\nProduct: ${product}` : reason,
     customerName: actor.displayName || "Customer",
     customerEmail: actor.email || "unknown@invalid.local",
     userId: actor.id,
     orderId: order.id,
     orderReference: reference,
+    productName: product,
   });
   emitOrderChange("CLAIMS", { id: order.id, reference, status: "CLAIMS" });
   return { reference, ticket };

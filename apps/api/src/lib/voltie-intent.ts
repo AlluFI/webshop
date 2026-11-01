@@ -24,6 +24,85 @@ export function wantsLatestOrder(text: string) {
   return /\b(latest|last|most recent)\b/i.test(text);
 }
 
+export function wantsOrderHelp(text: string) {
+  return /\b(help with (an |my |the |this )?orders?|need help.*orders?|orders? (help|issue|problem|question)|about (an |my |the )?orders?)\b/i.test(
+    text,
+  );
+}
+
+export function lastOrderFromTranscript(messages: { content: string }[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const reference = extractOrderReference(messages[index].content);
+    if (reference) return reference;
+  }
+  return null;
+}
+
+export function looksLikeProblem(text: string) {
+  return /(not work|doesn't work|does not work|won't work|wont work|stopped work|faulty|broken|damaged|dead|defective|not turning on|doesn't turn on|missing|ripped|torn|crushed|dented|incomplete|wrong item|wrong product|arrived (ripped|torn|open|damaged|broken)|package.*(rip|tear|damage|open))/i.test(
+    text,
+  );
+}
+
+export function looksLikeWholeOrder(text: string) {
+  if (/\b(whole order|entire order|all (items|products|of them)|everything)\b/i.test(text)) return true;
+  if (/\b(missing|cord|cable|charger|product|item)\b/i.test(text)) return false;
+  return (
+    /\b(package|parcel|box|carton)\b.*\b(ripped|torn|crushed|dented|open|damaged|broken)\b/i.test(text) ||
+    /\barrived (ripped|torn|open|damaged)\b/i.test(text)
+  );
+}
+
+export function matchOrderProduct<T extends { n: number; name: string; productId?: string }>(
+  text: string,
+  items: T[],
+) {
+  const value = text.toLowerCase();
+  const words = new Set(value.split(/\W+/).filter(Boolean));
+  const catalog = items.filter((item) => item.productId);
+  const hits = catalog.filter((item) => {
+    const name = item.name.toLowerCase();
+    if (value.includes(name)) return true;
+    const tokens = name.split(/\W+/).filter((word) => word.length >= 4);
+    return tokens.some((token) => words.has(token));
+  });
+  return hits.length === 1 ? hits[0] : null;
+}
+
+const CHOICE_WORDS: Record<string, number> = {
+  first: 1,
+  second: 2,
+  third: 3,
+  fourth: 4,
+  fifth: 5,
+};
+
+export function extractOrderChoice(text: string) {
+  const trimmed = text.trim().toLowerCase();
+  if (CHOICE_WORDS[trimmed]) return CHOICE_WORDS[trimmed];
+  const numbered = trimmed.match(/^(?:#|no\.?\s*|number\s*|order\s*|product\s*)?([1-9])(?:[.)])?$/);
+  return numbered ? Number(numbered[1]) : null;
+}
+
+export function applyThreadContext(
+  intent: VoltieIntent,
+  text: string,
+  lastOrder: string | null,
+): { intent: VoltieIntent; reference: string | null } {
+  const mentioned = extractOrderReference(text);
+  if (mentioned) return { intent: intent === "help" ? "orders" : intent, reference: mentioned };
+  if (!lastOrder) return { intent, reference: null };
+  if (intent === "orders" && (wantsLatestOrder(text) || wantsOrderHelp(text))) {
+    return { intent, reference: null };
+  }
+  if (intent === "help" && looksLikeProblem(text)) return { intent: "claim", reference: lastOrder };
+  if (intent === "help") return { intent: "help", reference: lastOrder };
+  if (intent === "claim" || intent === "orders" || intent === "enquiry") {
+    return { intent, reference: lastOrder };
+  }
+  return { intent, reference: null };
+}
+
 const TYPO_ALIASES: Record<string, string> = {
   shoe: "show",
   shw: "show",
@@ -199,12 +278,12 @@ export function resolveVoltieUtterance(text: string): VoltieUtterance {
 
 export function classifyVoltieIntent(text: string): VoltieIntent {
   const value = text.toLowerCase();
-  if (/(claim|damaged|broken|smashed|not satisf|wrong item|missing item|defective)/.test(value)) {
+  if (looksLikeProblem(value) && !wantsOrderHelp(value)) {
     return "claim";
   }
   if (
     ORDER_REF.test(text) ||
-    /\b(my orders?|latest order|last order|recent order|most recent|order status|where('s| is) my|tracking|delivery status|show (me )?(my )?(latest |last |recent )?(orders?))\b/.test(
+    /\b(my orders?|latest order|last order|recent order|most recent|order status|where('s| is) my|tracking|delivery status|show (me )?(my )?(latest |last |recent )?(orders?)|help with (an |my |the |this )?orders?|need help.*orders?|orders? (help|issue|problem|question)|about (an |my |the )?orders?)\b/.test(
       value,
     )
   ) {

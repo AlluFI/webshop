@@ -1210,6 +1210,38 @@ async function main() {
   const bose = await prisma.product.findUnique({ where: { slug: "bose-quietcomfort-ultra" } });
   const airpods = await prisma.product.findUnique({ where: { slug: "apple-airpods-pro-2" } });
   if (headphones) {
+    const extra = bose ?? airpods;
+    const lines = [
+      {
+        productId: headphones.id,
+        productName: headphones.name,
+        quantity: 1,
+        unitPrice: headphones.price,
+        lineTotal: headphones.price,
+        locatorCode: formatLocatorCode(
+          headphones.locatorStation,
+          headphones.locatorBlock,
+          headphones.locatorShelf,
+          headphones.locatorPlace,
+        ),
+      },
+      extra
+        ? {
+            productId: extra.id,
+            productName: extra.name,
+            quantity: 1,
+            unitPrice: extra.price,
+            lineTotal: extra.price,
+            locatorCode: formatLocatorCode(
+              extra.locatorStation,
+              extra.locatorBlock,
+              extra.locatorShelf,
+              extra.locatorPlace,
+            ),
+          }
+        : null,
+    ].filter((row): row is NonNullable<typeof row> => Boolean(row));
+    const merchandise = lines.reduce((sum, line) => sum + Number(line.lineTotal), 0);
     await prisma.order.deleteMany({
       where: { userId: demoUser.id, items: { some: { productId: headphones.id } } },
     });
@@ -1217,10 +1249,10 @@ async function main() {
       data: {
         userId: demoUser.id,
         status: "DELIVERED",
-        subtotal: headphones.price,
+        subtotal: merchandise,
         shippingCost: 0,
         tax: 0,
-        total: headphones.price,
+        total: merchandise,
         shippingMethod: "standard",
         contactEmailEnc: encrypt(demoEmail),
         contactNameEnc: encrypt("Demo Customer"),
@@ -1234,19 +1266,7 @@ async function main() {
           countryName: "Finland",
         }),
         items: {
-          create: {
-            productId: headphones.id,
-            productName: headphones.name,
-            quantity: 1,
-            unitPrice: headphones.price,
-            lineTotal: headphones.price,
-            locatorCode: formatLocatorCode(
-              headphones.locatorStation,
-              headphones.locatorBlock,
-              headphones.locatorShelf,
-              headphones.locatorPlace,
-            ),
-          },
+          create: lines,
         },
         events: {
           create: [
@@ -1257,7 +1277,7 @@ async function main() {
         payment: {
           create: {
             status: "SUCCEEDED",
-            amount: headphones.price,
+            amount: merchandise,
             currency: "EUR",
           },
         },

@@ -13,10 +13,24 @@ import {
   toolMyOrders,
   toolSearchCatalog,
   toolShopInfo,
+  uniqueOrderProducts,
   type AssistantActor,
   type AssistantUiBlock,
+  type VisibleOrder,
+  type VisibleOrderItem,
 } from "../lib/assistant-tools.js";
-import { extractEmail, extractOrderReference, resolveVoltieUtterance, wantsLatestOrder } from "../lib/voltie-intent.js";
+import {
+  applyThreadContext,
+  extractEmail,
+  extractOrderChoice,
+  lastOrderFromTranscript,
+  looksLikeProblem,
+  looksLikeWholeOrder,
+  matchOrderProduct,
+  resolveVoltieUtterance,
+  wantsLatestOrder,
+  wantsOrderHelp,
+} from "../lib/voltie-intent.js";
 
 function asBlocks(value: Prisma.JsonValue | null): AssistantUiBlock[] {
   return Array.isArray(value) ? (value as AssistantUiBlock[]) : [];
@@ -49,6 +63,128 @@ async function assertThread(threadId: string, userId?: string) {
   return thread;
 }
 
+type OrderPicker = Extract<AssistantUiBlock, { type: "order_picker" }>;
+type ProductPicker = Extract<AssistantUiBlock, { type: "product_picker" }>;
+type HelpPicker = OrderPicker | ProductPicker;
+
+function lastHelpPicker(blocks: AssistantUiBlock[]): HelpPicker | null {
+  return (
+    blocks.find((block): block is ProductPicker => block.type === "product_picker") ??
+    blocks.find((block): block is OrderPicker => block.type === "order_picker") ??
+    null
+  );
+}
+
+function pickerBlock(problem: string, orders: VisibleOrder[]): OrderPicker {
+  return {
+    type: "order_picker",
+    problem,
+    items: orders.slice(0, 8).map((order, index) => ({
+      n: index + 1,
+      orderId: order.id,
+      reference: order.reference,
+      statusLabel: order.statusLabel,
+      summary: order.summary,
+    })),
+  };
+}
+
+function productPickerBlock(problem: string, order: VisibleOrder, products: VisibleOrderItem[]): ProductPicker {
+  const items = products.slice(0, 8).map((item, index) => ({
+    n: index + 1,
+    productId: item.productId,
+    name: item.name,
+    quantity: item.quantity,
+  }));
+  items.push({
+    n: items.length + 1,
+    productId: "",
+    name: "The whole order",
+    quantity: 0,
+  });
+  return { type: "product_picker", problem, orderId: order.id, reference: order.reference, items };
+}
+
+function claimReason(problem: string, productLabel: string, reference: string) {
+  const text = problem.replace(/\s+/g, " ").trim();
+  return `${text} — ${productLabel} on ${reference}`;
+}
+
+function resolveProductLabel(problem: string, products: VisibleOrderItem[], selected?: string | null) {
+  if (selected) return selected;
+  if (looksLikeWholeOrder(problem)) return "the whole order";
+  if (products.length === 1) return products[0].name;
+  return matchOrderProduct(problem, products.map((item, index) => ({ n: index + 1, ...item })))?.name ?? null;
+}
+
+async function continueOrderHelp(
+  actor: AssistantActor,
+  reference: string,
+  problem: string,
+  selectedProduct?: string | null,
+) {
+  const orders = await toolMyOrders(actor, reference);
+  if (orders.needsSignIn) {
+    return { content: orders.summary, uiBlocks: [] as AssistantUiBlock[] };
+  }
+  const target = orders.orders[0];
+  if (!target) {
+    return { content: orders.summary, uiBlocks: [] as AssistantUiBlock[] };
+  }
+  const products = uniqueOrderProducts(target.items);
+  if (!looksLikeProblem(problem) || wantsOrderHelp(problem)) {
+    return {
+      content: `I have ${target.reference} (${target.statusLabel} · ${target.summary}). What went wrong — a missing part, damage in transit, or something else?`,
+      uiBlocks: [] as AssistantUiBlock[],
+    };
+  }
+  if (!target.claimable) {
+    return {
+      content: `${target.reference} is ${target.statusLabel}, so I cannot open a claim from chat. I can email support about “${problem}” if you want.`,
+      uiBlocks: [] as AssistantUiBlock[],
+    };
+  }
+  const productLabel = resolveProductLabel(problem, products, selectedProduct);
+  if (!productLabel && products.length > 1) {
+    return {
+      content: `Which product on ${target.reference} is this about?`,
+      uiBlocks: [productPickerBlock(problem, target, products)] as AssistantUiBlock[],
+    };
+  }
+  const label = productLabel || products[0]?.name || "the order";
+  const reason = claimReason(problem, label, target.reference);
+  return {
+    content: `Got it — ${reason}. Confirm the claim below. Our customer support will contact you regarding your claim.`,
+    uiBlocks: [
+      {
+        type: "confirm_claim" as const,
+        orderId: target.id,
+        reference: target.reference,
+        reason,
+        productName: label,
+      },
+    ],
+  };
+}
+
+async function offerOrderHelp(actor: AssistantActor, problem: string, reference: string | null) {
+  const listed = await toolMyOrders(actor, reference);
+  if (listed.needsSignIn) {
+    return { content: "Sign in as the customer who placed the order and I will list the ones I can help with.", uiBlocks: [] as AssistantUiBlock[] };
+  }
+  if (!listed.orders.length) {
+    return { content: listed.summary, uiBlocks: [] as AssistantUiBlock[] };
+  }
+  if (reference || listed.orders.length === 1) {
+    return continueOrderHelp(actor, listed.orders[0].reference, problem);
+  }
+  const picker = pickerBlock(problem, listed.orders);
+  const intro = looksLikeProblem(problem)
+    ? "I can help with that. Which order is this about?"
+    : "I can help. Which order is this about?";
+  return { content: intro, uiBlocks: [picker] as AssistantUiBlock[] };
+}
+
 function helpText(actor: AssistantActor) {
   if (!actor.id) {
     return "I’m Voltie. I can search the shop, explain shipping and returns, and send a note to support. Sign in if you want me to look at an order you placed — I never look up other people’s orders.";
@@ -59,7 +195,12 @@ function helpText(actor: AssistantActor) {
   return "I’m Voltie. Ask about a product, shipping, or one of your orders. If something arrived wrong, I can open a claim after you confirm. I can also email support (that becomes a mock Jira ticket in this demo).";
 }
 
-async function ruleReply(actor: AssistantActor, text: string) {
+async function ruleReply(
+  actor: AssistantActor,
+  text: string,
+  lastOrder: string | null,
+  picker: HelpPicker | null,
+) {
   const resolved = resolveVoltieUtterance(text);
   if (resolved.ask.length) {
     return {
@@ -67,9 +208,47 @@ async function ruleReply(actor: AssistantActor, text: string) {
       uiBlocks: resolved.ask.map((suggestion) => ({ type: "did_you_mean" as const, suggestion })),
     };
   }
-  const intent = resolved.intent;
-  const reference = extractOrderReference(resolved.text);
+  const productPicker = picker?.type === "product_picker" ? picker : null;
+  const orderPicker = picker?.type === "order_picker" ? picker : null;
+  const choice = extractOrderChoice(resolved.text);
+  if (choice && productPicker) {
+    const picked = productPicker.items.find((item) => item.n === choice);
+    if (!picked) {
+      return {
+        content: `Which product is this about? Tap a row or reply with 1 to ${productPicker.items.length}.`,
+        uiBlocks: [productPicker] as AssistantUiBlock[],
+      };
+    }
+    return continueOrderHelp(actor, productPicker.reference, productPicker.problem, picked.name);
+  }
+  if (productPicker) {
+    const named = matchOrderProduct(resolved.text, productPicker.items);
+    if (named) {
+      const problem = looksLikeProblem(resolved.text) ? resolved.text : productPicker.problem;
+      return continueOrderHelp(actor, productPicker.reference, problem, named.name);
+    }
+    if (looksLikeWholeOrder(resolved.text)) {
+      return continueOrderHelp(actor, productPicker.reference, productPicker.problem, "the whole order");
+    }
+  }
+  if (choice && orderPicker) {
+    const picked = orderPicker.items.find((item) => item.n === choice);
+    if (!picked) {
+      return {
+        content: `Which order is this about? Tap a row or reply with 1 to ${orderPicker.items.length}.`,
+        uiBlocks: [orderPicker] as AssistantUiBlock[],
+      };
+    }
+    return continueOrderHelp(actor, picked.reference, orderPicker.problem);
+  }
+  const grounded = applyThreadContext(resolved.intent, resolved.text, lastOrder);
+  const intent = grounded.intent;
+  const reference = grounded.reference;
   const note = resolved.note ? `${resolved.note} ` : "";
+  const problem = looksLikeProblem(resolved.text) ? resolved.text : picker?.problem || resolved.text;
+  if (wantsOrderHelp(resolved.text) || (looksLikeProblem(resolved.text) && (intent === "claim" || intent === "help"))) {
+    return offerOrderHelp(actor, problem, reference);
+  }
 
   if (intent === "search") {
     const found = await toolSearchCatalog(resolved.text);
@@ -94,7 +273,9 @@ async function ruleReply(actor: AssistantActor, text: string) {
     const intro =
       latestOnly && shown[0]
         ? `Your latest order is ${shown[0].reference}.`
-        : orders.summary;
+        : wantsOrderHelp(resolved.text) && shown.length
+          ? "Which order do you need help with? I can check status, open a claim, or email support."
+          : orders.summary;
     const lines = shown
       .map((order) => `${order.reference}: ${order.statusLabel} · ${order.summary}`)
       .join("\n");
@@ -105,25 +286,7 @@ async function ruleReply(actor: AssistantActor, text: string) {
   }
 
   if (intent === "claim") {
-    const orders = await toolMyOrders(actor, reference);
-    if (orders.needsSignIn) {
-      return { content: "Sign in to open a claim on an order you placed.", uiBlocks: [] as AssistantUiBlock[] };
-    }
-    const claimable = orders.orders.filter((order) => order.claimable);
-    const target = claimable[0];
-    if (!target) {
-      return {
-        content: orders.orders.length
-          ? "None of those orders can move to claims from chat (already claimed, cancelled, or unpaid)."
-          : orders.summary,
-        uiBlocks: [] as AssistantUiBlock[],
-      };
-    }
-    const reason = text.trim();
-    return {
-      content: `I can open a claim on ${target.reference}. Confirm below and support will get a ticket (mock Jira key in this demo). Picking pauses while the order is in Claims.`,
-      uiBlocks: [{ type: "confirm_claim", orderId: target.id, reference: target.reference, reason }],
-    };
+    return offerOrderHelp(actor, problem, reference);
   }
 
   if (intent === "enquiry") {
@@ -146,6 +309,12 @@ async function ruleReply(actor: AssistantActor, text: string) {
     };
   }
 
+  if (reference) {
+    return {
+      content: `We were looking at ${reference}. I can check its status, open a claim if something is wrong, or email support. What should I do?`,
+      uiBlocks: [] as AssistantUiBlock[],
+    };
+  }
   return { content: helpText(actor), uiBlocks: [] as AssistantUiBlock[] };
 }
 
@@ -191,7 +360,15 @@ export const assistantService = {
       const suggestion = asBlocks(previous?.uiBlocks ?? null).find((block) => block.type === "did_you_mean");
       if (suggestion) spoken = suggestion.suggestion;
     }
-    const reply = await ruleReply(actor, spoken);
+    const recent = await prisma.assistantMessage.findMany({
+      where: { threadId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: { content: true, uiBlocks: true },
+    });
+    const lastOrder = lastOrderFromTranscript(recent.slice().reverse());
+    const picker = recent.map((row) => lastHelpPicker(asBlocks(row.uiBlocks))).find((block) => block) ?? null;
+    const reply = await ruleReply(actor, spoken, lastOrder, picker);
     const saved = await prisma.assistantMessage.create({
       data: {
         threadId,
@@ -228,8 +405,8 @@ export const assistantService = {
     const dto = assistantClaimSchema.parse(input);
     const thread = await assertThread(threadId, userId);
     const actor = await loadActor(thread.userId ?? userId);
-    const result = await toolConfirmClaim(actor, dto.orderId, dto.reason);
-    const content = `Claim opened on ${result.reference}. Ticket ${result.ticket.reference} / ${result.ticket.externalKey}. Order handling is paused.`;
+    const result = await toolConfirmClaim(actor, dto.orderId, dto.reason, dto.productName);
+    const content = `Claim opened on ${result.reference}. Ticket ${result.ticket.reference} / ${result.ticket.externalKey}. Our customer support will contact you regarding your claim.`;
     const uiBlocks: AssistantUiBlock[] = [
       { type: "ticket", reference: result.ticket.reference, externalKey: result.ticket.externalKey },
     ];

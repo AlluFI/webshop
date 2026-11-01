@@ -137,6 +137,15 @@ describeLive("Voltie assistant", () => {
       .set("Authorization", `Bearer ${accessToken}`);
     expect(mine.status).toBe(201);
 
+    const help = await request(app)
+      .post(`/api/v1/assistant/threads/${mine.body.id}/messages`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ content: "I need help with an order" });
+    expect(help.status).toBe(201);
+    expect(help.body.content).toMatch(/what went wrong|which order/i);
+    expect(help.body.content).toContain(formatOrderReference(order.id));
+    expect(help.body.content).not.toMatch(/I’m Voltie|I'm Voltie/);
+
     const latest = await request(app)
       .post(`/api/v1/assistant/threads/${mine.body.id}/messages`)
       .set("Authorization", `Bearer ${accessToken}`)
@@ -154,6 +163,16 @@ describeLive("Voltie assistant", () => {
     expect(typo.body.content).toMatch(/latest order|“oder”|oder/i);
     expect(typo.body.content).toContain(formatOrderReference(order.id));
     expect(typo.body.content).not.toMatch(/I’m Voltie|I'm Voltie/);
+
+    const followUp = await request(app)
+      .post(`/api/v1/assistant/threads/${mine.body.id}/messages`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ content: "the product is not working" });
+    expect(followUp.status).toBe(201);
+    expect(followUp.body.content).toContain(formatOrderReference(order.id));
+    expect(followUp.body.content).not.toMatch(/I’m Voltie|I'm Voltie/);
+    expect(followUp.body.uiBlocks?.[0]?.type).toBe("confirm_claim");
+    expect(followUp.body.uiBlocks?.[0]?.productName).toBe(product.name);
 
     const stolen = await request(app)
       .get(`/api/v1/assistant/threads/${mine.body.id}/messages`)
@@ -177,5 +196,78 @@ describeLive("Voltie assistant", () => {
     expect(confirmed.body.ticket.externalKey).toMatch(/^VOLT-/);
 
     await prisma.user.delete({ where: { id: other.id } }).catch(() => undefined);
+  });
+
+  it("asks which product before a claim when the order has several items", { timeout: 15_000 }, async () => {
+    const products = await prisma.product.findMany({ take: 2, select: { id: true, name: true, barcode: true } });
+    if (products.length < 2) return;
+    const role = await prisma.role.upsert({
+      where: { name: "customer" },
+      update: {},
+      create: { name: "customer" },
+    });
+    const mixedEmail = `voltie-mixed-${stamp}@volt.test`;
+    const user = await prisma.user.create({
+      data: {
+        email: mixedEmail,
+        displayName: "Mixed Basket",
+        passwordHash: await argon2.hash("Shopping123"),
+        emailVerifiedAt: new Date(),
+        roleId: role.id,
+      },
+    });
+    const order = await prisma.order.create({
+      data: {
+        userId: user.id,
+        status: "DELIVERED",
+        currency: "EUR",
+        subtotal: 20,
+        shippingCost: 0,
+        tax: 4,
+        total: 24,
+        shippingMethod: "standard",
+        contactEmailEnc: encrypt(mixedEmail),
+        contactNameEnc: encrypt("Mixed Basket"),
+        shippingAddressEnc: encrypt("{}"),
+        items: {
+          create: products.map((item) => ({
+            productId: item.id,
+            productName: item.name,
+            quantity: 1,
+            unitPrice: 10,
+            lineTotal: 10,
+            barcode: item.barcode,
+          })),
+        },
+      },
+    });
+    const login = await request(app).post("/api/v1/auth/login").send({ email: mixedEmail, password: "Shopping123" });
+    const thread = await request(app)
+      .post("/api/v1/assistant/threads")
+      .set("Authorization", `Bearer ${login.body.accessToken}`);
+    const problem = await request(app)
+      .post(`/api/v1/assistant/threads/${thread.body.id}/messages`)
+      .set("Authorization", `Bearer ${login.body.accessToken}`)
+      .send({ content: "the product is not working" });
+    expect(problem.status).toBe(201);
+    expect(problem.body.uiBlocks?.[0]?.type).toBe("product_picker");
+    expect(problem.body.uiBlocks?.[0]?.items?.map((item: { name: string }) => item.name)).toEqual(
+      expect.arrayContaining([products[0].name, products[1].name, "The whole order"]),
+    );
+    expect(problem.body.content).not.toMatch(/I’m Voltie|I'm Voltie/);
+
+    const picked = await request(app)
+      .post(`/api/v1/assistant/threads/${thread.body.id}/messages`)
+      .set("Authorization", `Bearer ${login.body.accessToken}`)
+      .send({ content: "2" });
+    expect(picked.status).toBe(201);
+    expect(picked.body.uiBlocks?.[0]?.type).toBe("confirm_claim");
+    expect(picked.body.uiBlocks?.[0]?.productName).toBe(products[1].name);
+    expect(picked.body.uiBlocks?.[0]?.reason).toContain(products[1].name);
+
+    await prisma.supportTicket.deleteMany({ where: { orderId: order.id } }).catch(() => undefined);
+    await prisma.order.delete({ where: { id: order.id } }).catch(() => undefined);
+    await prisma.assistantThread.deleteMany({ where: { userId: user.id } }).catch(() => undefined);
+    await prisma.user.delete({ where: { id: user.id } }).catch(() => undefined);
   });
 });

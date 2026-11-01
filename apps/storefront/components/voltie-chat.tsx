@@ -9,9 +9,21 @@ import { useAuth } from "./auth";
 
 type UiBlock =
   | { type: "products"; items: { name: string; slug: string; href: string; price: number }[] }
-  | { type: "confirm_claim"; orderId: string; reference: string; reason: string }
+  | { type: "confirm_claim"; orderId: string; reference: string; reason: string; productName?: string }
   | { type: "ticket"; reference: string; externalKey: string }
-  | { type: "did_you_mean"; suggestion: string };
+  | { type: "did_you_mean"; suggestion: string }
+  | {
+      type: "order_picker";
+      problem: string;
+      items: { n: number; orderId: string; reference: string; statusLabel: string; summary: string }[];
+    }
+  | {
+      type: "product_picker";
+      problem: string;
+      orderId: string;
+      reference: string;
+      items: { n: number; productId: string; name: string; quantity: number }[];
+    };
 
 type ChatMessage = {
   id: string;
@@ -83,6 +95,25 @@ export function VoltieChat() {
     await sendText(draft.trim());
   }
 
+  async function startNewChat() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    setDraft("");
+    setMessages([]);
+    sessionStorage.removeItem(THREAD_KEY);
+    setThreadId(null);
+    try {
+      const created = await api<{ id: string }>("/assistant/threads", { method: "POST", token: accessToken });
+      sessionStorage.setItem(THREAD_KEY, created.id);
+      setThreadId(created.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not start a new chat");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function confirmClaim(block: Extract<UiBlock, { type: "confirm_claim" }>) {
     if (!threadId) return;
     setBusy(true);
@@ -91,7 +122,11 @@ export function VoltieChat() {
       const reply = await api<ChatMessage>(`/assistant/threads/${threadId}/claim`, {
         method: "POST",
         token: accessToken,
-        body: JSON.stringify({ orderId: block.orderId, reason: block.reason }),
+        body: JSON.stringify({
+          orderId: block.orderId,
+          reason: block.reason,
+          productName: block.productName,
+        }),
       });
       setMessages((current) => [...current, reply]);
     } catch (err) {
@@ -112,9 +147,14 @@ export function VoltieChat() {
               <p className="kicker">Shop assistant</p>
               <strong>Voltie</strong>
             </div>
-            <button className="ghost" type="button" onClick={() => setOpen(false)}>
-              Close
-            </button>
+            <div className="voltie-actions">
+              <button className="ghost" type="button" disabled={busy} onClick={() => void startNewChat()}>
+                New chat
+              </button>
+              <button className="ghost" type="button" onClick={() => setOpen(false)}>
+                Close
+              </button>
+            </div>
           </header>
           <div className="voltie-log" ref={scroller}>
             <p className="voltie-bubble assistant">
@@ -150,7 +190,44 @@ export function VoltieChat() {
                         onClick={() => void confirmClaim(block)}
                       >
                         Confirm claim on {block.reference}
+                        {block.productName ? ` · ${block.productName}` : ""}
                       </button>
+                    );
+                  }
+                  if (block.type === "order_picker") {
+                    return (
+                      <ol key={`${message.id}-o-${index}`} className="voltie-picker">
+                        {block.items.map((item) => (
+                          <li key={item.reference}>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void sendText(String(item.n))}
+                            >
+                              <strong>{item.n}.</strong> {item.reference} — {item.statusLabel}
+                              <span>{item.summary}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                    );
+                  }
+                  if (block.type === "product_picker") {
+                    return (
+                      <ol key={`${message.id}-pr-${index}`} className="voltie-picker">
+                        {block.items.map((item) => (
+                          <li key={`${item.n}-${item.productId || item.name}`}>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void sendText(String(item.n))}
+                            >
+                              <strong>{item.n}.</strong> {item.name}
+                              {item.quantity > 0 ? <span>{item.quantity}× in this order</span> : <span>Package or every item</span>}
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
                     );
                   }
                   if (block.type === "did_you_mean") {
