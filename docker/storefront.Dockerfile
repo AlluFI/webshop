@@ -10,9 +10,6 @@ COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY apps/storefront/package.json apps/storefront/
 COPY apps/worker/package.json apps/worker/
-COPY packages/shared packages/shared
-COPY apps/storefront apps/storefront
-
 ARG NEXT_PUBLIC_RECAPTCHA_SITE_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
 
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -22,7 +19,12 @@ ENV DOCKER_STOREFRONT=1
 ENV API_PROXY_TARGET=http://api:3000
 ENV API_INTERNAL_URL=http://api:3000/api/v1
 
-RUN pnpm install --frozen-lockfile --filter storefront...
+RUN pnpm install --frozen-lockfile --filter storefront... \
+  || pnpm install --frozen-lockfile --filter storefront...
+
+COPY packages/shared packages/shared
+COPY apps/storefront apps/storefront
+
 RUN pnpm --filter @volt/shared build
 RUN pnpm --filter storefront build
 

@@ -3,6 +3,7 @@ import {
   assistantClaimSchema,
   assistantEnquirySchema,
   assistantMessageSchema,
+  assistantStaffActionSchema,
   isStaffRole,
 } from "@volt/shared";
 import { prisma } from "../prisma.js";
@@ -31,6 +32,7 @@ import {
   wantsLatestOrder,
   wantsOrderHelp,
 } from "../lib/voltie-intent.js";
+import { staffConfirmAction, staffRuleReply } from "../lib/staff-assistant.service.js";
 
 function asBlocks(value: Prisma.JsonValue | null): AssistantUiBlock[] {
   return Array.isArray(value) ? (value as AssistantUiBlock[]) : [];
@@ -368,7 +370,9 @@ export const assistantService = {
     });
     const lastOrder = lastOrderFromTranscript(recent.slice().reverse());
     const picker = recent.map((row) => lastHelpPicker(asBlocks(row.uiBlocks))).find((block) => block) ?? null;
-    const reply = await ruleReply(actor, spoken, lastOrder, picker);
+    const reply = isStaffRole(actor.role ?? "")
+      ? await staffRuleReply(actor, spoken, lastOrder)
+      : await ruleReply(actor, spoken, lastOrder, picker);
     const saved = await prisma.assistantMessage.create({
       data: {
         threadId,
@@ -390,6 +394,9 @@ export const assistantService = {
     const dto = assistantEnquirySchema.parse(input);
     const thread = await assertThread(threadId, userId);
     const actor = await loadActor(thread.userId ?? userId);
+    if (isStaffRole(actor.role ?? "")) {
+      throw new HttpError(403, "Use the staff chat for lookups. Customer enquiries stay on the shop widget.");
+    }
     const ticket = await toolCreateEnquiry(actor, dto);
     const content = `Sent to support as ${ticket.reference} (demo Jira key ${ticket.externalKey}).`;
     const uiBlocks: AssistantUiBlock[] = [
@@ -405,6 +412,9 @@ export const assistantService = {
     const dto = assistantClaimSchema.parse(input);
     const thread = await assertThread(threadId, userId);
     const actor = await loadActor(thread.userId ?? userId);
+    if (isStaffRole(actor.role ?? "")) {
+      throw new HttpError(403, "Staff cannot open a customer claim from Voltie.");
+    }
     const result = await toolConfirmClaim(actor, dto.orderId, dto.reason, dto.productName);
     const content = `Claim opened on ${result.reference}. Ticket ${result.ticket.reference} / ${result.ticket.externalKey}. Our customer support will contact you regarding your claim.`;
     const uiBlocks: AssistantUiBlock[] = [
@@ -414,5 +424,30 @@ export const assistantService = {
       data: { threadId, role: "assistant", content, uiBlocks },
     });
     return { content, uiBlocks, ticket: result.ticket, reference: result.reference };
+  },
+
+  async staffAction(threadId: string, input: unknown, userId?: string) {
+    const dto = assistantStaffActionSchema.parse(input);
+    const thread = await assertThread(threadId, userId);
+    const actor = await loadActor(thread.userId ?? userId);
+    if (!isStaffRole(actor.role ?? "")) {
+      throw new HttpError(403, "Staff access required");
+    }
+    const reply = await staffConfirmAction(actor, dto);
+    const saved = await prisma.assistantMessage.create({
+      data: {
+        threadId,
+        role: "assistant",
+        content: reply.content,
+        uiBlocks: reply.uiBlocks.length ? reply.uiBlocks : Prisma.JsonNull,
+      },
+    });
+    await prisma.assistantThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } });
+    return {
+      id: saved.id,
+      role: "assistant",
+      content: saved.content,
+      uiBlocks: reply.uiBlocks,
+    };
   },
 };

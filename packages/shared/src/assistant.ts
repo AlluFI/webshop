@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { emailSchema } from "./auth.js";
+import { ORDER_STATUSES } from "./checkout.js";
 
 export const SUPPORT_TICKET_KINDS = ["ENQUIRY", "CLAIM"] as const;
 export const SUPPORT_TICKET_STATUSES = ["OPEN", "PENDING", "DONE"] as const;
@@ -21,6 +22,21 @@ export const assistantClaimSchema = z.object({
   reason: z.string().trim().min(8, "Describe the problem").max(1000),
   productName: z.string().trim().max(160).optional(),
 });
+
+export const assistantStaffActionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("status"),
+    orderId: z.string().uuid(),
+    status: z.enum(ORDER_STATUSES),
+    note: z.string().trim().max(240).optional(),
+  }),
+  z.object({
+    action: z.literal("refund"),
+    orderId: z.string().uuid(),
+    reason: z.enum(["customer_requested", "shop_error", "wrong_or_damaged", "never_arrived", "other"]).default("customer_requested"),
+    note: z.string().trim().max(240).optional(),
+  }),
+]);
 
 export function formatTicketReference(id: string) {
   return `VD-${id.replaceAll("-", "").slice(0, 8).toUpperCase()}`;

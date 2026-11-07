@@ -36,6 +36,20 @@ export type AssistantUiBlock =
       orderId: string;
       reference: string;
       items: { n: number; productId: string; name: string; quantity: number }[];
+    }
+  | {
+      type: "confirm_status";
+      orderId: string;
+      reference: string;
+      status: string;
+      note?: string;
+    }
+  | {
+      type: "confirm_refund";
+      orderId: string;
+      reference: string;
+      reason: string;
+      note?: string;
     };
 
 function shopInfo(topic: string) {

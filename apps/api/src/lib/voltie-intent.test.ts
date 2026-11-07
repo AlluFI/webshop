@@ -62,6 +62,8 @@ describe("voltie intent", () => {
   });
 
   it("corrects shop typos or offers a did-you-mean", () => {
+    expect(softenVoltieText("rosendahlaleksip@gmail.com").text).toBe("rosendahlaleksip@gmail.com");
+    expect(softenVoltieText("show me orders for user ros@gmail.com").text).toContain("ros@gmail.com");
     expect(softenVoltieText("shoe my latest oder").text.toLowerCase()).toBe("show my latest order");
     expect(resolveVoltieUtterance("Show my latest oder").intent).toBe("orders");
     expect(resolveVoltieUtterance("Show my latest oder").note).toMatch(/oder/i);

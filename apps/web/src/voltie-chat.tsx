@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { formatOrderStatus, isStaffRole } from "@volt/shared";
 import { api, ApiError } from "./api";
 import { money } from "./product";
 import { useAuth } from "./auth";
@@ -20,7 +21,9 @@ type UiBlock =
       orderId: string;
       reference: string;
       items: { n: number; productId: string; name: string; quantity: number }[];
-    };
+    }
+  | { type: "confirm_status"; orderId: string; reference: string; status: string; note?: string }
+  | { type: "confirm_refund"; orderId: string; reference: string; reason: string; note?: string };
 
 type ChatMessage = {
   id: string;
@@ -30,10 +33,13 @@ type ChatMessage = {
 };
 
 const THREAD_KEY = "voltie_thread";
+const STAFF_THREAD_KEY = "voltie_staff_thread";
 
-export function VoltieChat() {
+export function VoltieChat({ variant = "shop" }: { variant?: "shop" | "staff" }) {
   const location = useLocation();
   const { accessToken, user, ready } = useAuth();
+  const staff = variant === "staff";
+  const threadKey = staff ? STAFF_THREAD_KEY : THREAD_KEY;
   const [open, setOpen] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -41,7 +47,9 @@ export function VoltieChat() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
-  const hidden = location.pathname.startsWith("/admin");
+  const hidden = staff
+    ? !user || !isStaffRole(user.role)
+    : location.pathname.startsWith("/admin") || Boolean(user && isStaffRole(user.role));
 
   useEffect(() => {
     if (!open) return;
@@ -50,7 +58,7 @@ export function VoltieChat() {
 
   async function ensureThread() {
     if (threadId) return threadId;
-    const stored = sessionStorage.getItem(THREAD_KEY);
+    const stored = sessionStorage.getItem(threadKey);
     if (stored) {
       setThreadId(stored);
       const data = await api<{ items: ChatMessage[] }>(`/assistant/threads/${stored}/messages`, {
@@ -60,7 +68,7 @@ export function VoltieChat() {
       return stored;
     }
     const created = await api<{ id: string }>("/assistant/threads", { method: "POST", token: accessToken });
-    sessionStorage.setItem(THREAD_KEY, created.id);
+    sessionStorage.setItem(threadKey, created.id);
     setThreadId(created.id);
     return created.id;
   }
@@ -97,14 +105,36 @@ export function VoltieChat() {
     setError("");
     setDraft("");
     setMessages([]);
-    sessionStorage.removeItem(THREAD_KEY);
+    sessionStorage.removeItem(threadKey);
     setThreadId(null);
     try {
       const created = await api<{ id: string }>("/assistant/threads", { method: "POST", token: accessToken });
-      sessionStorage.setItem(THREAD_KEY, created.id);
+      sessionStorage.setItem(threadKey, created.id);
       setThreadId(created.id);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not start a new chat");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmStaff(block: Extract<UiBlock, { type: "confirm_status" | "confirm_refund" }>) {
+    if (!threadId) return;
+    setBusy(true);
+    setError("");
+    try {
+      const reply = await api<ChatMessage>(`/assistant/threads/${threadId}/staff`, {
+        method: "POST",
+        token: accessToken,
+        body: JSON.stringify(
+          block.type === "confirm_status"
+            ? { action: "status", orderId: block.orderId, status: block.status, note: block.note }
+            : { action: "refund", orderId: block.orderId, reason: block.reason, note: block.note },
+        ),
+      });
+      setMessages((current) => [...current, reply]);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not apply that action");
     } finally {
       setBusy(false);
     }
@@ -137,10 +167,10 @@ export function VoltieChat() {
   return (
     <div className="voltie">
       {open ? (
-        <section className="voltie-panel" aria-label="Voltie shop assistant">
+        <section className="voltie-panel" aria-label={staff ? "Voltie staff assistant" : "Voltie shop assistant"}>
           <header className="voltie-head">
             <div>
-              <p className="kicker">Shop assistant</p>
+              <p className="kicker">{staff ? "Staff wingman" : "Shop assistant"}</p>
               <strong>Voltie</strong>
             </div>
             <div className="voltie-actions">
@@ -154,9 +184,11 @@ export function VoltieChat() {
           </header>
           <div className="voltie-log" ref={scroller}>
             <p className="voltie-bubble assistant">
-              {user
-                ? "Ask me about products, shipping, or an order on this account. I can email support (demo Jira ticket) or open a claim after you confirm."
-                : "Ask me about products, shipping, or returns. Sign in to talk about an order you placed. I never look up someone else’s order."}
+              {staff
+                ? "Ask for a VC- order, the pick list, a locator, low stock, tickets, or last week’s sales. I only show what your role can see. Refunds and status changes wait until you tap Confirm."
+                : user
+                  ? "Ask me about products, shipping, or an order on this account. I can email support (demo Jira ticket) or open a claim after you confirm."
+                  : "Ask me about products, shipping, or returns. Sign in to talk about an order you placed. I never look up someone else’s order."}
             </p>
             {messages.map((message) => (
               <div key={message.id} className={`voltie-bubble ${message.role}`}>
@@ -239,25 +271,52 @@ export function VoltieChat() {
                       </button>
                     );
                   }
-                  return (
-                    <p key={`${message.id}-t-${index}`} className="muted">
-                      Ticket {block.reference} · {block.externalKey}
-                    </p>
-                  );
+                  if (block.type === "confirm_status") {
+                    return (
+                      <button
+                        key={`${message.id}-st-${index}`}
+                        className="primary"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void confirmStaff(block)}
+                      >
+                        Confirm {block.reference} → {formatOrderStatus(block.status)}
+                      </button>
+                    );
+                  }
+                  if (block.type === "confirm_refund") {
+                    return (
+                      <button
+                        key={`${message.id}-rf-${index}`}
+                        className="primary"
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void confirmStaff(block)}
+                      >
+                        Confirm refund of {block.reference}
+                      </button>
+                    );
+                  }
+                  if (block.type === "ticket") {
+                    return (
+                      <p key={`${message.id}-t-${index}`} className="muted">
+                        Ticket {block.reference} · {block.externalKey}
+                      </p>
+                    );
+                  }
+                  return null;
                 })}
               </div>
             ))}
           </div>
           {error ? <p className="banner error">{error}</p> : null}
           <form className="voltie-form" onSubmit={(event) => void send(event)}>
-            <label className="skip" htmlFor="voltie-input">
-              Message Voltie
-            </label>
             <input
-              id="voltie-input"
+              id={staff ? "voltie-staff-input" : "voltie-input"}
+              aria-label="Message Voltie"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="Ask Voltie…"
+              placeholder={staff ? "Find VC-…, pick list, low stock…" : "Ask Voltie…"}
               maxLength={2000}
             />
             <button className="primary" type="submit" disabled={busy || !draft.trim()}>

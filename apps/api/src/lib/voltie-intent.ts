@@ -119,6 +119,7 @@ const TYPO_ALIASES: Record<string, string> = {
   delievery: "delivery",
   retrun: "return",
   refound: "refund",
+  locater: "locator",
   warrenty: "warranty",
   warrany: "warranty",
   headphons: "headphones",
@@ -145,6 +146,12 @@ const CORRECTABLE = [
   "delivery",
   "return",
   "refund",
+  "locator",
+  "inventory",
+  "stock",
+  "picking",
+  "tickets",
+  "customer",
   "warranty",
   "claim",
   "ticket",
@@ -240,8 +247,18 @@ export function softenVoltieText(text: string): VoltieCorrection {
   const pieces = text.split(/(\b[\w']+\b)/);
   const changes: { from: string; to: string }[] = [];
   const variants: string[][] = [];
-  for (const piece of pieces) {
-    if (!/^[\w']+$/.test(piece) || ORDER_REF.test(piece) || piece.includes("@") || /^\d+$/.test(piece)) {
+  for (let index = 0; index < pieces.length; index += 1) {
+    const piece = pieces[index];
+    const prev = pieces[index - 1] ?? "";
+    const next = pieces[index + 1] ?? "";
+    const inEmail = prev.includes("@") || prev.endsWith(".") || next.startsWith("@") || next.startsWith(".");
+    if (
+      !/^[\w']+$/.test(piece) ||
+      ORDER_REF.test(piece) ||
+      piece.includes("@") ||
+      /^\d+$/.test(piece) ||
+      inEmail
+    ) {
       variants.push([piece]);
       continue;
     }

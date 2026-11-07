@@ -16,7 +16,7 @@ A B2C electronics shop is provided: accounts, a PostgreSQL catalog, faceted sear
 - **Load:** k6 (`load-tests/shop.js`) — report in [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
 - **Staff Admin:** tab-by-tab guide and roles in [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - **BI / integrations:** SQL views + machine API keys + signed webhooks — [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
-- **Voltie:** customer shop assistant + mock Jira tickets — [docs/VOLTIE.md](docs/VOLTIE.md)
+- **Voltie:** customer shop assistant and staff wingman (role-scoped, confirmed writes) + mock Jira tickets — [docs/VOLTIE.md](docs/VOLTIE.md)
 - **Monorepo:** pnpm workspaces (`apps/api`, `apps/web`, `apps/storefront`, `apps/worker`, `packages/shared`)
 
 ## Entity relationship diagram
@@ -196,10 +196,10 @@ The Next storefront is served by `./scripts/start.sh` on 8088 / 8443. Home, cata
 The same value is used as the Admin **Courier** field placeholder. When it is pasted for a Posti hand-off, a working Posti tracking URL is built.
 
 ```
-JJFI66012700410158170/32109367922
+JJFI66012700410158170
 ```
 
-Opens: https://www.posti.fi/en/tracking/JJFI66012700410158170/32109367922
+Opens: https://www.posti.fi/en/tracking/JJFI66012700410158170
 
 ## Bonus features (beyond the Part 3 mandatory list)
 
@@ -209,7 +209,7 @@ These extras can be opened by a reviewer without extra setup. They are **not** r
 | --- | --- | --- |
 | Staff **change log** | Admin → **log** (`admin@volt.test`) | Encrypted audit rows for product, category, order, review, user-role, and shipping edits |
 | **Shipped** email + tracking | Admin → hand an order to the courier; Mailpit + order page | HTML mail with carrier link, ETA, and a tracking modal on the order |
-| Finland carrier URLs | Ship with Posti / PostNord / Budbee | Posti uses `/en/tracking/{code}/{id}`; sample code `JJFI66012700410158170/32109367922` (same as the Courier placeholder). Other carriers open their official pages |
+| Finland carrier URLs | Ship with Posti / PostNord / Budbee | Posti uses `/en/tracking/{code}/{id}`; sample code `JJFI66012700410158170` (same as the Courier placeholder). Other carriers open their official pages |
 | Staff **roles** | `admin` / `support` / `sales` / `warehouse` demo accounts | RBAC: catalog vs orders/refunds vs reviews vs shipping vs warehouse floor; customer roles stay locked |
 | **FAQ** and **Terms** | Header/footer | Extra content pages (About / Contact / 404 are mandatory; these two are extra) |
 | Separate **billing** address | Checkout | Optional billing block when “same as shipping” is unchecked |

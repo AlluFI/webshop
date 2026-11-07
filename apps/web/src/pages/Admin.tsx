@@ -20,6 +20,7 @@ import { UsersPanel } from "./admin/UsersPanel";
 import { IntegrationsPanel } from "./admin/IntegrationsPanel";
 import { TicketsPanel } from "./admin/TicketsPanel";
 import { WholesalersPanel } from "./admin/WholesalersPanel";
+import { VoltieChat } from "../voltie-chat";
 
 type Tab =
   | "products"
@@ -181,6 +182,7 @@ export function AdminPage() {
           {tab === "tickets" && <TicketsPanel token={accessToken} />}
         </div>
       </div>
+      <VoltieChat variant="staff" />
     </section>
   );
 }

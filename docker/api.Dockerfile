@@ -14,10 +14,11 @@ COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
 
+RUN pnpm install --frozen-lockfile --filter api... \
+  || pnpm install --frozen-lockfile --filter api...
+
 COPY packages/shared packages/shared
 COPY apps/api apps/api
-
-RUN pnpm install --frozen-lockfile --filter api...
 
 RUN pnpm --filter @volt/shared build
 

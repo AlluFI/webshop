@@ -2049,6 +2049,19 @@ export const openApiDocument: OpenAPIV3.Document = {
         responses: { "201": { description: "Claim opened" }, "409": { description: "Order not claimable" } },
       },
     },
+    "/api/v1/assistant/threads/{id}/staff": {
+      post: {
+        tags: ["Assistant"],
+        summary: "Staff-confirmed refund or status change from Voltie (never silent writes)",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "201": { description: "Action applied" },
+          "400": { description: "Courier hand-off must use Order handling" },
+          "403": { description: "Missing staff role or permission" },
+        },
+      },
+    },
     "/api/v1/admin/tickets": {
       get: {
         tags: ["Admin"],

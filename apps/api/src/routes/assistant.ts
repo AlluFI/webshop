@@ -1,7 +1,13 @@
 import { Router } from "express";
-import { assistantClaimSchema, assistantEnquirySchema, assistantMessageSchema } from "@volt/shared";
+import {
+  assistantClaimSchema,
+  assistantEnquirySchema,
+  assistantMessageSchema,
+  assistantStaffActionSchema,
+} from "@volt/shared";
 import { asyncHandler, validate } from "../middleware/error-handler.js";
 import { optionalAuth, type AuthedRequest } from "../middleware/auth.js";
+import { requireStaff } from "../middleware/rbac.js";
 import { rateLimit } from "../lib/rate-limit.js";
 import { assistantService } from "../services/assistant.service.js";
 
@@ -55,5 +61,15 @@ assistantRouter.post(
   validate(assistantClaimSchema),
   asyncHandler(async (req, res) => {
     res.status(201).json(await assistantService.claim(String(req.params.id), req.body, userId(req as AuthedRequest)));
+  }),
+);
+
+assistantRouter.post(
+  "/threads/:id/staff",
+  requireStaff,
+  assistantRateLimit,
+  validate(assistantStaffActionSchema),
+  asyncHandler(async (req, res) => {
+    res.status(201).json(await assistantService.staffAction(String(req.params.id), req.body, userId(req as AuthedRequest)));
   }),
 );
