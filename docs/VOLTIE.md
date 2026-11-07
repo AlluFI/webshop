@@ -43,4 +43,4 @@ A signed-in customer can ask Voltie to open a claim. Voltie shows **Confirm clai
 2. Guest: “Do you sell Sony headphones?”, “How long is shipping?”, “Please email support … reply to you@example.com”.
 3. Sign in as `customer@volt.test` and ask about a damaged order; confirm the claim.
 4. Mailpit + Admin → Tickets show the mock Jira payload.
-5. Sign in as staff (2FA). On Admin, open Voltie: “Find VC-…”, “how many unpicked order in queue?”, “show me orders for user customer@volt.test”, “Which is wholesaler for apple products?”, “What products are low on stock?”. Warehouse answers omit email. Refunds and status wait for Confirm. Emails are not spell-corrected (so `gmail.com` stays `gmail.com`).
+5. Sign in as staff (2FA). On Admin, open Voltie: “Find VC-…”, “how many unpicked order in queue?”, “show me orders for user customer@volt.test”, “Which is wholesaler for apple products?”, “What products are low on stock?”, “show laptops”, “what locator code for apple watch?”, “list last 7 days sale”, “show orders with claim”. Warehouse answers omit email. Refunds and status wait for Confirm. Emails are not spell-corrected (so `gmail.com` stays `gmail.com`).

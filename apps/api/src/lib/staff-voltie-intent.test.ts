@@ -21,6 +21,12 @@ describe("staff voltie intent", () => {
     expect(classifyStaffVoltieIntent("Refund VC-3FFC7D49")).toBe("refund");
     expect(classifyStaffVoltieIntent("Mark VC-3FFC7D49 as delivered")).toBe("status");
     expect(classifyStaffVoltieIntent("Do you sell Sony headphones?")).toBe("search");
+    expect(classifyStaffVoltieIntent("show laptops")).toBe("search");
+    expect(classifyStaffVoltieIntent("Show available laptops")).toBe("search");
+    expect(classifyStaffVoltieIntent("what locator code for apple watch?")).toBe("locator");
+    expect(classifyStaffVoltieIntent("what is bar code for apple watch")).toBe("locator");
+    expect(classifyStaffVoltieIntent("list last 7 days sale")).toBe("sales");
+    expect(classifyStaffVoltieIntent("show orders with claim")).toBe("claim_orders");
     expect(classifyStaffVoltieIntent("What products are low on stock?")).toBe("inventory");
     expect(classifyStaffVoltieIntent("How much stock of Sony?")).toBe("inventory");
     expect(classifyStaffVoltieIntent("Which products are out of stock?")).toBe("inventory");
@@ -37,6 +43,10 @@ describe("staff voltie intent", () => {
     expect(extractStaffStatus("Hand VC-3FFC7D49 to the courier")).toBe("WITH_COURIER");
     expect(classifyStaffVoltieIntent("Hand VC-3FFC7D49 to the courier")).toBe("status");
     expect(staffProductQuery("Where is the Sony headphones")).toMatch(/sony/i);
+    expect(staffProductQuery("what locator code for apple watch?")).toMatch(/apple watch/i);
+    expect(staffProductQuery("what is bar code for apple watch")).toMatch(/apple watch/i);
+    expect(staffProductQuery("what locator code for apple watch?")).not.toMatch(/code/i);
+    expect(staffInventoryQuery("Show me inventory")).toBe("");
     expect(staffCustomerQuery("Find customer alex@volt.test")).toBe("alex@volt.test");
     expect(staffInventoryQuery("What products are low on stock?")).toBe("");
     expect(staffInventoryMode("What products are low on stock?")).toBe("low");

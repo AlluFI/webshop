@@ -81,7 +81,7 @@ describeLive("Staff Voltie", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ content });
     expect(reply.status).toBe(201);
-    return { threadId: thread.body.id as string, body: reply.body as { content: string; uiBlocks?: { type: string; orderId?: string; status?: string; reason?: string }[] } };
+    return { threadId: thread.body.id as string, body: reply.body as { content: string; uiBlocks?: { type: string; title?: string; orderId?: string; status?: string; reason?: string; items?: { name: string }[] }[] } };
   }
 
   it("scopes lookups by role and confirms status without silent writes", { timeout: 30_000 }, async () => {
@@ -193,6 +193,35 @@ describeLive("Staff Voltie", () => {
 
     const locator = await chat(warehouseToken, `Where is ${productName}?`);
     expect(locator.body.content.toLowerCase()).toMatch(/locator|@ |stock/);
+
+    const laptops = await chat(adminToken, "show laptops");
+    expect(laptops.body.content).not.toMatch(/I’m Voltie for/i);
+    expect(laptops.body.content.toLowerCase()).toMatch(/laptop|macbook|framework|match/i);
+    const laptopBlocks = (laptops.body.uiBlocks ?? []).filter((block) => block.type === "products");
+    const matchNames = (laptopBlocks[0]?.items ?? []).map((item: { name: string }) => item.name).join(" ");
+    expect(matchNames).toMatch(/laptop|macbook|framework/i);
+    expect(matchNames).not.toMatch(/power bank/i);
+
+    const availableLaptops = await chat(adminToken, "Show available laptops");
+    expect(availableLaptops.body.content).not.toMatch(/I’m Voltie for/i);
+    expect(availableLaptops.body.content.toLowerCase()).toMatch(/laptop|macbook|framework/i);
+
+    const watchLocator = await chat(warehouseToken, "what locator code for apple watch?");
+    expect(watchLocator.body.content).toMatch(/Apple Watch/i);
+    expect(watchLocator.body.content).not.toMatch(/No locator found/i);
+    expect(watchLocator.body.content).not.toMatch(/code for apple watch/i);
+
+    const watchBarcode = await chat(warehouseToken, "what is bar code for apple watch");
+    expect(watchBarcode.body.content).toMatch(/Apple Watch/i);
+    expect(watchBarcode.body.content).not.toMatch(/I’m Voltie for/i);
+
+    const salesPhrase = await chat(adminToken, "list last 7 days sale");
+    expect(salesPhrase.body.content).toMatch(/last 7 days/i);
+    expect(salesPhrase.body.content).not.toMatch(/I’m Voltie for/i);
+
+    const claims = await chat(adminToken, "show orders with claim");
+    expect(claims.body.content).not.toMatch(/I’m Voltie for/i);
+    expect(claims.body.content).toMatch(/claims/i);
 
     const originalStock = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stockQuantity;
     await prisma.product.update({ where: { id: product.id }, data: { stockQuantity: 2 } });

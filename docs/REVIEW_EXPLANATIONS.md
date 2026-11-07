@@ -2,7 +2,7 @@
 
 Written answers for the “student can explain / demonstrate” items are collected here. The live demo is still required; this document is the same story in writing so it can be read before or after the call.
 
-Related files: [ERD](erd.md), [README](../README.md), [master plan](../PROJECT_MASTER_PLAN.md).
+Related files: [ERD](erd.md), [README](../README.md), [master plan](../PROJECT_MASTER_PLAN.md), [performance / bottlenecks](PERFORMANCE.md).
 
 ---
 
@@ -266,6 +266,42 @@ Demo: `docker compose exec api pnpm test`. Storefront smokes: `pnpm test:e2e` (P
 
 ---
 
+## 12. Bottlenecks and proposed solutions
+
+k6 against the Docker storefront (2026-09-14): **p90 = 59 ms**, **p95 = 103 ms**, **112 req/s**, **0% errors** at ~64 VUs (50 browse + search + auth). The p95 > 5s cliff was **not** reached. Full numbers and how to rerun: [PERFORMANCE.md](PERFORMANCE.md).
+
+The shop is not in pain at class-demo scale. Bottlenecks below are the ones designed for, plus the ones that would show up first if traffic or the catalog grew. Scaling order: measure → indexes/cache → extra API/worker containers → PgBouncer/replicas. Microservices are **not** the next step (one catalog and one users table).
+
+### Seen or already mitigated
+
+| Bottleneck | Why it shows up | What is done / next |
+| --- | --- | --- |
+| Shared-IP rate limits | Token buckets are keyed on `X-Forwarded-For`. 50 k6 VUs from one IP looked like one attacker (~74% **429**, latency still tiny). | Keep per-IP buckets (availability). k6 sends a unique forwarded address per VU. |
+| Catalog facet `groupBy` | Every PLP counted brands/categories across the filtered set. Cheap at 14 SKUs, linear later. | **Done:** Redis `facets:v1:{ver}:…` (45s TTL); admin writes bump `facets:ver`. Next: materialized view at tens of thousands of SKUs. |
+| Relevance search two round-trips | `ts_rank` returns ids, then Prisma `findMany` loads rows. | Fine at demo size. Next: select columns in the raw SQL; put brand name in `search_vector`. |
+| Images from the API process | Node streaming `/api/v1/files/` competes with JSON on the same event loop. | Cache-Control 7 days on files. Next: object storage + CDN; API only mints URLs. |
+| Argon2 on login | Tens of ms of CPU per attempt by design. A login burst pegs one API container. | Auth token-bucket (60 capacity, 1/s). Next: more API replicas (stateless). Do not weaken Argon2. |
+| Single payment worker | `apps/worker` is one consumer on `payment.status`. Webhook stays fast; email/stock queue behind it. | Enough for the demo. Next: more worker replicas on the same queue. DLQ already exists. |
+| Postgres connections | API + worker each open a Prisma pool against one Postgres. | Next: PgBouncer before 100+ VUs; cap `connection_limit`. |
+| Hot SKU `SELECT FOR UPDATE` | Last-unit checkout serializes on the product row. Correct for integrity; a flash-sale SKU waits. | Keep the lock. Mail is already off the transaction. Next: reservation rows if one SKU is a bottleneck. |
+
+### Could be faced later
+
+| Bottleneck | How it would show | Proposed solution |
+| --- | --- | --- |
+| Next.js SSR catalog | Home/PLP HTML p95 rises while `/api/v1/products` stays flat. | Cache anonymous HTML; more `web` replicas; keep cart/checkout dynamic. |
+| Redis as a SPOF | Refresh, rate limits, TOTP, and facet cache all fail if Redis is down. | Managed Redis replica. Sessions and rate limits fail **closed**; facet cache can fail open to Postgres. |
+| Single Postgres primary | Checkouts queue; read replicas do not help `INSERT order`. | Indexes / `EXPLAIN ANALYZE` first. Then catalog read replicas. Partition `orders` by month if history is huge. |
+| Bulk CSV on the request | Admin import blocks one Node worker until parse+insert finish. | Return `202` and insert in the worker in chunks. |
+| Upload volume on one node | A second API replica does not see images on the first disk. | Compose shared volume is fine. Production: S3. |
+| Stripe webhook retries | A buggy handler + Stripe retries duplicate `payment.status`. | Keep the handler idempotent (PaymentIntent id / order status). Replay from the DLQ. |
+| Guest carts pile up | Every guest cookie creates a hashed cart row. | TTL/cron unused guest carts. Qty is already clamped to stock. |
+| TLS nginx as the only public door | One `tls` container; 8443 dies with it (8088 still works on the host). | Two nginx replicas behind a load balancer. |
+| k6 measured HTTP, not TLS | Report used `http://web:3000`, so nginx TLS is not in the p90. | Re-run with `BASE_URL=https://tls:443` before quoting TLS numbers. |
+| 90% CPU never hit | Review mix: API ~3% CPU / 111 MiB. | `K6_PROFILE=stress` (200 browse VUs) + `docker stats` is the honest “max users before p95 > 5s” run. |
+
+---
+
 ## Quick demo script (same as README, with “explain” beats)
 
 1. `./scripts/start.sh` → https://localhost:8443 (the cert is accepted) or http://localhost:8088, Mailpit http://localhost:8025.
@@ -277,4 +313,4 @@ Demo: `docker compose exec api pnpm test`. Storefront smokes: `pnpm test:e2e` (P
 7. Checkout: prefill, bad postcode field error, Pay with `4242…4242`; confirmation shows `VC-` reference + estimated delivery; Mailpit HTML. Then `4000…9995`: the order page is opened, items are returned to the cart, the failure mail is received in Mailpit (no Stripe CLI).
 8. Admin `admin@volt.test` + TOTP `DEMOADMIN2FASECRETKEYAA`: the two-factor fields are empty (email/password are not reused). CRUD, bulk CSV, hide a review, **order handling** Print label (Posti / PostNord / Budbee mock), hand to courier, refuse a role until 2FA.
 9. Contact form → Mailpit; unknown URL → 404; burst `/auth/login` → 429.
-10. `docker compose exec api pnpm test` then k6 + `docs/PERFORMANCE.md`. ACID, PCI, CIA, and semantic HTML are walked through.
+10. `docker compose exec api pnpm test` then k6 + `docs/PERFORMANCE.md`. ACID, PCI, CIA, semantic HTML, and bottlenecks (section 12) are walked through.

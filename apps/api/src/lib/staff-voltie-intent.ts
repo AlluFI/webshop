@@ -9,6 +9,7 @@ export type StaffVoltieIntent =
   | "inventory"
   | "wholesaler"
   | "tickets"
+  | "claim_orders"
   | "sales"
   | "refund"
   | "status"
@@ -48,6 +49,11 @@ export function classifyStaffVoltieIntent(text: string): StaffVoltieIntent {
   if (/\b(tickets?|jira|open claims?|claims queue|support inbox)\b/.test(value)) {
     return "tickets";
   }
+  if (
+    /\b(orders? (with|in|on) claims?|claims? orders?|in claims|with a claim)\b/.test(value)
+  ) {
+    return "claim_orders";
+  }
   if (/\brefund/.test(value)) return "refund";
   if (extractStaffStatus(text)) return "status";
   if (extractOrderReference(text) || /\b(find (the )?order|look up (the )?order|order VC-|status of (the )?order)\b/.test(value)) {
@@ -60,7 +66,11 @@ export function classifyStaffVoltieIntent(text: string): StaffVoltieIntent {
   ) {
     return "inventory";
   }
-  if (/\b(locator|where (is|are)|stock location|warehouse location|barcode)\b/.test(value)) {
+  if (
+    /\b(locator( codes?)?|where (is|are)|stock location|warehouse location|bar[\s-]?codes?)\b/.test(
+      value,
+    )
+  ) {
     return "locator";
   }
   if (/\b(wholesaler|supplier|who supplies|supplied by|who (is|are) the (wholesaler|supplier))\b/.test(value)) {
@@ -73,26 +83,35 @@ export function classifyStaffVoltieIntent(text: string): StaffVoltieIntent {
   ) {
     return "customer";
   }
-  if (/\b(sales|revenue|how much (did we|have we)|last (week|month)|overview|this week)\b/.test(value)) {
+  if (
+    /\b(sales?|revenue|how much (did we|have we)|last (\d+ )?days|last (week|month)|overview|this week|7 days)\b/.test(
+      value,
+    )
+  ) {
     return "sales";
   }
-  if (/\b(find|search|sell|headphones?|laptop|sony|bose|stock|product)\b/.test(value)) {
+  if (
+    /\b(find|search|looking for|recommend|do you sell|available|headphones?|earbuds?|earphones?|headset|laptops?|phones?|watches?|sony|bose|macbook|catalog|products?)\b/.test(
+      value,
+    ) || /^(show|list)\b/.test(value)
+  ) {
     return "search";
   }
   return "help";
 }
 
+const PRODUCT_FILLER =
+  /\b(what|which|where|is|are|the|a|an|for|of|please|me|tell|give|get|show|find|locator|locators|location|warehouse|stock location|bar[\s-]?codes?|codes?)\b/gi;
+
 export function staffProductQuery(text: string) {
-  return searchQueryFrom(
-    text.replace(/\b(locator|where (is|are)|stock location|warehouse location|barcode for|find)\b/gi, " ").trim(),
-  );
+  return searchQueryFrom(text.replace(PRODUCT_FILLER, " ").replace(/\s+/g, " ").trim());
 }
 
 export function staffInventoryQuery(text: string) {
   return searchQueryFrom(
     text
       .replace(
-        /\b(what|which|whose|products?|items?|skus?|are|is|low|on|of|the|a|an|stock|stocks|inventory|inventories|restock|restocks|out of|running|how much|how many|do we have|left|below|threshold|levels?|qty|quantity|sold out)\b/gi,
+        /\b(what|which|whose|show|me|list|available|please|products?|items?|skus?|are|is|low|on|of|the|a|an|stock|stocks|inventory|inventories|restock|restocks|out of|running|how much|how many|do we have|left|below|threshold|levels?|qty|quantity|sold out)\b/gi,
         " ",
       )
       .replace(/\s+/g, " ")

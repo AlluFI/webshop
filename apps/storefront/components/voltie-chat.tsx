@@ -9,7 +9,7 @@ import { money } from "@/lib/product";
 import { useAuth } from "./auth";
 
 type UiBlock =
-  | { type: "products"; items: { name: string; slug: string; href: string; price: number }[] }
+  | { type: "products"; title?: string; items: { name: string; slug: string; href: string; price: number }[] }
   | { type: "confirm_claim"; orderId: string; reference: string; reason: string; productName?: string }
   | { type: "ticket"; reference: string; externalKey: string }
   | { type: "did_you_mean"; suggestion: string }
@@ -200,16 +200,19 @@ export function VoltieChat({ variant = "shop" }: { variant?: "shop" | "staff" })
                 {message.uiBlocks?.map((block, index) => {
                   if (block.type === "products") {
                     return (
-                      <ul key={`${message.id}-p-${index}`} className="voltie-products">
-                        {block.items.map((item) => (
-                          <li key={item.slug}>
-                            <Link href={item.href} onClick={() => setOpen(false)}>
-                              {item.name}
-                            </Link>
-                            <span>{money(item.price)}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      <div key={`${message.id}-p-${index}`}>
+                        {block.title ? <p className="voltie-products-label">{block.title}</p> : null}
+                        <ul className="voltie-products">
+                          {block.items.map((item) => (
+                            <li key={item.slug}>
+                              <Link href={item.href} onClick={() => setOpen(false)}>
+                                {item.name}
+                              </Link>
+                              <span>{money(item.price)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     );
                   }
                   if (block.type === "confirm_claim") {

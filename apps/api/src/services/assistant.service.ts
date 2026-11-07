@@ -12,6 +12,7 @@ import {
   toolConfirmClaim,
   toolCreateEnquiry,
   toolMyOrders,
+  catalogProductBlocks,
   toolSearchCatalog,
   toolShopInfo,
   uniqueOrderProducts,
@@ -254,11 +255,12 @@ async function ruleReply(
 
   if (intent === "search") {
     const found = await toolSearchCatalog(resolved.text);
+    const blocks = catalogProductBlocks(found);
     return {
-      content: found.products.length
+      content: blocks.length
         ? `${note}${found.summary} Open a product for specs, warranty, and stock.`
         : `${note}${found.summary} Try a brand or model name.`,
-      uiBlocks: found.products.length ? [{ type: "products" as const, items: found.products }] : [],
+      uiBlocks: blocks,
     };
   }
 

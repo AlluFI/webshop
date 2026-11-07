@@ -1469,9 +1469,16 @@ button.link {
   background: #e4eee8;
 }
 .voltie-bubble p { margin: 0; white-space: pre-wrap; }
+.voltie-products-label {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted, #5c584f);
+}
 .voltie-products {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   padding: 0;
 }
 .voltie-products li {

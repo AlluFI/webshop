@@ -400,7 +400,7 @@ const SEARCH_STOP = new Set([
 ]);
 
 const SEARCH_PREFIX =
-  /^(do you (sell|have|stock)|have you got|can i (buy|get)|can you (show|find|recommend|list)?|please |i want |i need |i('m| am) looking for |what (kind|type|sort)s? of |which (kind|type|sort)s? of |what |which |show me |list |are there (any )?)/i;
+  /^(do you (sell|have|stock)|have you got|can i (buy|get)|can you (show|find|recommend|list)?|please |i want |i need |i('m| am) looking for |what (kind|type|sort)s? of |which (kind|type|sort)s? of |what |which |show me |show |list |are there (any )?)/i;
 const SEARCH_SUFFIX =
   /\b(are (there )?(any )?(available|in stock)?|available|in stock|do you (sell|have|stock)|please)\s*\?*$/i;
 

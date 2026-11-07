@@ -11,7 +11,7 @@ import { prisma } from "../prisma.js";
 import { HttpError } from "../http-error.js";
 import { adminService } from "../services/admin.service.js";
 import { salesService } from "../services/sales.service.js";
-import { toolSearchCatalog, type AssistantActor, type AssistantUiBlock } from "./assistant-tools.js";
+import { catalogProductBlocks, toolSearchCatalog, type AssistantActor, type AssistantUiBlock } from "./assistant-tools.js";
 import { listSupportTickets } from "./tickets.js";
 
 type StaffOrder = NonNullable<Awaited<ReturnType<typeof findOrderByStaffReference>>>;
@@ -34,7 +34,10 @@ function euro(value: number) {
 
 export function staffHelpText(role: string) {
   const bits: string[] = [];
-  if (can(role, "orders")) bits.push("look up an order by VC- number");
+  if (can(role, "orders")) {
+    bits.push("look up an order by VC- number");
+    bits.push("list orders in claims");
+  }
   if (can(role, "customers")) bits.push("find a customer by name or email");
   if (can(role, "picking")) bits.push("show the pick list");
   if (can(role, "products")) bits.push("find a warehouse locator or barcode");
@@ -88,6 +91,24 @@ export async function toolStaffOrder(actor: AssistantActor, reference: string | 
     return { content: `No order ${reference} in the shop.`, uiBlocks: [] };
   }
   return { content: describeOrder(roleName(actor), order), uiBlocks: [], order };
+}
+
+export async function toolStaffClaimOrders(actor: AssistantActor) {
+  if (!can(roleName(actor), "orders")) return deny("look up orders");
+  const listed = await adminService.listOrders({ status: "CLAIMS", pageSize: 8 });
+  if (!listed.items.length) {
+    return { content: "No orders are in Claims.", uiBlocks: [] as AssistantUiBlock[] };
+  }
+  const showCustomer = can(roleName(actor), "customers");
+  const lines = listed.items.map((order) => {
+    const who = showCustomer && (order.customerName || order.email) ? ` · ${order.customerName || order.email}` : "";
+    return `${order.reference} · ${formatOrderStatus(order.status)}${who} · ${order.summary || "no line items"}`;
+  });
+  const extra = listed.total > lines.length ? `\n…and ${listed.total - lines.length} more on Orders.` : "";
+  return {
+    content: `${listed.total} order(s) in Claims:\n${lines.join("\n")}${extra}`,
+    uiBlocks: [] as AssistantUiBlock[],
+  };
 }
 
 export async function toolStaffCustomer(actor: AssistantActor, query: string) {
@@ -390,9 +411,7 @@ export async function toolStaffSearch(actor: AssistantActor, text: string) {
   const found = await toolSearchCatalog(text);
   return {
     content: found.summary,
-    uiBlocks: found.products.length
-      ? ([{ type: "products", items: found.products }] as AssistantUiBlock[])
-      : ([] as AssistantUiBlock[]),
+    uiBlocks: catalogProductBlocks(found),
   };
 }
 

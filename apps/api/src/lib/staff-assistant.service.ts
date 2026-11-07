@@ -12,6 +12,7 @@ import {
 import {
   applyStaffAction,
   staffHelpText,
+  toolStaffClaimOrders,
   toolStaffCustomer,
   toolStaffInventory,
   toolStaffLocator,
@@ -52,6 +53,7 @@ export async function staffRuleReply(
   if (intent === "locator") return toolStaffLocator(actor, staffProductQuery(spoken));
   if (intent === "wholesaler") return toolStaffWholesaler(actor, staffWholesalerQuery(spoken));
   if (intent === "tickets") return toolStaffTickets(actor);
+  if (intent === "claim_orders") return toolStaffClaimOrders(actor);
   if (intent === "customer") return toolStaffCustomer(actor, staffCustomerQuery(spoken));
   if (intent === "sales") return toolStaffSales(actor);
   if (intent === "search") return toolStaffSearch(actor, spoken);

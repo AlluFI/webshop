@@ -58,6 +58,8 @@ describe("voltie intent", () => {
     expect(searchQueryFrom("What kind of headphones are available?")).toBe("headphones");
     expect(searchTokens("What kind of headphones are available?")).toEqual(["headphones"]);
     expect(searchQueryFrom("Which laptops do you have?")).toBe("laptops");
+    expect(searchQueryFrom("show laptops")).toBe("laptops");
+    expect(searchQueryFrom("Show available laptops")).toMatch(/laptops/i);
     expect(classifyVoltieIntent("What kind of headphones are available?")).toBe("search");
   });
 

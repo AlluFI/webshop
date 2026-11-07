@@ -59,6 +59,23 @@ describeLive("Voltie assistant", () => {
     expect(category.body.uiBlocks?.[0]?.type).toBe("products");
     expect(category.body.uiBlocks?.[0]?.items?.length).toBeGreaterThan(1);
 
+    const laptops = await request(app)
+      .post(`/api/v1/assistant/threads/${guestThread.body.id}/messages`)
+      .send({ content: "show laptops" });
+    expect(laptops.status).toBe(201);
+    expect(laptops.body.content.toLowerCase()).toMatch(/match|laptop|macbook|framework/);
+    const laptopNames = (laptops.body.uiBlocks ?? [])
+      .filter((block: { type: string }) => block.type === "products")
+      .flatMap((block: { title?: string; items?: { name: string }[] }) =>
+        (block.items ?? []).map((item) => ({ title: block.title, name: item.name })),
+      );
+    expect(laptopNames.some((row: { name: string }) => /framework laptop|macbook/i.test(row.name))).toBe(true);
+    const powerBank = laptopNames.find((row: { name: string }) => /power bank/i.test(row.name));
+    if (powerBank) {
+      expect(powerBank.title).toMatch(/related/i);
+      expect(laptopNames.find((row: { name: string }) => /framework laptop/i.test(row.name))?.title).toMatch(/match/i);
+    }
+
     const orders = await request(app)
       .post(`/api/v1/assistant/threads/${guestThread.body.id}/messages`)
       .send({ content: "Where is my order VC-AAAAAAAA?" });

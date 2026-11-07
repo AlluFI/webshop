@@ -9,6 +9,7 @@ import { catalogService } from "../services/catalog.service.js";
 import { shippingService } from "../services/shipping.service.js";
 import { createSupportTicket } from "./tickets.js";
 import { searchQueryFrom, searchTokens } from "./voltie-intent.js";
+import { CATEGORY_ALIASES, partitionCatalogHits } from "./catalog-match.js";
 import { HttpError } from "../http-error.js";
 import { writeAudit } from "./audit.js";
 import { emitOrderChange } from "./integration-events.js";
@@ -20,8 +21,16 @@ export type AssistantActor = {
   displayName?: string | null;
 };
 
+export type CatalogCard = { name: string; slug: string; href: string; price: number };
+
+export type CatalogSearchResult = {
+  summary: string;
+  products: CatalogCard[];
+  related: CatalogCard[];
+};
+
 export type AssistantUiBlock =
-  | { type: "products"; items: { name: string; slug: string; href: string; price: number }[] }
+  | { type: "products"; title?: string; items: CatalogCard[] }
   | { type: "confirm_claim"; orderId: string; reference: string; reason: string; productName?: string }
   | { type: "ticket"; reference: string; externalKey: string }
   | { type: "did_you_mean"; suggestion: string }
@@ -71,43 +80,6 @@ function shopInfo(topic: string) {
   return "I can help with products, shipping, returns, orders you own, and opening a support ticket. I cannot see other customers’ data.";
 }
 
-const CATEGORY_ALIASES: Record<string, string> = {
-  headphone: "audio",
-  headphones: "audio",
-  earbud: "audio",
-  earbuds: "audio",
-  earphone: "audio",
-  earphones: "audio",
-  headset: "audio",
-  speaker: "audio",
-  speakers: "audio",
-  audio: "audio",
-  laptop: "computers",
-  laptops: "computers",
-  computer: "computers",
-  computers: "computers",
-  notebook: "computers",
-  monitor: "computers",
-  monitors: "computers",
-  display: "computers",
-  phone: "phones",
-  phones: "phones",
-  smartphone: "phones",
-  smartphones: "phones",
-  watch: "wearables",
-  watches: "wearables",
-  wearable: "wearables",
-  keyboard: "accessories",
-  keyboards: "accessories",
-  mouse: "accessories",
-  mice: "accessories",
-  charger: "accessories",
-  accessories: "accessories",
-  light: "smart-home",
-  lights: "smart-home",
-  hub: "smart-home",
-};
-
 function uniqueWords(values: string[]) {
   const seen = new Set<string>();
   const words: string[] = [];
@@ -121,18 +93,53 @@ function uniqueWords(values: string[]) {
   return words;
 }
 
-function catalogHits(
-  items: { name: string; slug: string; sellingPrice?: number | string; price: number | string }[],
-  label: string,
-) {
+function toCard(item: {
+  name: string;
+  slug: string;
+  sellingPrice?: number | string;
+  price: number | string;
+}): CatalogCard {
   return {
-    summary: `Here is what we have for ${label}.`,
-    products: items.map((item) => ({
-      name: item.name,
-      slug: item.slug,
-      href: `/products/${item.slug}`,
-      price: Number(item.sellingPrice ?? item.price),
-    })),
+    name: item.name,
+    slug: item.slug,
+    href: `/products/${item.slug}`,
+    price: Number(item.sellingPrice ?? item.price),
+  };
+}
+
+export function catalogProductBlocks(found: CatalogSearchResult): AssistantUiBlock[] {
+  const blocks: AssistantUiBlock[] = [];
+  if (found.products.length) {
+    blocks.push({
+      type: "products",
+      title: found.related.length ? "Matches" : undefined,
+      items: found.products,
+    });
+  }
+  if (found.related.length) {
+    blocks.push({ type: "products", title: "Related accessories", items: found.related });
+  }
+  return blocks;
+}
+
+function catalogSummary(label: string, matches: CatalogCard[], related: CatalogCard[]): CatalogSearchResult {
+  if (!matches.length && !related.length) {
+    return { summary: `I could not find “${label}” in the catalog.`, products: [], related: [] };
+  }
+  if (matches.length && related.length) {
+    return {
+      summary: `Matches for ${label}, plus related accessories.`,
+      products: matches,
+      related,
+    };
+  }
+  if (matches.length) {
+    return { summary: `Here is what we have for ${label}.`, products: matches, related: [] };
+  }
+  return {
+    summary: `I did not find ${label} in the catalog. Related accessories:`,
+    products: [],
+    related,
   };
 }
 
@@ -158,26 +165,63 @@ async function resolveCategory(words: string[]) {
   return null;
 }
 
-export async function toolSearchCatalog(query: string) {
+export async function toolSearchCatalog(query: string): Promise<CatalogSearchResult> {
   const cleaned = searchQueryFrom(query);
   const tokens = searchTokens(query);
   const attempts = uniqueWords([cleaned, ...tokens]);
+  const label = cleaned || attempts[0] || query;
+  const category = await resolveCategory(attempts);
+  const byId = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      slug: string;
+      description?: string | null;
+      sellingPrice?: number | string;
+      price: number | string;
+      category: { slug: string };
+      brand: { name: string };
+    }
+  >();
+
+  function add(
+    items: {
+      id: string;
+      name: string;
+      slug: string;
+      description?: string | null;
+      sellingPrice?: number | string;
+      price: number | string;
+      category: { slug: string };
+      brand: { name: string };
+    }[],
+  ) {
+    for (const item of items) {
+      if (!byId.has(item.id)) byId.set(item.id, item);
+    }
+  }
 
   for (const attempt of attempts) {
-    const result = await catalogService.list({ q: attempt, pageSize: 5, sort: "relevance" });
-    if (result.items.length) return catalogHits(result.items, attempt);
+    add((await catalogService.list({ q: attempt, pageSize: 8, sort: "relevance" })).items);
   }
-
-  const category = await resolveCategory(attempts);
   if (category) {
-    const result = await catalogService.list({ category: category.slug, pageSize: 5 });
-    if (result.items.length) return catalogHits(result.items, category.name.toLowerCase());
+    add((await catalogService.list({ category: category.slug, pageSize: 8 })).items);
+    add((await catalogService.list({ category: "accessories", q: attemptToken(attempts), pageSize: 4 })).items);
   }
 
-  return {
-    summary: `I could not find “${cleaned || query}” in the catalog.`,
-    products: [],
-  };
+  const pooled = [...byId.values()];
+  const { matches, related } = partitionCatalogHits(pooled, tokens.length ? tokens : attempts, category?.slug ?? null);
+  const relatedFirst = [
+    ...related.filter((item) => item.category.slug === "accessories"),
+    ...related.filter((item) => item.category.slug !== "accessories"),
+  ].slice(0, 3);
+
+  return catalogSummary(label, matches.slice(0, 5).map(toCard), relatedFirst.map(toCard));
+}
+
+function attemptToken(attempts: string[]) {
+  return attempts.find((word) => word.length >= 3) ?? attempts[0] ?? "";
 }
 
 export async function toolShopInfo(topic: string) {
