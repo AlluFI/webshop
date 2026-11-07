@@ -36,7 +36,7 @@ export const config = {
   mailHost: process.env.MAIL_HOST ?? "127.0.0.1",
   mailPort: number("MAIL_PORT", 1025),
   mailFrom: process.env.MAIL_FROM ?? "Volt & Co <no-reply@localhost>",
-  webAppUrl: process.env.WEB_APP_URL ?? "http://localhost:5173",
+  webAppUrl: process.env.WEB_APP_URL ?? "http://localhost:8088",
   cookieSecure: process.env.COOKIE_SECURE === "true",
   uploadDir: process.env.UPLOAD_DIR ?? "uploads",
   dataEncryptionKey:

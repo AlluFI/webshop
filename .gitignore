@@ -6,13 +6,11 @@ coverage
 **/.env
 .env.*
 !.env.example
-!.env.development
 
 *.log
 .DS_Store
 uploads
 apps/api/uploads
-apps/web/dist
 apps/storefront/.next
 packages/shared/dist
 

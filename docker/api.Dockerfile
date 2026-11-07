@@ -11,7 +11,6 @@ WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
-COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
 
 RUN pnpm install --frozen-lockfile --filter api... \

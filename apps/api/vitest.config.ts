@@ -19,7 +19,7 @@ export default defineConfig({
       JWT_REFRESH_EXPIRES_SEC: "604800",
       MAIL_HOST: process.env.MAIL_HOST ?? "127.0.0.1",
       MAIL_PORT: process.env.MAIL_PORT ?? "10250",
-      WEB_APP_URL: "http://localhost:5173",
+      WEB_APP_URL: "http://localhost:8088",
       COOKIE_SECURE: "false",
       UPLOAD_DIR: process.env.UPLOAD_DIR ?? "uploads",
       DATA_ENCRYPTION_KEY: "test_data_encryption_key_must_be_32ch",

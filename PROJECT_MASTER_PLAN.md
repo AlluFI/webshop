@@ -45,13 +45,13 @@ Brand tone: clean, trustworthy, not gimmicky. First impression is “I would act
 | Layer | Choice |
 | --- | --- |
 | API | Express + TypeScript |
-| Web | Next.js 15 App Router (`apps/storefront`) in Docker. Vite (`apps/web`) is retained as a leftover local SPA. |
+| Web | Next.js 15 App Router (`apps/storefront`) in Docker |
 | ORM / DB | Prisma + PostgreSQL (ACID transactions) |
 | Sessions / cache | Redis (refresh tokens; later rate limit + search cache) |
 | Queue (Part 2+) | RabbitMQ |
 | Payments (Part 2+) | Stripe sandbox + Stripe.js / Elements (no card data on the server) |
 | Mail | Nodemailer + Mailpit in Docker |
-| Monorepo | pnpm workspaces: `apps/api`, `apps/web`, `apps/storefront`, `apps/worker`, `packages/shared` |
+| Monorepo | pnpm workspaces: `apps/api`, `apps/storefront`, `apps/worker`, `packages/shared` |
 | Validation | Zod in `packages/shared` (client + server) |
 | Tests | Vitest (unit) + Supertest (API) + Playwright storefront smokes; k6 load tests in Part 3 |
 | Auth hashing | Argon2 |
@@ -194,6 +194,8 @@ Part 3 adds:
   load-tests/               # k6 scenarios
   docs/PERFORMANCE.md       # load-test report for README
 ```
+
+The Vite SPA (`apps/web`) from Part 1 is removed; Next is the only storefront.
 
 API versioning: all HTTP APIs under `/api/v1/...`.
 

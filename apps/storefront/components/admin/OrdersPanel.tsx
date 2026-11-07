@@ -9,6 +9,7 @@ import {
   SHIPPING_CARRIER_META,
   STAFF_REFUNDABLE_STATUSES,
   carrierTrackingUrl,
+  POSTI_LIVE_TEST_TRACKING,
   storeCalendarDate,
 } from "@volt/shared";
 import { api, ApiError } from "@/lib/api";
@@ -274,7 +275,7 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
               onChange={(e) => setForm({ ...form, trackingCode: e.target.value })}
               placeholder={
                 form.carrier === "posti"
-                  ? "JJFI66012700410158170/32109367922"
+                  ? POSTI_LIVE_TEST_TRACKING
                   : form.carrier === "postnord"
                     ? "00TEST123456789SE"
                     : "BUD-DEV-12345"

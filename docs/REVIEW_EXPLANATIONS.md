@@ -200,7 +200,7 @@ CAPTCHA and Google’s redirect are not treated as fully trusted from unit tests
 A **modular monolith** is used, not a distributed set of microservices.
 
 - **One deployable API** (Express) with folders for auth, catalog, mail, tokens, and carriers — modules, not separate repos.
-- **One Docker storefront** (Next.js 15 App Router in `apps/storefront`) talking only to versioned HTTP: `/api/v1/...`. Interactive docs live at `/api/v1/docs` (OpenAPI 3 + Swagger UI). A leftover Vite SPA in `apps/web` is kept for local `pnpm dev:web` and is not served by Docker.
+- **One Docker storefront** (Next.js 15 App Router in `apps/storefront`) talking only to versioned HTTP: `/api/v1/...`. Interactive docs live at `/api/v1/docs` (OpenAPI 3 + Swagger UI).
 - **One Postgres** as the system of record; **Redis** for session state.
 - **Docker Compose** runs API, Next storefront, worker, Postgres, Redis, Mailpit, RabbitMQ, and nginx TLS. Docker plus optional Stripe CLI is required for reviewers.
 
@@ -211,7 +211,7 @@ A **modular monolith** is used, not a distributed set of microservices.
 - `apps/worker` consumes RabbitMQ **without** splitting the catalog database. Payment webhooks publish `payment.status`; the order is updated, email is sent, and inventory is restored by the worker. If payment volume later needs its own process, that module is already a boundary.
 - Carrier integrations are isolated under `apps/api/src/lib/carriers/`. Mock adapters return Volt labels; live adapters (Posti OAuth, PostNord OAuth, Budbee Basic auth) are selected with `*_MODE=live`.
 - BI and SaaS integrations are already in the codebase: `analytics_*` SQL views for a replica warehouse, hashed `volt_test_` / `volt_live_` API keys on `/api/v1/integrations/v1/*`, and HMAC-signed webhooks. Production cutover is replica access plus Admin → Integrations keys — see [INTEGRATIONS.md](INTEGRATIONS.md).
-- **Voltie** is the customer shop assistant. Guests get catalog/FAQ only; signed-in customers can see their own orders and confirm a claim. Tickets use a Jira-shaped payload stored locally and emailed to Mailpit (`TICKET_MODE=mock`) so the demo does not need Jira — see [VOLTIE.md](VOLTIE.md).
+- **Voltie** is the shop assistant (customers) and Admin wingman (staff, role-scoped, confirmed writes). Guests get catalog/FAQ only; signed-in customers can see their own orders and confirm a claim. Tickets use a Jira-shaped payload stored locally and emailed to Mailpit (`TICKET_MODE=mock`) so the demo does not need Jira — see [VOLTIE.md](VOLTIE.md).
 
 **What is not done yet:** a separate “User Service” and “Product Service” with two databases. Joining products to brands/categories and to order lines is exactly what one relational database is for.
 

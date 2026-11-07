@@ -6,7 +6,6 @@ A B2C electronics shop is provided: accounts, a PostgreSQL catalog, faceted sear
 
 - **API:** Express + TypeScript
 - **Web:** Next.js 15 App Router (`apps/storefront`) on 8088 / 8443 — SSR catalog, client checkout/admin
-- **Web (leftover):** React 19 + Vite (`apps/web`) for local `pnpm dev:web` on 5173; Docker does not serve this app
 - **Edge:** nginx TLS terminator (`https://localhost:8443`) proxies to the Next storefront
 - **Data:** PostgreSQL (Prisma, ACID transactions) + Redis (refresh sessions + token-bucket rate limits)
 - **Mail:** Nodemailer → Mailpit (Docker)
@@ -17,7 +16,7 @@ A B2C electronics shop is provided: accounts, a PostgreSQL catalog, faceted sear
 - **Staff Admin:** tab-by-tab guide and roles in [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
 - **BI / integrations:** SQL views + machine API keys + signed webhooks — [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
 - **Voltie:** customer shop assistant and staff wingman (role-scoped, confirmed writes) + mock Jira tickets — [docs/VOLTIE.md](docs/VOLTIE.md)
-- **Monorepo:** pnpm workspaces (`apps/api`, `apps/web`, `apps/storefront`, `apps/worker`, `packages/shared`)
+- **Monorepo:** pnpm workspaces (`apps/api`, `apps/storefront`, `apps/worker`, `packages/shared`)
 
 ## Entity relationship diagram
 
@@ -158,11 +157,10 @@ pnpm --filter api exec prisma migrate deploy
 pnpm --filter api seed
 pnpm dev:api   # http://localhost:3000
 pnpm --filter worker dev
-pnpm dev:web   # http://localhost:5173 — leftover Vite SPA
 pnpm dev:storefront   # http://localhost:3001 — Next.js storefront
 ```
 
-The Next storefront is served by `./scripts/start.sh` on 8088 / 8443. Home, catalog, and product HTML (title, description, JSON-LD) are server-rendered. `/api` is proxied to Express so guest `cart_token` cookies stay same-origin. Checkout, orders, account, and staff admin are client islands. Local Next without Docker is started with `pnpm dev:storefront` on 3001 (API on 3000). The Vite app on 5173 is retained as a leftover SPA and is not used in Docker.
+The Next storefront is served by `./scripts/start.sh` on 8088 / 8443. Home, catalog, and product HTML (title, description, JSON-LD) are server-rendered. `/api` is proxied to Express so guest `cart_token` cookies stay same-origin. Checkout, orders, account, and staff admin are client islands. Local Next without Docker is started with `pnpm dev:storefront` on 3001 (API on 3000); set `WEB_APP_URL=http://localhost:3001` in `apps/api/.env` for that setup.
 
 ## Usage
 
