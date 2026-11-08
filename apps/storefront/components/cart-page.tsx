@@ -9,8 +9,10 @@ import { useAuth } from "./auth";
 import { useCart } from "./cart";
 import { ProductCard } from "./product-card";
 import { CustomerShopGate } from "./shop-gate";
+import { useI18n } from "./i18n";
 
 function CartInner() {
+  const { t } = useI18n();
   const { cart, ready, error, refresh, updateItem, removeItem } = useCart();
   const { accessToken } = useAuth();
   const [related, setRelated] = useState<Product[]>([]);
@@ -42,14 +44,14 @@ function CartInner() {
       .catch(() => setRelated([]));
   }, [ready, hydrated, cart.items]);
 
-  if (!ready || !hydrated) return <p>Loading cart…</p>;
+  if (!ready || !hydrated) return <p>{t("cart.loading")}</p>;
 
   async function onQuantity(itemId: string, quantity: number) {
     try {
       await updateItem(itemId, quantity);
       setActionError("");
     } catch (err) {
-      setActionError(userErrorMessage(err, "Could not update quantity"));
+      setActionError(userErrorMessage(err, t("cart.updateError")));
     }
   }
 
@@ -58,14 +60,14 @@ function CartInner() {
       await removeItem(itemId);
       setActionError("");
     } catch (err) {
-      setActionError(userErrorMessage(err, "Could not remove this item"));
+      setActionError(userErrorMessage(err, t("cart.removeError")));
     }
   }
 
   return (
     <section>
-      <p className="kicker">Your bag</p>
-      <h1>Cart</h1>
+      <p className="kicker">{t("cart.kicker")}</p>
+      <h1>{t("cart.title")}</h1>
       {error && <p className="banner error">{error}</p>}
       {actionError && <p className="banner error">{actionError}</p>}
       {cart.warnings.map((warning) => (
@@ -75,7 +77,7 @@ function CartInner() {
       ))}
       {cart.items.length === 0 ? (
         <p>
-          Your cart is empty. <Link href="/catalog">Browse the catalog</Link>
+          {t("cart.empty")} <Link href="/catalog">{t("cart.browse")}</Link>
         </p>
       ) : (
         <div className="checkout-grid">
@@ -87,9 +89,9 @@ function CartInner() {
                   <Link href={`/products/${item.slug}`}>
                     <strong>{item.name}</strong>
                   </Link>
-                  <p className="muted">{money(item.price)} each</p>
+                  <p className="muted">{t("cart.each", { amount: money(item.price) })}</p>
                   <label>
-                    Qty{" "}
+                    {t("cart.qty")}{" "}
                     <input
                       type="number"
                       min={1}
@@ -99,7 +101,7 @@ function CartInner() {
                     />
                   </label>
                   <button className="link" type="button" onClick={() => void onRemove(item.id)}>
-                    Remove
+                    {t("cart.remove")}
                   </button>
                 </div>
                 <p className="price">{money(item.lineTotal)}</p>
@@ -107,27 +109,27 @@ function CartInner() {
             ))}
           </div>
           <aside className="panel">
-            <h2>Summary</h2>
+            <h2>{t("cart.summary")}</h2>
             <p>
-              {cart.itemCount} {cart.itemCount === 1 ? "item" : "items"}
+              {cart.itemCount} {cart.itemCount === 1 ? t("cart.item") : t("cart.items")}
             </p>
             <p className="price" style={{ fontSize: "1.3rem" }}>
               {money(cart.subtotal)}
             </p>
             <p className="muted">
-              Shipping is calculated at checkout. Free standard over {money(FREE_STANDARD_THRESHOLD)}.
+              {t("cart.shippingHint", { amount: money(FREE_STANDARD_THRESHOLD) })}
             </p>
             {cart.guest && (
               <p className="muted">
-                Sign in to keep this cart across devices. Guest selections are saved on this browser.
+                {t("cart.guestHint")}
               </p>
             )}
             <div className="actions">
               <Link className="button" href="/checkout">
-                Checkout
+                {t("cart.checkout")}
               </Link>
               <Link className="ghost" href="/catalog">
-                Continue shopping
+                {t("cart.continue")}
               </Link>
             </div>
           </aside>
@@ -135,8 +137,8 @@ function CartInner() {
       )}
       {related.length > 0 && (
         <div style={{ marginTop: 36 }}>
-          <p className="kicker">You might also like</p>
-          <h2>Related products</h2>
+          <p className="kicker">{t("cart.relatedKicker")}</p>
+          <h2>{t("cart.related")}</h2>
           <div className="grid">
             {related.map((product) => (
               <ProductCard key={product.id} product={product} />

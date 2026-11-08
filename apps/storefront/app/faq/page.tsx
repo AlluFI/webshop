@@ -1,26 +1,28 @@
+import Link from "next/link";
+import { getTranslator } from "@/lib/i18n/server";
 import { pageMetadata } from "@/lib/seo";
 
-export const metadata = pageMetadata(
-  "FAQ — Volt & Co",
-  "Shipping, returns, 2FA, and how Volt & Co handles payments without storing card numbers.",
-);
+export async function generateMetadata() {
+  const t = await getTranslator();
+  return pageMetadata(`${t("faq.title")} — Volt & Co`, t("faq.shipA"));
+}
 
-export default function FaqPage() {
+export default async function FaqPage() {
+  const t = await getTranslator();
   return (
     <article className="prose-page">
-      <h1>FAQ</h1>
-      <h2>How fast do you ship?</h2>
-      <p>Standard is 3–5 business days (free over €150). Express is 1–2 days.</p>
-      <h2>Can I return a paid order?</h2>
+      <h1>{t("faq.title")}</h1>
+      <h2>{t("faq.shipQ")}</h2>
+      <p>{t("faq.shipA")}</p>
+      <h2>{t("faq.lookupQ")}</h2>
       <p>
-        Yes — while the order is still <strong>Paid</strong>, open it, choose a reason, and request a
-        sandbox refund. Stock is restored. After staff moves it to processing or shipping, only support
-        can refund.
+        {t("faq.lookupA")}{" "}
+        <Link href="/orders/lookup">{t("footer.lookup")}</Link>
       </p>
-      <h2>Why do I need 2FA for admin?</h2>
-      <p>Staff roles can change prices, refunds, and other people’s roles. Authenticator apps are mandatory.</p>
-      <h2>Do you store card numbers?</h2>
-      <p>No. Checkout uses Stripe Payment Element. We store PaymentIntent ids, never PAN or CVC.</p>
+      <h2>{t("faq.returnQ")}</h2>
+      <p>{t("faq.returnA")}</p>
+      <h2>{t("faq.cardQ")}</h2>
+      <p>{t("faq.cardA")}</p>
     </article>
   );
 }

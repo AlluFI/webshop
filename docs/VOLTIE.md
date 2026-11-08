@@ -6,11 +6,11 @@ Voltie is rule-based (no LLM keys). The shop FAB is for customers. Staff get a s
 
 | Caller | Allowed | Blocked |
 | --- | --- | --- |
-| Guest | Catalog search, shipping/returns/warranty/payments/promos, open an enquiry with an email | Any order lookup |
+| Guest | Catalog search, shipping/returns/warranty/payments/promos, how to track without an account (Find order: VC- number + last name, or the confirmation-email link), open an enquiry with an email | Looking up a specific order in chat (never by email) |
 | Signed-in customer | That plus **their** orders, a confirmed claim | Other people’s orders |
 | Staff | Shop widget is hidden — use Admin Voltie | — |
 
-Order lookup is never done by email alone. If a shopper needs help with an order (missing parts, ripped parcel, “the product is not working”), Voltie asks which order and shows tap rows. When that order has more than one product, Voltie asks which product (or the whole order) before offering a confirmed claim, so the support ticket already names the item.
+Order lookup is never done by email alone. Guests are sent to **Find order** (`/orders/lookup`) with the VC- number and last name, or the **View your order** link in the confirmation email. If a signed-in shopper needs help with an order (missing parts, ripped parcel, “the product is not working”), Voltie asks which order and shows tap rows. When that order has more than one product, Voltie asks which product (or the whole order) before offering a confirmed claim, so the support ticket already names the item.
 
 ## Staff widget (Admin)
 
@@ -40,7 +40,7 @@ A signed-in customer can ask Voltie to open a claim. Voltie shows **Confirm clai
 ## Demo
 
 1. Open http://localhost:8088 and click **Voltie**. **New chat** starts a fresh thread so the previous order context is dropped.
-2. Guest: “Do you sell Sony headphones?”, “How long is shipping?”, “Please email support … reply to you@example.com”.
+2. Guest: “Do you sell Sony headphones?”, “How long is shipping?”, “How can I track my order?”, “Please email support … reply to you@example.com”.
 3. Sign in as `customer@volt.test` and ask about a damaged order; confirm the claim.
 4. Mailpit + Admin → Tickets show the mock Jira payload.
 5. Sign in as staff (2FA). On Admin, open Voltie: “Find VC-…”, “how many unpicked order in queue?”, “show me orders for user customer@volt.test”, “Which is wholesaler for apple products?”, “What products are low on stock?”, “show laptops”, “what locator code for apple watch?”, “list last 7 days sale”, “show orders with claim”. Warehouse answers omit email. Refunds and status wait for Confirm. Emails are not spell-corrected (so `gmail.com` stays `gmail.com`).

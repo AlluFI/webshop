@@ -152,14 +152,15 @@ Buyers on paid-through-delivered orders in the selected time frame. Signed-in sh
 
 Warehouse pick and ship work is listed here.
 
-- **Paid**, **Processing**, and **Shipping** orders are listed with **express first** (oldest to newest), then standard (oldest to newest). Express rows show a red **! Express** mark. **Claims**, Cancelled, and Refunded orders are not in this queue. A red **!** also appears when the order is marked as a deviation.
-- A row is opened for locator codes, barcodes, quantities, and the delivery address
+- **Paid**, **Processing**, and **Shipping** orders are listed with **express first** (oldest to newest), then standard and Helsinki **pickup** (oldest to newest). Express rows show a red **! Express** mark. Pickup rows show a **Pickup** mark. **Claims**, Cancelled, and Refunded orders are not in this queue. A red **!** also appears when the order is marked as a deviation.
+- A row is opened for locator codes, barcodes, quantities, and the delivery address (or warehouse collection for pickup)
 - Lines stay locked until **Process** (status becomes **Processing**)
 - Each line is ticked by hand, or a barcode is scanned (USB scanner, or Use camera on a phone). A scan only ticks a matching line; checkboxes remain available
 - **Order completed** is used, then quantities are confirmed
-- A confirmed pick moves the order to **Shipping**. The order **stays on this list** until it is handed to the courier
-- **Create label** / **Print label** calls `POST /api/v1/admin/orders/{id}/shipment`. A carrier adapter is selected (Posti, PostNord, or Budbee). In mock mode a Volt HTML label and a demo tracking code are returned. The same request shape is used later when `POSTI_MODE`, `POSTNORD_MODE`, or `BUDBEE_MODE` is set to `live`
-- **Hand to courier** saves tracking, emails the customer, and removes the order from this list. The order remains under **Orders**
+- A confirmed pick moves the order to **Shipping**. Courier orders **stay on this list** until handed to the courier. Pickup orders stay until the customer collects them
+- After a pickup pick, staff are told to hold the order on the warehouse shelf. Courier labels are blocked. The customer is emailed that the order is ready at Mannerheimintie 12, 00100 Helsinki
+- **Create label** / **Print label** calls `POST /api/v1/admin/orders/{id}/shipment` for courier orders only. A carrier adapter is selected (Posti, PostNord, or Budbee). In mock mode a Volt HTML label and a demo tracking code are returned. The same request shape is used later when `POSTI_MODE`, `POSTNORD_MODE`, or `BUDBEE_MODE` is set to `live`
+- **Hand to courier** saves tracking, emails the customer, and removes the order from this list. **Customer collected** is used for Helsinki pickup. The order remains under **Orders**
 
 ---
 
@@ -210,7 +211,7 @@ Shopper directory (not the sales report).
 
 **Who:** admin, support
 
-Product reviews from customers who bought the item are moderated here.
+Product reviews from customers who bought the item (written from the order) are moderated here.
 
 - Table: stars, product, author, status, text
 - **Hide** or **Publish**
@@ -223,7 +224,7 @@ Hidden reviews are excluded from the product average.
 
 **Who:** admin, sales
 
-Checkout shipping options (Standard, Express) are edited here.
+Checkout shipping options (Standard, Express, Pickup) are edited here. Pickup is free Helsinki warehouse collection (same day or next business day).
 
 - Name, description, price, free-shipping threshold, min/max days, active flag
 - An option is edited; inactive options are hidden at checkout

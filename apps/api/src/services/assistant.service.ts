@@ -13,6 +13,7 @@ import {
   toolCreateEnquiry,
   toolMyOrders,
   catalogProductBlocks,
+  guestOrderGuidance,
   toolSearchCatalog,
   toolShopInfo,
   uniqueOrderProducts,
@@ -128,7 +129,7 @@ async function continueOrderHelp(
 ) {
   const orders = await toolMyOrders(actor, reference);
   if (orders.needsSignIn) {
-    return { content: orders.summary, uiBlocks: [] as AssistantUiBlock[] };
+    return guestOrderGuidance({ reference, problem: looksLikeProblem(problem) });
   }
   const target = orders.orders[0];
   if (!target) {
@@ -173,7 +174,7 @@ async function continueOrderHelp(
 async function offerOrderHelp(actor: AssistantActor, problem: string, reference: string | null) {
   const listed = await toolMyOrders(actor, reference);
   if (listed.needsSignIn) {
-    return { content: "Sign in as the customer who placed the order and I will list the ones I can help with.", uiBlocks: [] as AssistantUiBlock[] };
+    return guestOrderGuidance({ reference, problem: looksLikeProblem(problem) });
   }
   if (!listed.orders.length) {
     return { content: listed.summary, uiBlocks: [] as AssistantUiBlock[] };
@@ -190,7 +191,7 @@ async function offerOrderHelp(actor: AssistantActor, problem: string, reference:
 
 function helpText(actor: AssistantActor) {
   if (!actor.id) {
-    return "I’m Voltie. I can search the shop, explain shipping and returns, and send a note to support. Sign in if you want me to look at an order you placed — I never look up other people’s orders.";
+    return "I’m Voltie. I can search the shop, explain shipping and returns, and send a note to support. Track an order without an account on Find order (VC- number + last name) — I never look up orders by email in chat.";
   }
   if (isStaffRole(actor.role ?? "")) {
     return "I’m Voltie for shoppers. I can search the catalog and open a support ticket. Order lookup and claims are limited to the customer who owns the order.";
@@ -271,7 +272,7 @@ async function ruleReply(
 
   if (intent === "orders") {
     const orders = await toolMyOrders(actor, reference);
-    if (orders.needsSignIn) return { content: orders.summary, uiBlocks: [] as AssistantUiBlock[] };
+    if (orders.needsSignIn) return guestOrderGuidance({ reference });
     const latestOnly = !reference && wantsLatestOrder(resolved.text);
     const shown = latestOnly ? orders.orders.slice(0, 1) : orders.orders.slice(0, 5);
     const intro =

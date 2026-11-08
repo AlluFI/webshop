@@ -605,7 +605,103 @@ describeLive("admin API", () => {
     expect(budbee.body.productCode).toBe("HOME");
     expect(budbee.body.trackingCode).toMatch(/^BUD-DEV-/);
 
-    await prisma.order.deleteMany({ where: { id: { in: [olderPick.id, newerPick.id, expressPick.id] } } });
+    const pickupPick = await prisma.order.create({
+      data: {
+        status: "PAID",
+        createdAt: new Date("2026-10-04T08:00:00.000Z"),
+        subtotal: 10,
+        shippingCost: 0,
+        tax: 0,
+        total: 10,
+        shippingMethod: "pickup",
+        contactEmailEnc: encrypt("pick-pickup@volt.test"),
+        contactNameEnc: encrypt("Pickup Pick"),
+        shippingAddressEnc: encryptJson({
+          recipientName: "Pickup Pick",
+          line1: "Testikatu 1",
+          city: "Helsinki",
+          postal: "00100",
+          country: "FI",
+          countryName: "Finland",
+        }),
+        items: {
+          create: {
+            productId: catalogProduct.id,
+            productName: catalogProduct.name,
+            quantity: 1,
+            unitPrice: 10,
+            lineTotal: 10,
+            locatorCode: "01|02|2|1",
+          },
+        },
+        payment: { create: { status: "SUCCEEDED", amount: 10, currency: "EUR" } },
+      },
+    });
+    const pickupStarted = await request(app)
+      .post(`/api/v1/admin/orders/${pickupPick.id}/process`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(pickupStarted.status).toBe(200);
+    const pickupQueue = await request(app)
+      .get("/api/v1/admin/orders/picking")
+      .set("Authorization", `Bearer ${accessToken}`);
+    const pickupRow = (
+      pickupQueue.body.items as { id: string; items: { id: string; quantity: number }[] }[]
+    ).find((row) => row.id === pickupPick.id);
+    const pickupPicked = await request(app)
+      .post(`/api/v1/admin/orders/${pickupPick.id}/pick`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ items: [{ id: pickupRow?.items[0]?.id, quantity: 1 }] });
+    expect(pickupPicked.status).toBe(200);
+    expect(pickupPicked.body.status).toBe("SHIPPING");
+    const pickupEvent = await prisma.orderStatusEvent.findFirst({
+      where: { orderId: pickupPick.id, status: "SHIPPING" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(pickupEvent?.note).toMatch(/Helsinki warehouse/i);
+    expect(pickupEvent?.note).toMatch(/do not hand this to a courier/i);
+
+    const pickupLabel = await request(app)
+      .post(`/api/v1/admin/orders/${pickupPick.id}/shipment`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ carrier: "posti" });
+    expect(pickupLabel.status).toBe(409);
+    expect(pickupLabel.body.error).toMatch(/pickup/i);
+
+    const pickupCourier = await request(app)
+      .post(`/api/v1/admin/orders/${pickupPick.id}/status`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        status: "WITH_COURIER",
+        carrier: "posti",
+        trackingCode: "JJFI66012700410158170",
+        estimatedDeliveryFrom: "2026-10-05",
+        estimatedDeliveryTo: "2026-10-06",
+      });
+    expect(pickupCourier.status).toBe(409);
+    expect(pickupCourier.body.error).toMatch(/pickup/i);
+
+    const pickupCollected = await request(app)
+      .post(`/api/v1/admin/orders/${pickupPick.id}/status`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ status: "DELIVERED" });
+    expect(pickupCollected.status).toBe(200);
+    expect(pickupCollected.body.status).toBe("DELIVERED");
+    const collectedEvent = await prisma.orderStatusEvent.findFirst({
+      where: { orderId: pickupPick.id, status: "DELIVERED" },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(collectedEvent?.note).toMatch(/collected/i);
+
+    const pickingAfterPickup = await request(app)
+      .get("/api/v1/admin/orders/picking")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(
+      (pickingAfterPickup.body.items as { id: string }[]).some((row) => row.id === pickupPick.id),
+    ).toBe(false);
+
+    await prisma.order.deleteMany({
+      where: { id: { in: [olderPick.id, newerPick.id, expressPick.id, pickupPick.id] } },
+    });
 
     const supplier = await request(app)
       .post("/api/v1/admin/wholesalers")

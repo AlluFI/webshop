@@ -14,6 +14,7 @@ import { usePathname } from "next/navigation";
 import { isStaffRole } from "@volt/shared";
 import { api, userErrorMessage } from "@/lib/api";
 import { useAuth } from "./auth";
+import { useI18n } from "./i18n";
 
 export type CartItem = {
   id: string;
@@ -153,6 +154,7 @@ export function AddToCartButton({
 }) {
   const { addItem } = useCart();
   const { user } = useAuth();
+  const { t } = useI18n();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -165,7 +167,7 @@ export function AddToCartButton({
     setMessage("");
     try {
       await addItem(productId, 1);
-      setMessage("Added to cart");
+      setMessage(t("product.added"));
     } catch (err) {
       setError(userErrorMessage(err, "Could not add to cart"));
     } finally {
@@ -174,7 +176,7 @@ export function AddToCartButton({
   }
 
   if (stockQuantity <= 0) {
-    return <p className="muted">Out of stock</p>;
+    return <p className="muted">{t("product.outOfStock")}</p>;
   }
 
   return (
@@ -186,10 +188,10 @@ export function AddToCartButton({
         title={staff ? "Staff accounts cannot add items to the cart" : undefined}
         onClick={() => void add()}
       >
-        {pending ? "Adding…" : "Add to cart"}
+        {pending ? t("product.adding") : t("product.addToCart")}
       </button>
       {staff && !compact && (
-        <p className="muted">Staff can browse the catalog but cannot add items or place orders.</p>
+        <p className="muted">{t("product.staffBrowse")}</p>
       )}
       {message && <p className="muted">{message}</p>}
       {error && <p className="error">{error}</p>}

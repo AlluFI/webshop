@@ -5,11 +5,18 @@ import {
   carrierTrackingUrl,
   CHECKOUT_COUNTRIES,
   checkoutPlaceSchema,
+  CUSTOMER_RETURNABLE_STATUSES,
   customerRefundRequestSchema,
+  customerReturnRequestSchema,
   formatLocatorCode,
   formatOrderReference,
   formatRefundNote,
+  formatReturnNote,
+  guestOrderLookupSchema,
+  lastNamesMatch,
   orderListQuerySchema,
+  parseOrderReference,
+  REVIEWABLE_ORDER_STATUSES,
   staffRefundRequestSchema,
   STAFF_REFUNDABLE_STATUSES,
   storeDayEnd,
@@ -29,6 +36,7 @@ import { orderTotal, taxAmount, toCents } from "../lib/cart-math.js";
 import { requireStripe, stripeConfigured, stripePublishableKey } from "../lib/stripe.js";
 import { publishPaymentStatus } from "../lib/queue.js";
 import { emitOrderChange } from "../lib/integration-events.js";
+import { createSupportTicket } from "../lib/tickets.js";
 import { cartService, type CartContext } from "./cart.service.js";
 import { addressService } from "./address.service.js";
 import { shippingService } from "./shipping.service.js";
@@ -126,6 +134,34 @@ async function findPaidReplacement(
   );
 }
 
+async function mapOrderItems(order: NonNullable<Awaited<ReturnType<typeof loadOrder>>>) {
+  const reviewable =
+    Boolean(order.userId) &&
+    (REVIEWABLE_ORDER_STATUSES as readonly string[]).includes(order.status);
+  const reviewed = new Set<string>();
+  if (reviewable && order.userId) {
+    const rows = await prisma.review.findMany({
+      where: {
+        userId: order.userId,
+        productId: { in: order.items.map((item) => item.productId) },
+      },
+      select: { productId: true },
+    });
+    for (const row of rows) reviewed.add(row.productId);
+  }
+  return order.items.map((item) => ({
+    id: item.id,
+    name: item.productName,
+    slug: item.product.slug,
+    quantity: item.quantity,
+    unitPrice: moneyNumber(item.unitPrice),
+    lineTotal: moneyNumber(item.lineTotal),
+    thumbnail: item.thumbnailPath ? `/api/v1/files/${item.thumbnailPath}` : null,
+    locatorCode: item.locatorCode || null,
+    canReview: reviewable && !reviewed.has(item.productId),
+  }));
+}
+
 async function publicOrder(order: NonNullable<Awaited<ReturnType<typeof loadOrder>>>) {
   const status = order.status as OrderStatus;
   const replacedByOrderId = await findPaidReplacement(order);
@@ -171,18 +207,10 @@ async function publicOrder(order: NonNullable<Awaited<ReturnType<typeof loadOrde
     createdAt: order.createdAt.toISOString(),
     canCancel: status === "PENDING_PAYMENT",
     canRefund: status === "PAID",
+    canReturn: (CUSTOMER_RETURNABLE_STATUSES as readonly string[]).includes(status),
     canRetry: status === "PAYMENT_FAILED" && !replacedByOrderId,
     replacedByOrderId,
-    items: order.items.map((item) => ({
-      id: item.id,
-      name: item.productName,
-      slug: item.product.slug,
-      quantity: item.quantity,
-      unitPrice: moneyNumber(item.unitPrice),
-      lineTotal: moneyNumber(item.lineTotal),
-      thumbnail: item.thumbnailPath ? `/api/v1/files/${item.thumbnailPath}` : null,
-      locatorCode: item.locatorCode || null,
-    })),
+    items: await mapOrderItems(order),
     events: order.events.map((event) => ({
       id: event.id,
       status: event.status,
@@ -547,6 +575,7 @@ export const orderService = {
         id: order.id,
         reference: formatOrderReference(order.id),
         status: order.status,
+        shippingMethod: order.shippingMethod,
         paymentStatus: order.payment?.status ?? "REQUIRES_PAYMENT",
         total: moneyNumber(order.total),
         currency: order.currency,
@@ -726,5 +755,75 @@ export const orderService = {
 
   async adminRefund(orderId: string, input: unknown = {}) {
     return this.refund({ userId: undefined }, orderId, undefined, true, input);
+  },
+
+  async lookup(raw: unknown) {
+    const dto = guestOrderLookupSchema.parse(raw);
+    const prefix = parseOrderReference(dto.reference);
+    if (!prefix) throw new HttpError(404, "Order not found");
+    const matches = await prisma.order.findMany({
+      where: { id: { startsWith: `${prefix}-` } },
+      include: { payment: true },
+      take: 5,
+    });
+    const order = matches.find((row) => lastNamesMatch(decryptOrEmpty(row.contactNameEnc), dto.lastName));
+    if (!order?.payment) throw new HttpError(404, "Order not found");
+    const guestAccess = randomToken();
+    let meta: PaymentMeta = { guestAccessHash: "" };
+    try {
+      meta = readMeta(order.payment.metadataEnc);
+    } catch {
+      meta = { guestAccessHash: "" };
+    }
+    await prisma.payment.update({
+      where: { orderId: order.id },
+      data: { metadataEnc: encryptJson({ ...meta, guestAccessHash: sha256Hex(guestAccess) }) },
+    });
+    const loaded = await loadOrder(order.id);
+    if (!loaded) throw new HttpError(404, "Order not found");
+    return { order: await publicOrder(loaded), orderAccessToken: guestAccess };
+  },
+
+  async requestReturn(ctx: CartContext, orderId: string, orderToken: string | undefined, input: unknown) {
+    const dto = customerReturnRequestSchema.parse(input);
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { payment: true, items: true },
+    });
+    if (!order || !canRead(order, ctx, orderToken)) {
+      throw new HttpError(404, "Order not found");
+    }
+    if (!(CUSTOMER_RETURNABLE_STATUSES as readonly string[]).includes(order.status)) {
+      throw new HttpError(409, "This order cannot be returned from your account. Contact support.");
+    }
+    const note = formatReturnNote(dto.reason, dto.note);
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: orderId },
+        data: { status: "CLAIMS", hasDeviation: true },
+      });
+      await tx.orderStatusEvent.create({
+        data: { orderId, status: "CLAIMS", note },
+      });
+    });
+    await createSupportTicket({
+      kind: "CLAIM",
+      subject: `Return ${formatOrderReference(orderId)}`,
+      message: note,
+      customerName: decryptOrEmpty(order.contactNameEnc) || "Customer",
+      customerEmail: decryptOrEmpty(order.contactEmailEnc) || "unknown@localhost",
+      userId: order.userId,
+      orderId,
+      orderReference: formatOrderReference(orderId),
+      productName: order.items[0]?.productName ?? null,
+    });
+    emitOrderChange("CLAIMS", {
+      id: orderId,
+      reference: formatOrderReference(orderId),
+      status: "CLAIMS",
+    });
+    const loaded = await loadOrder(orderId);
+    if (!loaded) throw new HttpError(404, "Order not found");
+    return await publicOrder(loaded);
   },
 };

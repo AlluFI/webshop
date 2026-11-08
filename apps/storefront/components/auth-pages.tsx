@@ -7,6 +7,7 @@ import ReCAPTCHA from "react-google-recaptcha";
 import { isStaffRole, loginSchema, registerSchema, resetPasswordSchema } from "@volt/shared";
 import { api, ApiError, recaptchaSiteKey } from "@/lib/api";
 import { useAuth } from "./auth";
+import { useI18n } from "./i18n";
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
@@ -41,14 +42,15 @@ function GoogleMark() {
 }
 
 function GoogleSignInLink() {
+  const { t } = useI18n();
   return (
     <div className="google-auth">
       <p className="auth-divider">
-        <span>or</span>
+        <span>{t("auth.or")}</span>
       </p>
       <a className="google-btn" href="/api/v1/auth/google">
         <GoogleMark />
-        Continue with Google
+        {t("auth.google")}
       </a>
     </div>
   );
@@ -90,6 +92,7 @@ function useGoogleSignInEnabled() {
 }
 
 export function RegisterForm() {
+  const { t } = useI18n();
   const [fields, setFields] = useState<Record<string, string>>({});
   const [captcha, setCaptcha] = useState<string | null>(null);
   const google = useGoogleSignInEnabled();
@@ -133,39 +136,43 @@ export function RegisterForm() {
 
   return (
     <div className="auth-card">
-      <h1>Create an account</h1>
-      {done && <p className="banner ok">{done} Open Mailpit at localhost:8025 if you are on Docker.</p>}
+      <h1>{t("auth.registerTitle")}</h1>
+      {done && (
+        <p className="banner ok">
+          {done} {t("auth.mailpit")}
+        </p>
+      )}
       {error && <p className="banner error">{error}</p>}
       <form onSubmit={(event) => void onSubmit(event)}>
         <label className="field">
-          <span>Name</span>
+          <span>{t("auth.name")}</span>
           <input name="displayName" autoComplete="name" />
         </label>
         <label className="field">
-          <span>Email</span>
+          <span>{t("auth.email")}</span>
           <input name="email" type="email" autoComplete="email" required />
           <FieldError message={fields.email} />
         </label>
         <label className="field">
-          <span>Password</span>
+          <span>{t("auth.password")}</span>
           <input name="password" type="password" autoComplete="new-password" required />
           <FieldError message={fields.password} />
         </label>
         <label className="field choice">
           <input name="marketingOptIn" type="checkbox" />
-          <span>Email me offers and product news</span>
+          <span>{t("auth.marketing")}</span>
         </label>
         <div className="field">
           <ReCAPTCHA sitekey={recaptchaSiteKey()} onChange={setCaptcha} />
           <FieldError message={fields.captchaToken} />
         </div>
         <button className="primary" type="submit">
-          Register
+          {t("auth.register")}
         </button>
       </form>
       {google && <GoogleSignInLink />}
       <p>
-        Already have an account? <Link href="/login">Sign in</Link>
+        {t("auth.haveAccount")} <Link href="/login">{t("nav.signIn")}</Link>
       </p>
     </div>
   );
@@ -178,13 +185,14 @@ function TwoFactorForm({
   error: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const { t } = useI18n();
   return (
     <>
-      <h1>Two-factor code</h1>
+      <h1>{t("auth.mfaTitle")}</h1>
       {error && <p className="banner error">{error}</p>}
       <form autoComplete="off" onSubmit={onSubmit}>
         <label className="field">
-          <span>Authenticator code</span>
+          <span>{t("auth.totp")}</span>
           <input
             name="totpCode"
             type="text"
@@ -194,11 +202,11 @@ function TwoFactorForm({
           />
         </label>
         <label className="field">
-          <span>Or backup code</span>
+          <span>{t("auth.backup")}</span>
           <input name="backupCode" type="text" autoComplete="off" />
         </label>
         <button className="primary" type="submit">
-          Continue
+          {t("auth.continue")}
         </button>
       </form>
     </>
@@ -206,6 +214,7 @@ function TwoFactorForm({
 }
 
 export function LoginForm() {
+  const { t } = useI18n();
   const { setSession } = useAuth();
   const router = useRouter();
   const [error, setError] = useState("");
@@ -276,32 +285,33 @@ export function LoginForm() {
 
   return (
     <div className="auth-card">
-      <h1>Sign in</h1>
+      <h1>{t("auth.signInTitle")}</h1>
       {error && <p className="banner error">{error}</p>}
       <form onSubmit={(event) => void onSubmit(event)}>
         <label className="field">
-          <span>Email</span>
+          <span>{t("auth.email")}</span>
           <input name="email" type="email" autoComplete="email" required />
           <FieldError message={fields.email} />
         </label>
         <label className="field">
-          <span>Password</span>
+          <span>{t("auth.password")}</span>
           <input name="password" type="password" autoComplete="current-password" required />
           <FieldError message={fields.password} />
         </label>
         <button className="primary" type="submit">
-          Sign in
+          {t("nav.signIn")}
         </button>
       </form>
       {google && <GoogleSignInLink />}
       <p>
-        <Link href="/forgot-password">Forgot password?</Link>
+        <Link href="/forgot-password">{t("auth.forgot")}</Link>
       </p>
     </div>
   );
 }
 
 export function ForgotForm() {
+  const { t } = useI18n();
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -321,16 +331,16 @@ export function ForgotForm() {
   }
   return (
     <div className="auth-card">
-      <h1>Reset password</h1>
+      <h1>{t("auth.forgotTitle")}</h1>
       {message && <p className="banner ok">{message}</p>}
       {error && <p className="banner error">{error}</p>}
       <form onSubmit={(event) => void onSubmit(event)}>
         <label className="field">
-          <span>Email</span>
+          <span>{t("auth.email")}</span>
           <input name="email" type="email" required />
         </label>
         <button className="primary" type="submit">
-          Send reset link
+          {t("auth.sendReset")}
         </button>
       </form>
     </div>
@@ -338,6 +348,7 @@ export function ForgotForm() {
 }
 
 function ResetFormInner() {
+  const { t } = useI18n();
   const params = useSearchParams();
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -364,16 +375,16 @@ function ResetFormInner() {
   }
   return (
     <div className="auth-card">
-      <h1>Choose a new password</h1>
+      <h1>{t("auth.resetTitle")}</h1>
       {message && <p className="banner ok">{message}</p>}
       {error && <p className="banner error">{error}</p>}
       <form onSubmit={(event) => void onSubmit(event)}>
         <label className="field">
-          <span>New password</span>
+          <span>{t("auth.newPassword")}</span>
           <input name="password" type="password" autoComplete="new-password" required />
         </label>
         <button className="primary" type="submit">
-          Update password
+          {t("auth.updatePassword")}
         </button>
       </form>
     </div>
@@ -381,47 +392,63 @@ function ResetFormInner() {
 }
 
 export function ResetForm() {
+  const { t } = useI18n();
   return (
-    <Suspense fallback={<p>Loading…</p>}>
+    <Suspense fallback={<p>{t("common.loading")}</p>}>
       <ResetFormInner />
     </Suspense>
   );
 }
 
 function VerifyInner() {
+  const { t } = useI18n();
   const params = useSearchParams();
-  const [message, setMessage] = useState("Verifying…");
+  const [status, setStatus] = useState<"verifying" | "missing" | "verified" | "error">("verifying");
+  const [error, setError] = useState("");
   useEffect(() => {
     const token = params.get("token");
     if (!token) {
-      setMessage("Missing verification token.");
+      setStatus("missing");
       return;
     }
     void api("/auth/verify-email", {
       method: "POST",
       body: JSON.stringify({ token }),
     })
-      .then(() => setMessage("Email verified. You can sign in."))
-      .catch((err: Error) => setMessage(err.message));
+      .then(() => setStatus("verified"))
+      .catch((err: Error) => {
+        setError(err.message);
+        setStatus("error");
+      });
   }, [params]);
+  const message =
+    status === "missing"
+      ? t("auth.missingToken")
+      : status === "verified"
+        ? t("auth.verified")
+        : status === "error"
+          ? error
+          : t("auth.verifying");
   return (
     <div className="auth-card">
-      <h1>Verify email</h1>
+      <h1>{t("auth.verifyTitle")}</h1>
       <p>{message}</p>
-      <Link href="/login">Sign in</Link>
+      <Link href="/login">{t("nav.signIn")}</Link>
     </div>
   );
 }
 
 export function VerifyForm() {
+  const { t } = useI18n();
   return (
-    <Suspense fallback={<p>Loading…</p>}>
+    <Suspense fallback={<p>{t("common.loading")}</p>}>
       <VerifyInner />
     </Suspense>
   );
 }
 
 export function OAuthCallback() {
+  const { t } = useI18n();
   const { ready, user } = useAuth();
   const router = useRouter();
   useEffect(() => {
@@ -430,7 +457,7 @@ export function OAuthCallback() {
   }, [ready, user, router]);
   return (
     <div className="auth-card">
-      <p>Finishing Google sign-in…</p>
+      <p>{t("auth.oauth")}</p>
     </div>
   );
 }

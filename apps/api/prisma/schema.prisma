@@ -42,6 +42,7 @@ model User {
   auditLogs               AuditLog[]
   supportTickets          SupportTicket[]
   assistantThreads        AssistantThread[]
+  wishlistItems           WishlistItem[]
 
   @@map("users")
 }
@@ -174,6 +175,8 @@ model Product {
   purchaseOrderItems PurchaseOrderItem[]
   priceHistory   ProductPriceHistory[]
   promotions     ProductPromotion[]
+  wishlistItems  WishlistItem[]
+  stockAlerts    StockAlert[]
 
   @@index([categoryId])
   @@index([brandId])
@@ -645,4 +648,32 @@ model AssistantMessage {
 
   @@index([threadId, createdAt])
   @@map("assistant_messages")
+}
+
+model WishlistItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+  @@map("wishlist_items")
+}
+
+model StockAlert {
+  id         String    @id @default(uuid())
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  emailEnc   String
+  emailHash  String
+  createdAt  DateTime  @default(now())
+  notifiedAt DateTime?
+
+  @@unique([productId, emailHash])
+  @@index([productId, notifiedAt])
+  @@map("stock_alerts")
 }

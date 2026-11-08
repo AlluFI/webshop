@@ -24,6 +24,7 @@ import {
   parcelLabelHtml,
   formatRefundNote,
   isDeviationStatus,
+  isPickupShipping,
   isStaffRole,
   LOW_STOCK_THRESHOLD,
   orderListQuerySchema,
@@ -51,7 +52,7 @@ import { bumpFacetCache, catalogService } from "./catalog.service.js";
 import { mail } from "../mail.js";
 import { VOLT_WAREHOUSE } from "../lib/restock-email.js";
 import { carrierProductForMethod, carrierSource, getCarrierAdapter, resolveCarrier } from "../lib/carriers/index.js";
-import { sendOrderShippedMail } from "./order-fulfillment.js";
+import { sendOrderPickupReadyMail, sendOrderShippedMail } from "./order-fulfillment.js";
 import { orderService } from "./order.service.js";
 import { reviewService } from "./review.service.js";
 import { shippingService } from "./shipping.service.js";
@@ -511,6 +512,10 @@ export const adminService = {
       });
     }
     await bumpFacetCache();
+    if (existing.stockQuantity <= 0 && dto.stockQuantity > 0) {
+      const { shopService } = await import("./shop.service.js");
+      void shopService.notifyRestock(id, existing.stockQuantity, dto.stockQuantity).catch(() => undefined);
+    }
     return catalogService.byIdOrSlug(id);
   },
 
@@ -1129,6 +1134,7 @@ export const adminService = {
       }
     }
 
+    const pickup = isPickupShipping(order.shippingMethod);
     await prisma.$transaction([
       prisma.order.update({
         where: { id: orderId },
@@ -1138,7 +1144,9 @@ export const adminService = {
         data: {
           orderId,
           status: "SHIPPING",
-          note: "Warehouse pick completed. Ready for shipping.",
+          note: pickup
+            ? "Warehouse pick completed. Hold at the Helsinki warehouse for customer collection. Do not hand this to a courier."
+            : "Warehouse pick completed. Ready for shipping.",
         },
       }),
     ]);
@@ -1152,6 +1160,9 @@ export const adminService = {
         changes: [{ field: "status", from: "PROCESSING", to: "SHIPPING" }],
       },
     });
+    if (pickup) {
+      await sendOrderPickupReadyMail(orderId);
+    }
     return { id: orderId, status: "SHIPPING" as const, reference: formatOrderReference(orderId) };
   },
 
@@ -1162,6 +1173,9 @@ export const adminService = {
       include: { items: { select: { productName: true, quantity: true } } },
     });
     if (!order) throw new HttpError(404, "Order not found");
+    if (isPickupShipping(order.shippingMethod)) {
+      throw new HttpError(409, "This order is Helsinki warehouse pickup. Do not create a courier label.");
+    }
     if (!["SHIPPING", "WITH_COURIER"].includes(order.status)) {
       throw new HttpError(409, "Finish picking before creating a parcel label.");
     }
@@ -1267,6 +1281,12 @@ export const adminService = {
     if (!order) throw new HttpError(404, "Order not found");
 
     const becomingWithCourier = dto.status === "WITH_COURIER" && order.status !== "WITH_COURIER";
+    if (isPickupShipping(order.shippingMethod) && dto.status === "WITH_COURIER") {
+      throw new HttpError(
+        409,
+        "This order is Helsinki warehouse pickup. Mark it collected when the customer takes it — do not hand it to a courier.",
+      );
+    }
     const carrier = dto.carrier || order.trackingCarrier;
     const trackingCode = dto.trackingCode || order.trackingCode;
     if (dto.status === "WITH_COURIER" && (!carrier || !trackingCode)) {
@@ -1292,7 +1312,9 @@ export const adminService = {
       dto.note ||
       (dto.status === "WITH_COURIER" && trackingCode
         ? `With the courier via ${carrier} ${trackingCode}`
-        : "Updated by staff");
+        : isPickupShipping(order.shippingMethod) && dto.status === "DELIVERED"
+          ? "Customer collected Helsinki warehouse pickup."
+          : "Updated by staff");
 
     const nextCarrier = dto.status === "WITH_COURIER" ? carrier : order.trackingCarrier;
     const nextTracking = dto.status === "WITH_COURIER" ? trackingCode : order.trackingCode;
@@ -1445,6 +1467,10 @@ export const adminService = {
         ],
       },
     });
+    if (product.stockQuantity <= 0 && updated.stockQuantity > 0) {
+      const { shopService } = await import("./shop.service.js");
+      void shopService.notifyRestock(product.id, product.stockQuantity, updated.stockQuantity).catch(() => undefined);
+    }
     return {
       id: updated.id,
       name: updated.name,

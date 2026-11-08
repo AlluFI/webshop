@@ -1,10 +1,11 @@
 import { AccountPage } from "@/components/account-page";
+import { getTranslator } from "@/lib/i18n/server";
 import { pageMetadata } from "@/lib/seo";
 
-export const metadata = pageMetadata(
-  "Profile — Volt & Co",
-  "Manage your Volt & Co display name, two-factor authentication, and saved shipping addresses.",
-);
+export async function generateMetadata() {
+  const t = await getTranslator();
+  return pageMetadata(`${t("account.profile")} — Volt & Co`, t("account.addressesHint"));
+}
 
 export default function AccountRoute() {
   return <AccountPage />;

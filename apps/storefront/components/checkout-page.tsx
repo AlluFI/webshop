@@ -6,9 +6,11 @@ import {
   CHECKOUT_COUNTRIES,
   EXPRESS_SHIPPING,
   FREE_STANDARD_THRESHOLD,
+  PICKUP_SHIPPING,
   STANDARD_SHIPPING,
   checkoutValidateSchema,
   type AddressInput,
+  type ShippingMethod,
 } from "@volt/shared";
 import { api, ApiError, storeOrderToken, userErrorMessage } from "@/lib/api";
 import { money } from "@/lib/product";
@@ -16,6 +18,26 @@ import { useAuth } from "./auth";
 import { useCart } from "./cart";
 import { CheckoutPay } from "./checkout-pay";
 import { CustomerShopGate } from "./shop-gate";
+import { useI18n } from "./i18n";
+
+type ShippingOption = {
+  code: ShippingMethod;
+  name: string;
+  description: string | null;
+  price: number;
+  freeThreshold: number | null;
+};
+
+function shippingCostFor(method: string, subtotal: number, options: ShippingOption[]) {
+  const option = options.find((row) => row.code === method);
+  if (option) {
+    if (option.freeThreshold != null && subtotal >= option.freeThreshold) return 0;
+    return option.price;
+  }
+  if (method === "express") return EXPRESS_SHIPPING;
+  if (method === "pickup") return PICKUP_SHIPPING;
+  return subtotal >= FREE_STANDARD_THRESHOLD ? 0 : STANDARD_SHIPPING;
+}
 
 type SavedAddress = AddressInput & { id: string; label?: string | null; isDefault?: boolean };
 
@@ -52,7 +74,9 @@ function CheckoutInner() {
   const [saveAddress, setSaveAddress] = useState(true);
   const [billingSame, setBillingSame] = useState(true);
   const [billing, setBilling] = useState<AddressInput>(emptyAddress);
-  const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard");
+  const { t } = useI18n();
+  const [shippingMethod, setShippingMethod] = useState<ShippingMethod>("standard");
+  const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteWarning, setQuoteWarning] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
@@ -77,6 +101,9 @@ function CheckoutInner() {
     void api<{ configured: boolean }>("/checkout/config")
       .then((result) => setStripeReady(result.configured))
       .catch(() => setStripeReady(false));
+    void api<{ items: ShippingOption[] }>("/shipping")
+      .then((result) => setShippingOptions(result.items))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -148,7 +175,7 @@ function CheckoutInner() {
         })
         .catch((err) => {
           setQuote(null);
-          setQuoteWarning(userErrorMessage(err, "Could not refresh the order totals."));
+          setQuoteWarning(userErrorMessage(err, t("checkout.startError")));
         });
     }, 200);
     return () => window.clearTimeout(handle);
@@ -197,7 +224,7 @@ function CheckoutInner() {
       });
       await refresh().catch(() => undefined);
     } catch (err) {
-      setError(userErrorMessage(err, "Could not start payment. Please try again."));
+      setError(userErrorMessage(err, t("checkout.startError")));
       const next: Record<string, string> = {};
       if (err instanceof ApiError) {
         Object.assign(next, err.fields ?? {});
@@ -221,13 +248,13 @@ function CheckoutInner() {
     }
   }
 
-  if (!ready || (!payment && !hydrated)) return <p>Loading checkout…</p>;
+  if (!ready || (!payment && !hydrated)) return <p>{t("checkout.loading")}</p>;
   if (!payment && cart.items.length === 0) {
     return (
       <section>
-        <h1>Checkout</h1>
+        <h1>{t("checkout.kicker")}</h1>
         <p>
-          Your cart is empty. <Link href="/catalog">Add something first</Link>
+          {t("checkout.empty")} <Link href="/catalog">{t("checkout.addFirst")}</Link>
         </p>
       </section>
     );
@@ -235,8 +262,8 @@ function CheckoutInner() {
 
   return (
     <section>
-      <p className="kicker">Checkout</p>
-      <h1>Complete your order</h1>
+      <p className="kicker">{t("checkout.kicker")}</p>
+      <h1>{t("checkout.title")}</h1>
       {error && <p className="banner error">{error}</p>}
       {quoteWarning && !error && <p className="banner error">{quoteWarning}</p>}
       {fields.network && !error.includes(fields.network) && (
@@ -245,9 +272,9 @@ function CheckoutInner() {
       <form className="checkout-grid" onSubmit={(event) => void onSubmit(event)}>
         <div>
           <div className="panel">
-            <h2>Contact</h2>
+            <h2>{t("checkout.contact")}</h2>
             <label className="field">
-              <span>Email</span>
+              <span>{t("checkout.email")}</span>
               <input
                 type="email"
                 autoComplete="email"
@@ -257,7 +284,7 @@ function CheckoutInner() {
               {fields.email && <p className="error">{fields.email}</p>}
             </label>
             <label className="field">
-              <span>Name</span>
+              <span>{t("checkout.name")}</span>
               <input
                 autoComplete="name"
                 value={displayName}
@@ -266,7 +293,7 @@ function CheckoutInner() {
               {fields.displayName && <p className="error">{fields.displayName}</p>}
             </label>
             <label className="field">
-              <span>Phone</span>
+              <span>{t("checkout.phone")}</span>
               <input
                 autoComplete="tel"
                 value={phone}
@@ -276,22 +303,22 @@ function CheckoutInner() {
             </label>
           </div>
           <div className="panel" style={{ marginTop: 16 }}>
-            <h2>Shipping address</h2>
+            <h2>{t("checkout.shippingAddress")}</h2>
             {saved.length > 0 && (
               <label className="field">
-                <span>Saved address</span>
+                <span>{t("checkout.savedAddress")}</span>
                 <select value={addressId} onChange={(event) => applySaved(event.target.value)}>
-                  <option value="">New address</option>
+                  <option value="">{t("checkout.newAddress")}</option>
                   {saved.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {(item.label || item.city) + ` · ${item.postal}` + (item.isDefault ? " (default)" : "")}
+                      {(item.label || item.city) + ` · ${item.postal}` + (item.isDefault ? ` ${t("checkout.defaultMark")}` : "")}
                     </option>
                   ))}
                 </select>
               </label>
             )}
             <label className="field">
-              <span>Recipient</span>
+              <span>{t("checkout.recipient")}</span>
               <input
                 value={address.recipientName}
                 onChange={(event) => {
@@ -302,7 +329,7 @@ function CheckoutInner() {
               {fields.recipientName && <p className="error">{fields.recipientName}</p>}
             </label>
             <label className="field">
-              <span>Street</span>
+              <span>{t("checkout.street")}</span>
               <input
                 autoComplete="address-line1"
                 value={address.line1}
@@ -314,7 +341,7 @@ function CheckoutInner() {
               {fields.line1 && <p className="error">{fields.line1}</p>}
             </label>
             <label className="field">
-              <span>Apartment, suite (optional)</span>
+              <span>{t("checkout.line2")}</span>
               <input
                 autoComplete="address-line2"
                 value={address.line2 || ""}
@@ -326,7 +353,7 @@ function CheckoutInner() {
             </label>
             <div className="dims">
               <label className="field">
-                <span>Postal code</span>
+                <span>{t("checkout.postal")}</span>
                 <input
                   autoComplete="postal-code"
                   value={address.postal}
@@ -337,7 +364,7 @@ function CheckoutInner() {
                 />
               </label>
               <label className="field">
-                <span>City</span>
+                <span>{t("checkout.city")}</span>
                 <input
                   autoComplete="address-level2"
                   value={address.city}
@@ -352,7 +379,7 @@ function CheckoutInner() {
             {fields.postal && <p className="error">{fields.postal}</p>}
             {fields.address && <p className="error">{fields.address}</p>}
             <label className="field">
-              <span>Region / state (optional)</span>
+              <span>{t("checkout.region")}</span>
               <input
                 autoComplete="address-level1"
                 value={address.region || ""}
@@ -363,7 +390,7 @@ function CheckoutInner() {
               />
             </label>
             <label className="field">
-              <span>Country</span>
+              <span>{t("checkout.country")}</span>
               <select
                 value={address.country}
                 onChange={(event) => {
@@ -385,27 +412,27 @@ function CheckoutInner() {
                   checked={saveAddress}
                   onChange={(event) => setSaveAddress(event.target.checked)}
                 />
-                <span>Save this address to my account</span>
+                <span>{t("checkout.saveAddress")}</span>
               </label>
             )}
           </div>
           <div className="panel" style={{ marginTop: 16 }}>
-            <h2>Billing address</h2>
+            <h2>{t("checkout.billing")}</h2>
             <label className="field choice">
               <input type="checkbox" checked={billingSame} onChange={(event) => setBillingSame(event.target.checked)} />
-              Same as shipping
+              {t("checkout.sameAsShipping")}
             </label>
             {!billingSame && (
               <>
                 <label className="field">
-                  <span>Recipient</span>
+                  <span>{t("checkout.recipient")}</span>
                   <input
                     value={billing.recipientName}
                     onChange={(event) => setBilling({ ...billing, recipientName: event.target.value })}
                   />
                 </label>
                 <label className="field">
-                  <span>Street</span>
+                  <span>{t("checkout.street")}</span>
                   <input
                     value={billing.line1}
                     onChange={(event) => setBilling({ ...billing, line1: event.target.value })}
@@ -413,14 +440,14 @@ function CheckoutInner() {
                 </label>
                 <div className="dims">
                   <label className="field">
-                    <span>Postal code</span>
+                    <span>{t("checkout.postal")}</span>
                     <input
                       value={billing.postal}
                       onChange={(event) => setBilling({ ...billing, postal: event.target.value })}
                     />
                   </label>
                   <label className="field">
-                    <span>City</span>
+                    <span>{t("checkout.city")}</span>
                     <input
                       value={billing.city}
                       onChange={(event) => setBilling({ ...billing, city: event.target.value })}
@@ -428,7 +455,7 @@ function CheckoutInner() {
                   </label>
                 </div>
                 <label className="field">
-                  <span>Country</span>
+                  <span>{t("checkout.country")}</span>
                   <select
                     value={billing.country}
                     onChange={(event) =>
@@ -447,29 +474,54 @@ function CheckoutInner() {
             )}
           </div>
           <div className="panel" style={{ marginTop: 16 }}>
-            <h2>Shipping</h2>
-            <label className="field choice">
-              <input
-                type="radio"
-                name="shipping"
-                checked={shippingMethod === "standard"}
-                onChange={() => setShippingMethod("standard")}
-              />
-              Standard (3–5 days) —{" "}
-              {cart.subtotal >= FREE_STANDARD_THRESHOLD ? "Free" : money(STANDARD_SHIPPING)}
-            </label>
-            <label className="field choice">
-              <input
-                type="radio"
-                name="shipping"
-                checked={shippingMethod === "express"}
-                onChange={() => setShippingMethod("express")}
-              />
-              Express (1–2 days) — {money(EXPRESS_SHIPPING)}
-            </label>
+            <h2>{t("checkout.shipping")}</h2>
+            {(shippingOptions.length
+              ? shippingOptions
+              : [
+                  {
+                    code: "standard" as const,
+                    name: "Standard",
+                    description: "3–5 business days",
+                    price: STANDARD_SHIPPING,
+                    freeThreshold: FREE_STANDARD_THRESHOLD,
+                  },
+                  {
+                    code: "express" as const,
+                    name: "Express",
+                    description: "1–2 business days",
+                    price: EXPRESS_SHIPPING,
+                    freeThreshold: null,
+                  },
+                  {
+                    code: "pickup" as const,
+                    name: "Pickup",
+                    description: "Collect from our Helsinki warehouse",
+                    price: PICKUP_SHIPPING,
+                    freeThreshold: null,
+                  },
+                ]
+            ).map((option) => (
+              <label className="field choice" key={option.code}>
+                <input
+                  type="radio"
+                  name="shipping"
+                  checked={shippingMethod === option.code}
+                  onChange={() => setShippingMethod(option.code)}
+                />
+                {option.code === "pickup"
+                  ? t("checkout.pickup")
+                  : t(option.code === "express" ? "checkout.express" : "checkout.standard", {
+                      price:
+                        option.freeThreshold != null && cart.subtotal >= option.freeThreshold
+                          ? t("common.free")
+                          : money(option.price),
+                    })}
+              </label>
+            ))}
+            {shippingMethod === "pickup" && <p className="muted">{t("checkout.pickupHint")}</p>}
           </div>
           <div className="panel" style={{ marginTop: 16 }}>
-            <h2>Payment</h2>
+            <h2>{t("checkout.payment")}</h2>
             {payment ? (
               <CheckoutPay
                 clientSecret={payment.clientSecret}
@@ -482,24 +534,18 @@ function CheckoutInner() {
             ) : (
               <>
                 {stripeReady === false && (
-                  <p className="banner error">
-                    Add Stripe test keys to <code>.env</code> (<code>STRIPE_SECRET_KEY</code> and{" "}
-                    <code>STRIPE_PUBLISHABLE_KEY</code>) and restart the API.
-                  </p>
+                  <p className="banner error">{t("checkout.stripeMissing")}</p>
                 )}
-                <p className="muted">
-                  Card details stay in Stripe Elements. Only PaymentIntent ids are stored, never
-                  card numbers. After the address is confirmed, the card is collected by Stripe.
-                </p>
+                <p className="muted">{t("checkout.cardStay")}</p>
                 <button className="primary" type="submit" disabled={busy || stripeReady === false}>
-                  {busy ? "Reserving stock…" : "Continue to payment"}
+                  {busy ? t("checkout.reserving") : t("checkout.continuePay")}
                 </button>
               </>
             )}
           </div>
         </div>
         <aside className="panel">
-          <h2>Order summary</h2>
+          <h2>{t("checkout.summary")}</h2>
           <ul className="summary-list">
             {(payment?.items ?? quote?.items ?? cart.items).map((item) => (
               <li key={item.id}>
@@ -511,37 +557,29 @@ function CheckoutInner() {
             ))}
           </ul>
           <p>
-            <Link href="/cart">Edit cart</Link>
+            <Link href="/cart">{t("checkout.editCart")}</Link>
           </p>
-          <p>Subtotal {money(payment?.subtotal ?? quote?.subtotal ?? cart.subtotal)}</p>
+          <p>{t("checkout.subtotal", { amount: money(payment?.subtotal ?? quote?.subtotal ?? cart.subtotal) })}</p>
           <p>
-            Shipping{" "}
-            {money(
-              payment?.shippingCost ??
-                quote?.shippingCost ??
-                (shippingMethod === "express"
-                  ? EXPRESS_SHIPPING
-                  : cart.subtotal >= FREE_STANDARD_THRESHOLD
-                    ? 0
-                    : STANDARD_SHIPPING),
-            )}
+            {t(shippingMethod === "pickup" ? "checkout.pickupCost" : "checkout.shippingCost", {
+              amount: money(
+                payment?.shippingCost ??
+                  quote?.shippingCost ??
+                  shippingCostFor(shippingMethod, cart.subtotal, shippingOptions),
+              ),
+            })}
           </p>
           <p>
-            {payment?.taxLabel ?? quote?.taxLabel ?? "VAT 25.5% (included)"}{" "}
-            {money(payment?.tax ?? quote?.tax ?? 0)}
+            {t("checkout.vat")} {money(payment?.tax ?? quote?.tax ?? 0)}
           </p>
           <p className="price" style={{ fontSize: "1.3rem" }}>
-            Total{" "}
-            {money(
-              payment?.total ??
-                quote?.total ??
-                cart.subtotal +
-                  (shippingMethod === "express"
-                    ? EXPRESS_SHIPPING
-                    : cart.subtotal >= FREE_STANDARD_THRESHOLD
-                      ? 0
-                      : STANDARD_SHIPPING),
-            )}
+            {t("checkout.total", {
+              amount: money(
+                payment?.total ??
+                  quote?.total ??
+                  cart.subtotal + shippingCostFor(shippingMethod, cart.subtotal, shippingOptions),
+              ),
+            })}
           </p>
         </aside>
       </form>

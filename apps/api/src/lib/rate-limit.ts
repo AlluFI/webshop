@@ -82,3 +82,4 @@ export const authRateLimit = rateLimit("auth", 60, 1);
 export const contactRateLimit = rateLimit("contact", 8, 8 / 60);
 export const searchRateLimit = rateLimit("search", 120, 4);
 export const apiRateLimit = rateLimit("api", 480, 8);
+export const lookupRateLimit = rateLimit("order-lookup", 12, 12 / 60);

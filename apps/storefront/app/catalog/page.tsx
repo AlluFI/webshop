@@ -2,6 +2,7 @@ import { CatalogFilters, CatalogPager, CatalogToolbar } from "@/components/catal
 import { ProductCard } from "@/components/product-card";
 import type { CatalogResponse } from "@/lib/product";
 import { queryString } from "@/lib/product";
+import { getTranslator } from "@/lib/i18n/server";
 import { serverApi } from "@/lib/server-api";
 import { pageMetadata } from "@/lib/seo";
 
@@ -28,15 +29,14 @@ function asQuery(search: Search) {
 }
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<Search> }) {
+  const t = await getTranslator();
   const query = asQuery(await searchParams);
-  const heading = query.q ? `Results for “${query.q}”` : "Catalog";
-  return pageMetadata(
-    query.q ? `${heading} — Volt & Co` : "Catalog — Volt & Co",
-    "Filter electronics by category, brand, price, and rating. Sort by relevance, price, or reviews.",
-  );
+  const heading = query.q ? t("catalog.results", { q: query.q }) : t("catalog.heading");
+  return pageMetadata(`${heading} — Volt & Co`, t("catalog.refine"));
 }
 
 export default async function CatalogPage({ searchParams }: { searchParams: Promise<Search> }) {
+  const t = await getTranslator();
   const query = asQuery(await searchParams);
   const qs = queryString(query);
   let data: CatalogResponse | null = null;
@@ -45,10 +45,10 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   try {
     data = await serverApi<CatalogResponse>(`/products?${qs}`);
   } catch (err) {
-    error = err instanceof Error ? err.message : "Could not load the catalog.";
+    error = err instanceof Error ? err.message : t("catalog.loadError");
   }
 
-  const heading = query.q ? `Results for “${query.q}”` : "Catalog";
+  const heading = query.q ? t("catalog.results", { q: query.q }) : t("catalog.heading");
   const view = query.view === "list" ? "list" : "grid";
   const page = Number(query.page || 1);
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;

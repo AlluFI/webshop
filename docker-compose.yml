@@ -90,6 +90,7 @@ services:
       BUDBEE_BASE_URL: ${BUDBEE_BASE_URL:-https://api.staging.budbee.com}
       BUDBEE_COLLECTION_ID: ${BUDBEE_COLLECTION_ID:-0}
       TICKET_MODE: ${TICKET_MODE:-mock}
+      I18N_ENABLED: ${I18N_ENABLED:-false}
     volumes:
       - uploads_data:/data/uploads
     depends_on:
@@ -143,11 +144,13 @@ services:
       dockerfile: docker/storefront.Dockerfile
       args:
         NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${RECAPTCHA_SITE_KEY:-6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI}
+        NEXT_PUBLIC_I18N_ENABLED: ${I18N_ENABLED:-false}
     environment:
       API_PROXY_TARGET: http://api:3000
       API_INTERNAL_URL: http://api:3000/api/v1
       NEXT_PUBLIC_API_BASE: /api/v1
       NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${RECAPTCHA_SITE_KEY:-6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI}
+      NEXT_PUBLIC_I18N_ENABLED: ${I18N_ENABLED:-false}
     depends_on:
       - api
     ports:

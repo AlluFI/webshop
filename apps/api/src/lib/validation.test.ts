@@ -5,8 +5,11 @@ import {
   adminUserListQuerySchema,
   checkoutValidateSchema,
   customerRefundRequestSchema,
+  lastNamesMatch,
   loginSchema,
+  parseOrderReference,
   registerSchema,
+  shippingMethodSchema,
   staffRefundRequestSchema,
 } from "@volt/shared";
 
@@ -116,5 +119,14 @@ describe("user input validation", () => {
     expect(adminUserListQuerySchema.parse({ role: "staff" }).role).toBe("staff");
     expect(adminUserListQuerySchema.parse({ role: "" }).role).toBeUndefined();
     expect(adminUserListQuerySchema.safeParse({ role: "manager" }).success).toBe(false);
+  });
+
+  it("accepts pickup shipping and matches guest order lookup by last name", () => {
+    expect(shippingMethodSchema.parse("pickup")).toBe("pickup");
+    expect(parseOrderReference("VC-A1B2C3D4")).toBe("a1b2c3d4");
+    expect(parseOrderReference("a1b2c3d4")).toBe("a1b2c3d4");
+    expect(parseOrderReference("nope")).toBeNull();
+    expect(lastNamesMatch("Lookup Customer", "Customer")).toBe(true);
+    expect(lastNamesMatch("Lookup Customer", "Wrong")).toBe(false);
   });
 });

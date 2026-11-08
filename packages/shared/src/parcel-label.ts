@@ -8,6 +8,15 @@ export const VOLT_WAREHOUSE_LABEL = {
   country: "Finland",
 };
 
+export function warehouseAddressLines() {
+  return [
+    VOLT_WAREHOUSE_LABEL.name,
+    VOLT_WAREHOUSE_LABEL.line1,
+    `${VOLT_WAREHOUSE_LABEL.postal} ${VOLT_WAREHOUSE_LABEL.city}`,
+    VOLT_WAREHOUSE_LABEL.country,
+  ];
+}
+
 export type ParcelAddress = {
   recipientName?: string;
   line1?: string;
@@ -74,12 +83,7 @@ function trackingBars(code: string) {
 }
 
 export function parcelLabelHtml(details: ParcelLabelDetails) {
-  const sender = [
-    VOLT_WAREHOUSE_LABEL.name,
-    VOLT_WAREHOUSE_LABEL.line1,
-    `${VOLT_WAREHOUSE_LABEL.postal} ${VOLT_WAREHOUSE_LABEL.city}`,
-    VOLT_WAREHOUSE_LABEL.country,
-  ];
+  const sender = warehouseAddressLines();
   const recipient = formatParcelAddress(details.recipient);
   const service = details.shippingMethod === "express" ? "Express" : "Standard";
   return `<!doctype html>

@@ -4,6 +4,7 @@ import {
   EXPRESS_SHIPPING,
   formatStoreDayMonth,
   FREE_STANDARD_THRESHOLD,
+  PICKUP_SHIPPING,
   STANDARD_SHIPPING,
   adminShippingSchema,
   storeCalendarDate,
@@ -34,6 +35,17 @@ const FALLBACK = [
     maxDays: 2,
     active: true,
     sortOrder: 1,
+  },
+  {
+    code: "pickup",
+    name: "Pickup",
+    description: "Collect from our Helsinki warehouse",
+    price: PICKUP_SHIPPING,
+    freeThreshold: null as number | null,
+    minDays: 0,
+    maxDays: 1,
+    active: true,
+    sortOrder: 2,
   },
 ];
 
@@ -102,10 +114,16 @@ export const shippingService = {
     const free =
       option.freeThreshold != null && subtotal >= option.freeThreshold ? 0 : option.price;
     const cost = roundMoney(free);
+    const span =
+      option.code === "pickup"
+        ? option.description || "Collect in Helsinki"
+        : option.minDays === option.maxDays
+          ? `${option.minDays} business day${option.minDays === 1 ? "" : "s"}`
+          : `${option.minDays}–${option.maxDays} business days`;
     const label =
       cost === 0 && option.freeThreshold != null
         ? `${option.name} (free over €${option.freeThreshold})`
-        : `${option.name} (${option.minDays}–${option.maxDays} business days)`;
+        : `${option.name} (${span})`;
     return { option, cost, label };
   },
 

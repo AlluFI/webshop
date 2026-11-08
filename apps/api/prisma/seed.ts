@@ -9,6 +9,7 @@ import {
   ean13FromIndex,
   EXPRESS_SHIPPING,
   FINLAND_VAT_RATE,
+  PICKUP_SHIPPING,
   formatLocatorCode,
   FREE_STANDARD_THRESHOLD,
   locatorFromIndex,
@@ -1202,6 +1203,29 @@ async function main() {
       maxDays: 2,
       active: true,
       sortOrder: 1,
+    },
+  });
+  await prisma.shippingOption.upsert({
+    where: { code: "pickup" },
+    update: {
+      name: "Pickup",
+      description: "Collect from our Helsinki warehouse",
+      price: PICKUP_SHIPPING,
+      freeThreshold: null,
+      minDays: 0,
+      maxDays: 1,
+      active: true,
+      sortOrder: 2,
+    },
+    create: {
+      code: "pickup",
+      name: "Pickup",
+      description: "Collect from our Helsinki warehouse",
+      price: PICKUP_SHIPPING,
+      minDays: 0,
+      maxDays: 1,
+      active: true,
+      sortOrder: 2,
     },
   });
   await ensurePackageSizes();

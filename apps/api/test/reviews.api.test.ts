@@ -32,7 +32,7 @@ describeLive("reviews API", () => {
     await prisma.user.deleteMany({ where: { email } }).catch(() => undefined);
   });
 
-  it("rejects reviews without a purchase, then accepts after a paid order", async () => {
+  it("rejects reviews without a purchase, then accepts after a paid order", { timeout: 15_000 }, async () => {
     const product = await prisma.product.findFirst({ where: { slug: "sony-wh-1000xm5" } });
     expect(product).toBeTruthy();
     productId = product!.id;
@@ -60,7 +60,7 @@ describeLive("reviews API", () => {
     expect(blocked.status).toBe(403);
 
     const role = await prisma.role.findUnique({ where: { name: "customer" } });
-    await prisma.order.create({
+    const purchase = await prisma.order.create({
       data: {
         userId,
         status: "PAID",
@@ -92,6 +92,19 @@ describeLive("reviews API", () => {
     });
     expect(role?.name).toBe("customer");
 
+    const eligible = await request(app)
+      .get(`/api/v1/products/${productSlug}/reviews/eligibility`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(eligible.status).toBe(200);
+    expect(eligible.body.canReview).toBe(true);
+    expect(eligible.body.orderId).toBe(purchase.id);
+
+    const detail = await request(app)
+      .get(`/api/v1/orders/${purchase.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.items.some((item: { canReview?: boolean }) => item.canReview)).toBe(true);
+
     const created = await request(app)
       .post(`/api/v1/products/${productSlug}/reviews`)
       .set("Authorization", `Bearer ${accessToken}`)
@@ -109,5 +122,10 @@ describeLive("reviews API", () => {
       .set("Authorization", `Bearer ${accessToken}`);
     expect(vote.status).toBe(200);
     expect(vote.body.helpfulCount).toBeGreaterThanOrEqual(1);
+
+    const afterReview = await request(app)
+      .get(`/api/v1/orders/${purchase.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(afterReview.body.items.every((item: { canReview?: boolean }) => !item.canReview)).toBe(true);
   });
 });

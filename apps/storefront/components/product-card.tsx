@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { stars, type Product } from "@/lib/product";
 import { ProductPrice } from "./product-price";
 import { AddToCartButton } from "./cart";
+import { ProductSaveActions } from "./product-actions";
 
 export function ProductCard({ product }: { product: Product }) {
   const href = `/products/${product.slug}`;
@@ -32,6 +35,7 @@ export function ProductCard({ product }: { product: Product }) {
       <div className="card-actions">
         <ProductPrice product={product} />
         <AddToCartButton productId={product.id} stockQuantity={product.stockQuantity} compact />
+        <ProductSaveActions product={product} compact />
       </div>
     </article>
   );

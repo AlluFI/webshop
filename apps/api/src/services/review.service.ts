@@ -2,12 +2,12 @@ import { Prisma } from "@prisma/client";
 import {
   averageRating,
   createReviewSchema,
+  REVIEWABLE_ORDER_STATUSES,
   reviewListQuerySchema,
 } from "@volt/shared";
 import { prisma } from "../prisma.js";
 import { HttpError } from "../http-error.js";
 
-const PURCHASED_STATUSES = ["PAID", "PROCESSING", "SHIPPING", "WITH_COURIER", "DELIVERED"] as const;
 
 function displayName(user: { displayName: string | null; email: string }) {
   if (user.displayName?.trim()) return user.displayName.trim();
@@ -24,16 +24,16 @@ async function productIdOf(idOrSlug: string) {
   return product.id;
 }
 
-async function hasPurchased(userId: string, productId: string) {
-  const order = await prisma.order.findFirst({
+async function purchasedOrder(userId: string, productId: string) {
+  return prisma.order.findFirst({
     where: {
       userId,
-      status: { in: [...PURCHASED_STATUSES] },
+      status: { in: [...REVIEWABLE_ORDER_STATUSES] },
       items: { some: { productId } },
     },
     select: { id: true },
+    orderBy: { createdAt: "desc" },
   });
-  return Boolean(order);
 }
 
 async function refreshProductRating(productId: string) {
@@ -113,14 +113,15 @@ export const reviewService = {
 
   async eligibility(idOrSlug: string, userId: string) {
     const productId = await productIdOf(idOrSlug);
-    const purchased = await hasPurchased(userId, productId);
+    const order = await purchasedOrder(userId, productId);
     const existing = await prisma.review.findUnique({
       where: { productId_userId: { productId, userId } },
       select: { id: true, status: true },
     });
     return {
-      purchased,
-      canReview: purchased && !existing,
+      purchased: Boolean(order),
+      canReview: Boolean(order) && !existing,
+      orderId: order?.id ?? null,
       existingReviewId: existing?.id ?? null,
     };
   },
@@ -128,8 +129,8 @@ export const reviewService = {
   async create(idOrSlug: string, userId: string, input: unknown) {
     const productId = await productIdOf(idOrSlug);
     const dto = createReviewSchema.parse(input);
-    if (!(await hasPurchased(userId, productId))) {
-      throw new HttpError(403, "You can only review products you have purchased.");
+    if (!(await purchasedOrder(userId, productId))) {
+      throw new HttpError(403, "You can only review products from an order.");
     }
     const existing = await prisma.review.findUnique({
       where: { productId_userId: { productId, userId } },

@@ -8,6 +8,8 @@ import { api } from "@/lib/api";
 import { money } from "@/lib/product";
 import { useAuth } from "./auth";
 import { useCart } from "./cart";
+import { LanguageSwitcher, useI18n } from "./i18n";
+import { useShopLists } from "./shop-lists";
 
 type Suggest = {
   products: { name: string; slug: string; href: string }[];
@@ -25,6 +27,8 @@ function NavItem({ href, children }: { href: string; children: React.ReactNode }
 }
 
 export function SiteHeader() {
+  const { t } = useI18n();
+  const { wishlistIds, compareIds } = useShopLists();
   const { user, logout, ready } = useAuth();
   const { cart } = useCart();
   const staff = Boolean(user && isStaffRole(user.role));
@@ -79,7 +83,7 @@ export function SiteHeader() {
   return (
     <>
       <a className="skip" href="#main">
-        Skip to content
+        {t("nav.skip")}
       </a>
       <header className="header">
         <div className="header-inner">
@@ -88,13 +92,13 @@ export function SiteHeader() {
           </Link>
           <form className="search" onSubmit={onSearch} ref={box} role="search">
             <label className="skip" htmlFor="q">
-              Search products
+              {t("nav.search")}
             </label>
             <input
               id="q"
               value={q}
               onChange={(event) => setQ(event.target.value)}
-              placeholder="Search headphones, laptops, phones…"
+              placeholder={t("nav.searchPlaceholder")}
               autoComplete="off"
             />
             {suggest && (suggest.products.length > 0 || suggest.categories.length > 0) && (
@@ -106,19 +110,19 @@ export function SiteHeader() {
                 ))}
                 {suggest.categories.map((item) => (
                   <Link key={item.slug} href={item.href} onClick={() => setSuggest(null)}>
-                    Category: {item.name}
+                    {t("nav.category", { name: item.name })}
                   </Link>
                 ))}
               </div>
             )}
           </form>
-          <nav className="nav" aria-label="Account">
+          <nav className="nav" aria-label={t("orders.account")}>
             {ready && !staff && (
               <div className="bag-wrap" ref={bag}>
                 <button
                   className="link bag-toggle cart-btn"
                   type="button"
-                  aria-label={cart.itemCount > 0 ? `Cart, ${cart.itemCount} items` : "Cart"}
+                  aria-label={cart.itemCount > 0 ? t("nav.cartCount", { n: cart.itemCount }) : t("nav.cart")}
                   onClick={() => setBagOpen((open) => !open)}
                 >
                   <svg className="cart-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -136,9 +140,9 @@ export function SiteHeader() {
                   {cart.itemCount > 0 && <span className="cart-count">{cart.itemCount}</span>}
                 </button>
                 {bagOpen && (
-                  <div className="quick-cart" role="dialog" aria-label="Cart preview">
+                  <div className="quick-cart" role="dialog" aria-label={t("nav.cart")}>
                     {cart.items.length === 0 ? (
-                      <p className="muted">Your bag is empty.</p>
+                      <p className="muted">{t("nav.cartEmpty")}</p>
                     ) : (
                       <ul>
                         {cart.items.slice(0, 4).map((item) => (
@@ -155,14 +159,14 @@ export function SiteHeader() {
                         ))}
                       </ul>
                     )}
-                    <p className="price">Subtotal {money(cart.subtotal)}</p>
+                    <p className="price">{t("nav.subtotal", { amount: money(cart.subtotal) })}</p>
                     <div className="actions">
                       <Link className="button" href="/cart" onClick={() => setBagOpen(false)}>
-                        View cart
+                        {t("nav.viewCart")}
                       </Link>
                       {cart.items.length > 0 && (
                         <Link className="ghost" href="/checkout" onClick={() => setBagOpen(false)}>
-                          Checkout
+                          {t("nav.checkout")}
                         </Link>
                       )}
                     </div>
@@ -170,10 +174,20 @@ export function SiteHeader() {
                 )}
               </div>
             )}
-            <NavItem href="/catalog">Catalog</NavItem>
+            <NavItem href="/catalog">{t("nav.catalog")}</NavItem>
+            <NavItem href="/wishlist">
+              {t("nav.wishlist")}
+              {wishlistIds.length > 0 ? ` (${wishlistIds.length})` : ""}
+            </NavItem>
+            {compareIds.length > 0 && (
+              <NavItem href="/compare">
+                {t("nav.compare")} ({compareIds.length})
+              </NavItem>
+            )}
+            <LanguageSwitcher />
             {ready && user ? (
               <>
-                {staff && <NavItem href="/admin">Admin</NavItem>}
+                {staff && <NavItem href="/admin">{t("nav.admin")}</NavItem>}
                 <div className="account-wrap" ref={account}>
                   <button
                     className="link account-toggle"
@@ -186,7 +200,7 @@ export function SiteHeader() {
                     {user.displayName || user.email}
                   </button>
                   {accountOpen && (
-                    <div className="account-menu" role="menu" aria-label="Account">
+                    <div className="account-menu" role="menu" aria-label={t("orders.account")}>
                       <Link
                         href="/account"
                         role="menuitem"
@@ -197,7 +211,7 @@ export function SiteHeader() {
                           router.push("/account");
                         }}
                       >
-                        Profile
+                        {t("nav.profile")}
                       </Link>
                       {!staff && (
                         <Link
@@ -210,20 +224,20 @@ export function SiteHeader() {
                             router.push("/orders");
                           }}
                         >
-                          Orders
+                          {t("nav.orders")}
                         </Link>
                       )}
                     </div>
                   )}
                 </div>
                 <button className="link" type="button" onClick={() => void logout()}>
-                  Sign out
+                  {t("nav.signOut")}
                 </button>
               </>
             ) : ready ? (
               <>
-                <NavItem href="/login">Sign in</NavItem>
-                <NavItem href="/register">Create account</NavItem>
+                <NavItem href="/login">{t("nav.signIn")}</NavItem>
+                <NavItem href="/register">{t("nav.createAccount")}</NavItem>
               </>
             ) : null}
           </nav>

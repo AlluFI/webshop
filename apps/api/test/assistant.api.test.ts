@@ -80,7 +80,27 @@ describeLive("Voltie assistant", () => {
       .post(`/api/v1/assistant/threads/${guestThread.body.id}/messages`)
       .send({ content: "Where is my order VC-AAAAAAAA?" });
     expect(orders.status).toBe(201);
-    expect(orders.body.content).toMatch(/Sign in/i);
+    expect(orders.body.content).toMatch(/Find order/i);
+    expect(orders.body.content).toMatch(/last name/i);
+    expect(orders.body.content).toMatch(/VC-AAAAAAAA/);
+    expect(orders.body.content).not.toMatch(/Sign in as the customer/i);
+    expect(orders.body.uiBlocks?.[0]).toMatchObject({ type: "link", href: "/orders/lookup" });
+
+    const guestTrack = await request(app)
+      .post(`/api/v1/assistant/threads/${guestThread.body.id}/messages`)
+      .send({ content: "How can I track my order?" });
+    expect(guestTrack.status).toBe(201);
+    expect(guestTrack.body.content).toMatch(/Find order/i);
+    expect(guestTrack.body.content).toMatch(/last name/i);
+    expect(guestTrack.body.content).not.toMatch(/Sign in as the customer/i);
+
+    const noAccount = await request(app)
+      .post(`/api/v1/assistant/threads/${guestThread.body.id}/messages`)
+      .send({ content: "I have no account" });
+    expect(noAccount.status).toBe(201);
+    expect(noAccount.body.content).toMatch(/don’t need an account|do not need an account|Find order/i);
+    expect(noAccount.body.content).toMatch(/last name/i);
+    expect(noAccount.body.uiBlocks?.[0]).toMatchObject({ type: "link", href: "/orders/lookup" });
 
     const ticket = await request(app)
       .post(`/api/v1/assistant/threads/${guestThread.body.id}/messages`)

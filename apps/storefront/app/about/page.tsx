@@ -1,43 +1,38 @@
+import { getTranslator } from "@/lib/i18n/server";
 import { pageMetadata } from "@/lib/seo";
 
 const TEAM = [
-  { name: "Alex Volt", role: "Founder", bio: "Buys the boring cables so you do not have to." },
-  { name: "Mira Chen", role: "Catalog", bio: "Keeps specs honest and photos in focus." },
-  { name: "Sami Rautio", role: "Support", bio: "Answers the contact form before the coffee cools." },
+  { name: "Alex Volt", role: "about.role.founder" as const, bio: "about.bio.alex" as const },
+  { name: "Mira Chen", role: "about.role.catalog" as const, bio: "about.bio.mira" as const },
+  { name: "Sami Rautio", role: "about.role.support" as const, bio: "about.bio.sami" as const },
 ];
 
-export const metadata = pageMetadata(
-  "About — Volt & Co",
-  "Volt & Co is a small electronics shop: honest specs, purchased-only reviews, and checkout that never sees your card number.",
-);
+export async function generateMetadata() {
+  const t = await getTranslator();
+  return pageMetadata(`${t("about.title")} — Volt & Co`, t("about.companyBody"));
+}
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const t = await getTranslator();
   return (
     <article className="prose-page">
-      <p className="kicker">The shop</p>
-      <h1>About Volt &amp; Co</h1>
-      <h2>Company</h2>
-      <p>
-        Volt &amp; Co is a B2C electronics shop based in Helsinki. We sell headphones, computers,
-        phones, wearables, and home tech with the details a buyer actually needs: stock, size in
-        both unit systems, and reviews from paying customers.
-      </p>
-      <h2>Mission</h2>
-      <p>
-        Make it easy to choose well. No fake scarcity, no card data on our servers, and no reviews
-        from people who never opened the box.
-      </p>
-      <h2>Team</h2>
+      <p className="kicker">{t("about.kicker")}</p>
+      <h1>{t("about.title")}</h1>
+      <h2>{t("about.company")}</h2>
+      <p>{t("about.companyBody")}</p>
+      <h2>{t("about.mission")}</h2>
+      <p>{t("about.missionBody")}</p>
+      <h2>{t("about.team")}</h2>
       <ul className="team-list">
         {TEAM.map((member) => (
           <li key={member.name} className="panel">
             <strong>{member.name}</strong>
-            <p className="muted">{member.role}</p>
-            <p>{member.bio}</p>
+            <p className="muted">{t(member.role)}</p>
+            <p>{t(member.bio)}</p>
           </li>
         ))}
       </ul>
-      <h2>Social</h2>
+      <h2>{t("about.social")}</h2>
       <p>
         <a href="https://github.com/volt-and-co" rel="noreferrer">
           github.com/volt-and-co

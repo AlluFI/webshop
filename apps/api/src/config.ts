@@ -78,6 +78,7 @@ export const config = {
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   assistantModel: process.env.ASSISTANT_MODEL ?? "",
+  i18nEnabled: process.env.I18N_ENABLED === "true",
 };
 
 if (config.jwtAccessSecret.length < 32 || config.jwtRefreshSecret.length < 32) {

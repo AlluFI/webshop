@@ -12,6 +12,7 @@ type UiBlock =
   | { type: "products"; title?: string; items: { name: string; slug: string; href: string; price: number }[] }
   | { type: "confirm_claim"; orderId: string; reference: string; reason: string; productName?: string }
   | { type: "ticket"; reference: string; externalKey: string }
+  | { type: "link"; href: string; label: string }
   | { type: "did_you_mean"; suggestion: string }
   | {
       type: "order_picker";
@@ -192,7 +193,7 @@ export function VoltieChat({ variant = "shop" }: { variant?: "shop" | "staff" })
                 ? "Ask for a VC- order, the pick list, a locator, low stock, tickets, or last week’s sales. I only show what your role can see. Refunds and status changes wait until you tap Confirm."
                 : user
                   ? "Ask me about products, shipping, or an order on this account. I can email support (demo Jira ticket) or open a claim after you confirm."
-                  : "Ask me about products, shipping, or returns. Sign in to talk about an order you placed. I never look up someone else’s order."}
+                  : "Ask me about products, shipping, or returns. Track an order on Find order with the VC- number and last name — I never look up orders by email."}
             </p>
             {messages.map((message) => (
               <div key={message.id} className={`voltie-bubble ${message.role}`}>
@@ -302,6 +303,15 @@ export function VoltieChat({ variant = "shop" }: { variant?: "shop" | "staff" })
                       >
                         Confirm refund of {block.reference}
                       </button>
+                    );
+                  }
+                  if (block.type === "link") {
+                    return (
+                      <p key={`${message.id}-l-${index}`}>
+                        <Link href={block.href} className="button" onClick={() => setOpen(false)}>
+                          {block.label}
+                        </Link>
+                      </p>
                     );
                   }
                   if (block.type === "ticket") {

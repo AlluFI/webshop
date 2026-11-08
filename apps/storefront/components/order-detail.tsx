@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { formatOrderReference, formatOrderStatus, formatStoreDateTime } from "@volt/shared";
+import { formatOrderReference, formatStoreDateTime } from "@volt/shared";
 import { api, readOrderToken, userErrorMessage } from "@/lib/api";
+import { fulfillmentStatusKey, shippingKey } from "@/lib/i18n";
 import { money } from "@/lib/product";
 import { useAuth } from "./auth";
 import { useCart } from "./cart";
 import { RefundForm } from "./refund-form";
+import { ReviewForm } from "./reviews";
+import { useI18n } from "./i18n";
 
 type Order = {
   id: string;
@@ -37,9 +40,17 @@ type Order = {
   } | null;
   canCancel: boolean;
   canRefund: boolean;
+  canReturn?: boolean;
   canRetry?: boolean;
   replacedByOrderId?: string | null;
-  items: { id: string; name: string; slug: string; quantity: number; lineTotal: number }[];
+  items: {
+    id: string;
+    name: string;
+    slug: string;
+    quantity: number;
+    lineTotal: number;
+    canReview?: boolean;
+  }[];
   events: { id: string; status: string; note: string | null; createdAt: string }[];
 };
 
@@ -49,7 +60,9 @@ export function OrderDetail({ id }: { id: string }) {
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const { t } = useI18n();
   const [refundOpen, setRefundOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +125,26 @@ export function OrderDetail({ id }: { id: string }) {
     }
   }
 
+  async function returnOrder(body: { reason: string; note?: string }) {
+    if (!order) return;
+    setBusy("return");
+    setError("");
+    try {
+      const next = await api<Order>(`/orders/${order.id}/return`, {
+        method: "POST",
+        token: accessToken,
+        orderToken: readOrderToken(order.id),
+        body: JSON.stringify(body),
+      });
+      setOrder(next);
+      setReturnOpen(false);
+    } catch (err) {
+      setError(userErrorMessage(err, "Could not request a return"));
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function refundOrder(body: { reason: string; note?: string }) {
     if (!order) return;
     setBusy("refund");
@@ -135,88 +168,115 @@ export function OrderDetail({ id }: { id: string }) {
   if (error && !order) {
     return (
       <section>
-        <h1>Order</h1>
+        <h1>{t("order.title")}</h1>
         <p className="banner error">{error}</p>
         <div className="actions">
           <Link className="button" href="/cart">
-            Return to cart
+            {t("order.returnCart")}
           </Link>
           <Link className="ghost" href="/orders">
-            All orders
+            {t("order.all")}
           </Link>
         </div>
       </section>
     );
   }
-  if (!order) return <p>Loading order…</p>;
+  if (!order) return <p>{t("order.loading")}</p>;
 
   const paid = order.status === "PAID";
   const failed = order.status === "PAYMENT_FAILED";
   const cancelled = order.status === "CANCELLED";
   const refunded = order.status === "REFUNDED";
   const canRetry = failed && (order.canRetry ?? true) && !order.replacedByOrderId;
+  const pickup = order.shippingMethod === "pickup";
   const title = paid
-    ? "Payment received"
+    ? t("order.paid")
     : failed
-      ? "Payment did not go through"
+      ? t("order.failed")
       : cancelled
-        ? "Order cancelled"
+        ? t("order.cancelled")
         : refunded
-          ? "Order refunded"
-          : "Waiting for payment";
+          ? t("order.refunded")
+          : t("order.waiting");
 
   return (
     <section>
-      <p className="kicker">Order {order.reference || formatOrderReference(order.id)}</p>
+      <p className="kicker">{t("orders.order", { ref: order.reference || formatOrderReference(order.id) })}</p>
       <h1>{title}</h1>
-      {error && !refundOpen && <p className="banner error">{error}</p>}
-      {paid && <p className="banner ok">A confirmation email is on the way (check Mailpit).</p>}
-      {failed && canRetry && (
-        <p className="banner error">
-          Nothing was charged. Your items are back in the cart so you can try another card. A
-          failure email is on the way (check Mailpit).
-        </p>
-      )}
+      {error && !refundOpen && !returnOpen && <p className="banner error">{error}</p>}
+      {paid && <p className="banner ok">{t("order.mailpit")}</p>}
+      {failed && canRetry && <p className="banner error">{t("order.failedRetry")}</p>}
       {failed && !canRetry && (
         <p className="banner ok">
-          Nothing was charged on this attempt.
+          {t("order.failedLater")}{" "}
           {order.replacedByOrderId
-            ? ` You later paid for these items in order ${formatOrderReference(order.replacedByOrderId)}.`
-            : " A later order already covers these items."}
+            ? t("order.paidReplacement", { ref: formatOrderReference(order.replacedByOrderId) })
+            : t("order.laterCovers")}
         </p>
       )}
-      {cancelled && <p className="banner ok">Stock was returned. Nothing was charged.</p>}
-      {refunded && <p className="banner ok">Stripe issued a sandbox refund and stock was restored.</p>}
-      <div className="panel">
+      {cancelled && <p className="banner ok">{t("order.cancelledBanner")}</p>}
+      {refunded && <p className="banner ok">{t("order.refundedBanner")}</p>}
+      <div className="panel invoice-print">
+        <h2 className="print-only">{t("order.invoice")}</h2>
         <p>
-          Order: <strong>{order.reference || formatOrderReference(order.id)}</strong>
+          {t("order.title")}: <strong>{order.reference || formatOrderReference(order.id)}</strong>
         </p>
         <p>
-          Status: <strong>{formatOrderStatus(order.status)}</strong>
+          {t("order.statusLabel")} <strong>{t(fulfillmentStatusKey(order.status, order.shippingMethod))}</strong>
         </p>
-        <p>Payment: {order.paymentStatus.replaceAll("_", " ")}</p>
+        <p>
+          {t("order.payment")} {order.paymentStatus.replaceAll("_", " ")}
+        </p>
         <p>
           {order.displayName} · {order.email}
           {order.phone ? ` · ${order.phone}` : ""}
         </p>
-        {order.shipping && (
-          <p className="muted">
-            Ship to {order.shipping.recipientName}, {order.shipping.line1}
-            {order.shipping.line2 ? `, ${order.shipping.line2}` : ""}, {order.shipping.postal}{" "}
-            {order.shipping.city}
-            {order.shipping.region ? `, ${order.shipping.region}` : ""},{" "}
-            {order.shipping.countryName || order.shipping.country}
-            {" · "}
-            {order.shippingMethod}
-            {order.estimatedDelivery ? ` · Est. delivery ${order.estimatedDelivery.label}` : ""}
-          </p>
+        {pickup ? (
+          <>
+            <p>
+              {t("order.collectFrom")} {t("order.pickupPlace")}
+              {" · "}
+              {t(shippingKey("pickup"))}
+              {order.estimatedDelivery ? ` · ${t("order.pickupReady", { label: order.estimatedDelivery.label })}` : ""}
+            </p>
+            <p className="muted">{t("order.pickupHint")}</p>
+            {order.shipping && (
+              <p className="muted">
+                {t("order.collector")} {order.shipping.recipientName}
+                {" · "}
+                {t("order.contactAddress")}{" "}
+                {[
+                  order.shipping.line1,
+                  order.shipping.line2,
+                  `${order.shipping.postal} ${order.shipping.city}`.trim(),
+                  order.shipping.region,
+                  order.shipping.countryName || order.shipping.country,
+                ]
+                  .filter((line) => line && String(line).trim())
+                  .join(", ")}
+              </p>
+            )}
+          </>
+        ) : (
+          order.shipping && (
+            <p className="muted">
+              {t("order.shipTo")} {order.shipping.recipientName}, {order.shipping.line1}
+              {order.shipping.line2 ? `, ${order.shipping.line2}` : ""}, {order.shipping.postal}{" "}
+              {order.shipping.city}
+              {order.shipping.region ? `, ${order.shipping.region}` : ""},{" "}
+              {order.shipping.countryName || order.shipping.country}
+              {" · "}
+              {t(shippingKey(order.shippingMethod))}
+              {order.estimatedDelivery ? ` · ${t("order.est", { label: order.estimatedDelivery.label })}` : ""}
+            </p>
+          )
         )}
-        {order.tracking && (
+        {order.tracking && !pickup && (
           <p>
-            Tracking: {order.tracking.carrierName} <strong>{order.tracking.code}</strong>
+            {t("order.tracking")} {order.tracking.carrierName} <strong>{order.tracking.code}</strong>
             {" · "}
             <a href={order.tracking.url} target="_blank" rel="noreferrer">
-              Track with {order.tracking.carrierName}
+              {t("order.trackWith", { name: order.tracking.carrierName })}
             </a>
           </p>
         )}
@@ -230,29 +290,65 @@ export function OrderDetail({ id }: { id: string }) {
             </li>
           ))}
         </ul>
-        {order.subtotal != null && <p>Subtotal {money(order.subtotal)}</p>}
-        {order.shippingCost != null && <p>Shipping {money(order.shippingCost)}</p>}
+        {accessToken && order.items.some((item) => item.canReview) && (
+          <div className="no-print" style={{ marginTop: 16 }}>
+            {order.items
+              .filter((item) => item.canReview)
+              .map((item) => (
+                <ReviewForm
+                  key={item.id}
+                  slug={item.slug}
+                  heading={t("order.review", { name: item.name })}
+                  token={accessToken}
+                  onPublished={() =>
+                    setOrder((current) =>
+                      current
+                        ? {
+                            ...current,
+                            items: current.items.map((row) =>
+                              row.id === item.id ? { ...row, canReview: false } : row,
+                            ),
+                          }
+                        : current,
+                    )
+                  }
+                />
+              ))}
+          </div>
+        )}
+        {order.subtotal != null && <p>{t("order.subtotal", { amount: money(order.subtotal) })}</p>}
+        {order.shippingCost != null && (
+          <p>{t(pickup ? "order.pickupFee" : "order.shipping", { amount: money(order.shippingCost) })}</p>
+        )}
         {order.tax != null && (
           <p>
-            {order.taxLabel || "VAT 25.5% (included)"} {money(order.tax)}
+            {t("checkout.vat")} {money(order.tax)}
           </p>
         )}
-        <p className="price">Total {money(order.total)}</p>
-        <div className="actions">
+        <p className="price">{t("checkout.total", { amount: money(order.total) })}</p>
+        <div className="actions no-print">
+          <button className="ghost" type="button" onClick={() => window.print()}>
+            {t("order.printInvoice")}
+          </button>
           {order.canCancel && (
             <button className="ghost" type="button" disabled={Boolean(busy)} onClick={() => void cancelOrder()}>
-              {busy === "cancel" ? "Cancelling…" : "Cancel order"}
+              {busy === "cancel" ? t("order.cancelling") : t("order.cancel")}
             </button>
           )}
           {order.canRefund && !refundOpen && (
             <button className="ghost" type="button" disabled={Boolean(busy)} onClick={() => setRefundOpen(true)}>
-              Request refund
+              {t("order.requestRefund")}
+            </button>
+          )}
+          {order.canReturn && !returnOpen && (
+            <button className="ghost" type="button" disabled={Boolean(busy)} onClick={() => setReturnOpen(true)}>
+              {t("order.return")}
             </button>
           )}
         </div>
         {order.canRefund && refundOpen && (
-          <div className="panel" style={{ marginTop: 16 }}>
-            <h2 className="kicker">Refund this order</h2>
+          <div className="panel no-print" style={{ marginTop: 16 }}>
+            <h2 className="kicker">{t("order.refundTitle")}</h2>
             <RefundForm
               busy={busy === "refund"}
               error={error}
@@ -264,14 +360,29 @@ export function OrderDetail({ id }: { id: string }) {
             />
           </div>
         )}
+        {order.canReturn && returnOpen && (
+          <div className="panel no-print" style={{ marginTop: 16 }}>
+            <h2 className="kicker">{t("order.returnTitle")}</h2>
+            <RefundForm
+              mode="return"
+              busy={busy === "return"}
+              error={error}
+              onCancel={() => {
+                setReturnOpen(false);
+                setError("");
+              }}
+              onSubmit={(body) => void returnOrder(body)}
+            />
+          </div>
+        )}
       </div>
       <h2 className="kicker" style={{ marginTop: 24 }}>
-        Status updates
+        {t("order.statusUpdates")}
       </h2>
       <ol className="muted" style={{ marginTop: 8 }}>
         {order.events.map((event) => (
           <li key={event.id}>
-            {formatStoreDateTime(event.createdAt)} — {formatOrderStatus(event.status)}
+            {formatStoreDateTime(event.createdAt)} — {t(fulfillmentStatusKey(event.status, order.shippingMethod))}
             {event.note ? ` · ${event.note}` : ""}
           </li>
         ))}
@@ -279,19 +390,19 @@ export function OrderDetail({ id }: { id: string }) {
       <div className="actions" style={{ marginTop: 24 }}>
         {canRetry ? (
           <Link className="button" href="/cart">
-            Return to cart
+            {t("order.returnCart")}
           </Link>
         ) : failed && order.replacedByOrderId ? (
           <Link className="button" href={`/orders/${order.replacedByOrderId}`}>
-            View paid order
+            {t("order.viewPaid")}
           </Link>
         ) : (
           <Link className="button" href="/catalog">
-            Continue shopping
+            {t("order.continue")}
           </Link>
         )}
         <Link className="ghost" href="/orders">
-          All orders
+          {t("order.all")}
         </Link>
       </div>
     </section>

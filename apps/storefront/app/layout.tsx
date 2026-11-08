@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
+import { CookieBanner } from "@/components/cookie-banner";
 import { Providers } from "@/components/providers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { VoltieChat } from "@/components/voltie-chat";
+import { getRequestLocale } from "@/lib/i18n/server";
 import { fitMetaDescription, fitPageTitle } from "@/lib/seo";
 import "./globals.css";
 
@@ -13,9 +15,10 @@ export const metadata = {
   ),
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const locale = await getRequestLocale();
   return (
-    <html lang="en">
+    <html lang={locale}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
@@ -25,13 +28,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
       </head>
       <body>
-        <Providers>
+        <Providers locale={locale}>
           <SiteHeader />
           <main id="main" className="page">
             {children}
           </main>
           <SiteFooter />
           <VoltieChat />
+          <CookieBanner />
         </Providers>
       </body>
     </html>

@@ -61,10 +61,14 @@ export const optionalPhoneSchema = z
   })
   .optional();
 
-export const shippingMethodSchema = z.enum(["standard", "express"]);
+export const shippingMethodSchema = z.enum(["standard", "express", "pickup"]);
 
 export function isExpressShipping(method?: string | null) {
   return method === "express";
+}
+
+export function isPickupShipping(method?: string | null) {
+  return method === "pickup";
 }
 
 export function comparePickingPriority(
@@ -175,6 +179,8 @@ export const STAFF_REFUNDABLE_STATUSES = [
   "DELIVERED",
 ] as const;
 
+export const REVIEWABLE_ORDER_STATUSES = STAFF_REFUNDABLE_STATUSES;
+
 export const ORDER_STATUS_LABELS: Record<(typeof ORDER_STATUSES)[number], string> = {
   PENDING_PAYMENT: "Pending payment",
   PAYMENT_FAILED: "Payment failed",
@@ -204,6 +210,13 @@ export function formatOrderStatus(status: string) {
 export function formatOrderReference(orderId: string) {
   return `VC-${orderId.replaceAll("-", "").slice(0, 8).toUpperCase()}`;
 }
+
+export const CUSTOMER_RETURNABLE_STATUSES = [
+  "PROCESSING",
+  "SHIPPING",
+  "WITH_COURIER",
+  "DELIVERED",
+] as const;
 
 export const CUSTOMER_REFUND_REASONS = [
   { code: "changed_mind", label: "Changed my mind" },
@@ -248,6 +261,7 @@ function refundRequestSchema(reasonCodes: [string, ...string[]]) {
 
 export const customerRefundRequestSchema = refundRequestSchema(customerRefundReasonCodes);
 export const staffRefundRequestSchema = refundRequestSchema(staffRefundReasonCodes);
+export const customerReturnRequestSchema = customerRefundRequestSchema;
 
 export function refundReasonLabel(code: string) {
   return STAFF_REFUND_REASONS.find((row) => row.code === code)?.label ?? code;
@@ -261,6 +275,12 @@ export function formatRefundNote(reason: string, note: string | undefined, actor
   const label = refundReasonLabel(reason);
   const extra = note?.trim() ? ` — ${note.trim()}` : "";
   return `${actor === "staff" ? "Staff" : "Customer"} refund: ${label}${extra}`;
+}
+
+export function formatReturnNote(reason: string, note: string | undefined) {
+  const label = refundReasonLabel(reason);
+  const extra = note?.trim() ? ` — ${note.trim()}` : "";
+  return `Customer return request: ${label}${extra}`;
 }
 
 export const orderListQuerySchema = z.object({

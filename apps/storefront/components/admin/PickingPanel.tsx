@@ -5,6 +5,7 @@ import {
   formatOrderStatus,
   formatParcelAddress,
   isExpressShipping,
+  isPickupShipping,
   formatStoreDateTime,
   normalizeBarcode,
   POSTI_LIVE_TEST_TRACKING,
@@ -13,6 +14,7 @@ import {
   SHIPPING_CARRIER_META,
   storeCalendarDate,
   type ShippingCarrier,
+  warehouseAddressLines,
 } from "@volt/shared";
 import { api, ApiError } from "@/lib/api";
 import { BarcodeScanField } from "./BarcodeScanField";
@@ -100,6 +102,24 @@ function ExpressMark() {
       <span aria-hidden="true">!</span>
       Express
     </span>
+  );
+}
+
+function PickupMark() {
+  return (
+    <span className="pickup-flag" title="Helsinki warehouse pickup — customer collects">
+      Pickup
+    </span>
+  );
+}
+
+function WarehouseAddress() {
+  return (
+    <p className="ship-address">
+      {warehouseAddressLines().map((line) => (
+        <span key={line}>{line}</span>
+      ))}
+    </p>
   );
 }
 
@@ -278,6 +298,29 @@ export function PickingPanel({ token }: { token: string }) {
     }
   }
 
+  async function markCollected() {
+    if (!order) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/admin/orders/${order.id}/status`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          status: "DELIVERED",
+          note: "Customer collected Helsinki warehouse pickup.",
+        }),
+      });
+      setOrder(null);
+      setStep("pick");
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not mark this order collected");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handToCourier(event: FormEvent) {
     event.preventDefault();
     if (!order) return;
@@ -307,11 +350,14 @@ export function PickingPanel({ token }: { token: string }) {
   }
 
   const express = isExpressShipping(order?.shippingMethod);
+  const pickup = isPickupShipping(order?.shippingMethod);
   const title =
     step === "confirm"
       ? `Confirm pick ${order?.reference ?? ""}`
       : step === "ship"
-        ? `Ship ${order?.reference ?? ""}`
+        ? pickup
+          ? `Hold for pickup ${order?.reference ?? ""}`
+          : `Ship ${order?.reference ?? ""}`
         : order
           ? `Pick ${order.reference}`
           : "Handle order";
@@ -322,8 +368,9 @@ export function PickingPanel({ token }: { token: string }) {
       <div className="toolbar">
         <h2>Order handling</h2>
         <p className="muted">
-          Express orders are listed first, oldest to newest, then standard. Once the order is with the
-          courier it leaves this list and stays under Orders.
+          Express orders are listed first, oldest to newest, then standard and Helsinki pickup. Courier
+          orders leave this list when handed to the courier. Pickup orders stay here until the customer
+          collects them at the warehouse.
         </p>
       </div>
       <Modal open={Boolean(order)} title={title} onClose={closeOrder}>
@@ -331,6 +378,12 @@ export function PickingPanel({ token }: { token: string }) {
         {order && express ? (
           <p className="express-banner">
             <ExpressMark /> Handle this order first.
+          </p>
+        ) : null}
+        {order && pickup && step !== "ship" ? (
+          <p className="pickup-banner">
+            <PickupMark /> Helsinki warehouse pickup — the customer collects this. Do not print a courier
+            label.
           </p>
         ) : null}
         {order && step === "pick" && (
@@ -398,7 +451,11 @@ export function PickingPanel({ token }: { token: string }) {
         )}
         {order && step === "confirm" && (
           <>
-            <p>Confirm that these products were picked and placed on the order:</p>
+            <p>
+              {pickup
+                ? "Confirm that these products were picked and held for Helsinki warehouse collection:"
+                : "Confirm that these products were picked and placed on the order:"}
+            </p>
             <ul className="pick-confirm">
               {order.items.map((item) => (
                 <li key={item.id}>
@@ -417,7 +474,49 @@ export function PickingPanel({ token }: { token: string }) {
             </div>
           </>
         )}
-        {order && step === "ship" && (
+        {order && step === "ship" && pickup && (
+          <div>
+            <p className="pickup-banner">
+              <PickupMark /> Picking is done. Hold this order on the pickup shelf. Do not print a courier
+              label or hand it to Posti, PostNord, or Budbee.
+            </p>
+            <PackageHint packaging={order.packaging} />
+            <div className="ship-panel">
+              <div>
+                <p className="kicker">Collect from</p>
+                <WarehouseAddress />
+              </div>
+              <div>
+                <p className="kicker">Customer / contact</p>
+                <AddressBlock address={order.shipping} />
+                {order.customerName ? <p className="muted">{order.customerName}</p> : null}
+              </div>
+              <div>
+                <p className="kicker">Contents</p>
+                <ul className="admin-order-summary-list">
+                  {order.items.map((item) => (
+                    <li key={item.id}>
+                      {item.name} × {item.quantity}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <p className="muted">
+              The customer has been emailed that the order is ready. When they have collected it, mark it
+              collected. It then leaves this list and stays under Orders as Collected.
+            </p>
+            <div className="actions">
+              <button className="primary" type="button" disabled={busy} onClick={() => void markCollected()}>
+                {busy ? "Saving…" : "Customer collected"}
+              </button>
+              <button className="ghost" type="button" disabled={busy} onClick={closeOrder}>
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+        {order && step === "ship" && !pickup && (
           <form onSubmit={(event) => void handToCourier(event)}>
             <p className="muted">
               Picking is done. Print label creates a shipment through the selected carrier adapter (mock
@@ -534,18 +633,23 @@ export function PickingPanel({ token }: { token: string }) {
               {items.map((item) => (
                 <tr
                   key={item.id}
-                  className={`pickable${isExpressShipping(item.shippingMethod) ? " express" : ""}`}
+                  className={`pickable${isExpressShipping(item.shippingMethod) ? " express" : ""}${isPickupShipping(item.shippingMethod) ? " pickup" : ""}`}
                   onClick={() => openOrder(item)}
                 >
                   <td>
                     {item.hasDeviation ? <DeviationMark /> : null}
                     {isExpressShipping(item.shippingMethod) ? <ExpressMark /> : null}
+                    {isPickupShipping(item.shippingMethod) ? <PickupMark /> : null}
                     <button className="link" type="button">
                       {item.reference}
                     </button>
                   </td>
                   <td>{item.customerName || "—"}</td>
-                  <td>{formatOrderStatus(item.status)}</td>
+                  <td>
+                    {isPickupShipping(item.shippingMethod) && item.status === "SHIPPING"
+                      ? "Ready for collection"
+                      : formatOrderStatus(item.status)}
+                  </td>
                   <td>{formatStoreDateTime(item.createdAt)}</td>
                   <td className="num">{item.itemCount}</td>
                   <td>

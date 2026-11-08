@@ -13,3 +13,4 @@ export * from "./parcel-label.js";
 export * from "./time.js";
 export * from "./integrations.js";
 export * from "./assistant.js";
+export * from "./shop.js";

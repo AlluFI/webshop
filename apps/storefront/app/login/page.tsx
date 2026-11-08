@@ -1,10 +1,11 @@
 import { LoginForm } from "@/components/auth-pages";
+import { getTranslator } from "@/lib/i18n/server";
 import { pageMetadata } from "@/lib/seo";
 
-export const metadata = pageMetadata(
-  "Sign in — Volt & Co",
-  "Sign in to Volt & Co to manage orders, addresses, and reviews. Staff accounts require two-factor authentication.",
-);
+export async function generateMetadata() {
+  const t = await getTranslator();
+  return pageMetadata(`${t("auth.signInTitle")} — Volt & Co`, t("auth.signInTitle"));
+}
 
 export default function LoginPage() {
   return <LoginForm />;

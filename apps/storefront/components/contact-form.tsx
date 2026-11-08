@@ -4,8 +4,10 @@ import { useState, type FormEvent } from "react";
 import ReCAPTCHA from "react-google-recaptcha";
 import { contactSchema } from "@volt/shared";
 import { api, ApiError, recaptchaSiteKey } from "@/lib/api";
+import { useI18n } from "./i18n";
 
 export function ContactForm() {
+  const { t } = useI18n();
   const [captcha, setCaptcha] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
@@ -39,32 +41,36 @@ export function ContactForm() {
 
   return (
     <section className="auth-card" style={{ maxWidth: 560 }}>
-      <h1>Contact</h1>
-      <p className="muted">Questions about an order, a spec, or a review? We read every note. Voltie (bottom right) can search the shop and open the same support ticket without Jira.</p>
-      {done && <p className="banner ok">{done} Check Mailpit on port 8025 in Docker.</p>}
+      <h1>{t("contact.title")}</h1>
+      <p className="muted">{t("contact.lead")}</p>
+      {done && (
+        <p className="banner ok">
+          {done} {t("contact.mailpit")}
+        </p>
+      )}
       {error && <p className="banner error">{error}</p>}
       {!done && (
         <form onSubmit={(event) => void onSubmit(event)}>
           <label className="field">
-            <span>Name</span>
+            <span>{t("checkout.name")}</span>
             <input name="name" required autoComplete="name" />
           </label>
           <label className="field">
-            <span>Email</span>
+            <span>{t("checkout.email")}</span>
             <input name="email" type="email" required autoComplete="email" />
           </label>
           <label className="field">
-            <span>Subject</span>
+            <span>{t("contact.subject")}</span>
             <input name="subject" required />
           </label>
           <label className="field">
-            <span>Message</span>
+            <span>{t("contact.message")}</span>
             <textarea name="message" rows={5} required />
           </label>
           <ReCAPTCHA sitekey={recaptchaSiteKey()} onChange={setCaptcha} />
           <div className="actions">
             <button className="primary" type="submit">
-              Send
+              {t("contact.send")}
             </button>
           </div>
         </form>

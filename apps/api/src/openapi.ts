@@ -180,6 +180,7 @@ export const openApiDocument: OpenAPIV3.Document = {
     { name: "Reviews" },
     { name: "Contact" },
     { name: "Shipping" },
+    { name: "Shop" },
     { name: "Admin" },
     { name: "Integrations" },
     { name: "Assistant" },
@@ -1303,7 +1304,7 @@ export const openApiDocument: OpenAPIV3.Document = {
               schema: {
                 type: "object",
                 properties: {
-                  shippingMethod: { type: "string", enum: ["standard", "express"] },
+                  shippingMethod: { type: "string", enum: ["standard", "express", "pickup"] },
                   address: { $ref: "#/components/schemas/AddressInput" },
                   addressId: { type: "string", format: "uuid" },
                 },
@@ -1333,7 +1334,7 @@ export const openApiDocument: OpenAPIV3.Document = {
                   email: { type: "string", format: "email" },
                   displayName: { type: "string" },
                   phone: { type: "string" },
-                  shippingMethod: { type: "string", enum: ["standard", "express"] },
+                  shippingMethod: { type: "string", enum: ["standard", "express", "pickup"] },
                   address: { $ref: "#/components/schemas/AddressInput" },
                   addressId: { type: "string", format: "uuid" },
                   saveAddress: { type: "boolean" },
@@ -1438,6 +1439,7 @@ export const openApiDocument: OpenAPIV3.Document = {
                 "DELIVERED",
                 "CANCELLED",
                 "REFUNDED",
+                "CLAIMS",
               ],
             },
           },
@@ -1449,6 +1451,32 @@ export const openApiDocument: OpenAPIV3.Document = {
         responses: {
           "200": { description: "Filtered order list" },
           "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+    },
+    "/api/v1/orders/lookup": {
+      post: {
+        tags: ["Orders"],
+        summary: "Guest order lookup by VC- number and last name",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["reference", "lastName"],
+                properties: {
+                  reference: { type: "string", example: "VC-A1B2C3D4" },
+                  lastName: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Order plus a one-time orderAccessToken" },
+          "404": { description: "Not found" },
+          "429": { description: "Rate limited" },
         },
       },
     },
@@ -1502,6 +1530,72 @@ export const openApiDocument: OpenAPIV3.Document = {
           "400": { description: "Reason required; Other needs a note" },
           "409": { description: "Order is no longer PAID" },
         },
+      },
+    },
+    "/api/v1/orders/{id}/return": {
+      post: {
+        tags: ["Orders"],
+        summary: "Request a return (CLAIMS ticket; staff still refunds)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["reason"],
+                properties: {
+                  reason: {
+                    type: "string",
+                    enum: ["changed_mind", "ordered_by_mistake", "wrong_or_damaged", "never_arrived", "other"],
+                  },
+                  note: { type: "string", maxLength: 240 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Return requested" },
+          "409": { description: "Order cannot be returned" },
+        },
+      },
+    },
+    "/api/v1/shop/config": {
+      get: {
+        tags: ["Shop"],
+        summary: "Storefront extras: i18n flag and compare limit",
+        responses: { "200": { description: "i18nEnabled, locales, compareLimit" } },
+      },
+    },
+    "/api/v1/wishlist": {
+      get: {
+        tags: ["Shop"],
+        summary: "Signed-in customer wishlist",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Wishlist products" }, "401": { $ref: "#/components/responses/Unauthorized" } },
+      },
+      post: {
+        tags: ["Shop"],
+        summary: "Add a product to the wishlist",
+        security: [{ bearerAuth: [] }],
+        responses: { "201": { description: "Updated wishlist" } },
+      },
+    },
+    "/api/v1/wishlist/{productId}": {
+      delete: {
+        tags: ["Shop"],
+        summary: "Remove a product from the wishlist",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "productId", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Updated wishlist" } },
+      },
+    },
+    "/api/v1/stock-alerts": {
+      post: {
+        tags: ["Shop"],
+        summary: "Email when a sold-out product is back in stock (Mailpit)",
+        responses: { "201": { description: "Subscribed" }, "409": { description: "Already in stock" } },
       },
     },
     "/api/v1/products/{idOrSlug}/reviews": {

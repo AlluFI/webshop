@@ -6,7 +6,7 @@ import { prisma } from "../prisma.js";
 import { config } from "../config.js";
 import { encryptJson, decryptJson, decryptOrEmpty } from "../lib/crypto.js";
 import { mail } from "../mail.js";
-import type { OrderEmailShipping, OrderShippedEmailDetails } from "../lib/order-email.js";
+import type { OrderEmailDetails, OrderEmailShipping, OrderShippedEmailDetails } from "../lib/order-email.js";
 import { shippingService } from "./shipping.service.js";
 
 export type PaymentMeta = {
@@ -325,4 +325,44 @@ export async function sendOrderShippedMail(orderId: string) {
 
   if (!details.email) return;
   await mail.sendOrderShipped(details);
+}
+
+export async function sendOrderPickupReadyMail(orderId: string) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      items: { include: { product: { select: { slug: true } } } },
+    },
+  });
+  if (!order || order.shippingMethod !== "pickup") return;
+
+  const origin = storeOrigin();
+  const details: OrderEmailDetails = {
+    orderId: order.id,
+    orderUrl: `${origin}/orders/${order.id}`,
+    status: "SHIPPING",
+    paymentStatus: "SUCCEEDED",
+    placedAt: order.createdAt,
+    customerName: decryptOrEmpty(order.contactNameEnc),
+    email: decryptOrEmpty(order.contactEmailEnc),
+    phone: decryptOrEmpty(order.contactPhoneEnc),
+    items: order.items.map((item) => ({
+      name: item.productName,
+      quantity: item.quantity,
+      unitPrice: moneyNumber(item.unitPrice),
+      lineTotal: moneyNumber(item.lineTotal),
+      thumbnailUrl: item.thumbnailPath ? `${origin}/api/v1/files/${item.thumbnailPath}` : null,
+      productUrl: `${origin}/products/${item.product.slug}`,
+    })),
+    subtotal: moneyNumber(order.subtotal),
+    shippingCost: moneyNumber(order.shippingCost),
+    shippingMethod: order.shippingMethod,
+    tax: moneyNumber(order.tax),
+    total: moneyNumber(order.total),
+    currency: order.currency,
+    shipping: shippingForEmail(order.shippingAddressEnc),
+  };
+
+  if (!details.email) return;
+  await mail.sendOrderPickupReady(details);
 }

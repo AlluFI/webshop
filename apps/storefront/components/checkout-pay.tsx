@@ -8,6 +8,7 @@ import { STRIPE_TEST_CARDS } from "@volt/shared";
 import { api, ApiError, userErrorMessage } from "@/lib/api";
 import { money } from "@/lib/product";
 import { useCart } from "./cart";
+import { useI18n } from "./i18n";
 
 function isPaymentDecline(error: {
   type?: string;
@@ -48,6 +49,7 @@ function PayForm({
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();
+  const { t } = useI18n();
   const { refresh } = useCart();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -102,10 +104,10 @@ function PayForm({
       {error && <p className="banner error">{error}</p>}
       <PaymentElement options={{ layout: "tabs" }} />
       <p className="muted" style={{ marginTop: 12 }}>
-        Card number, expiry, and CVC are collected by Stripe.js. The raw card is never received by this shop.
+        {t("checkout.pci")}
       </p>
       <button className="primary" type="button" onClick={() => void onPay()} disabled={!stripe || busy} style={{ marginTop: 12 }}>
-        {busy ? "Paying…" : `Pay ${money(total)}`}
+        {busy ? t("checkout.paying") : t("checkout.pay", { amount: money(total) })}
       </button>
       <ul className="muted" style={{ marginTop: 16, paddingLeft: 18, fontSize: "0.92rem" }}>
         {STRIPE_TEST_CARDS.map((card) => (

@@ -211,7 +211,7 @@ A **modular monolith** is used, not a distributed set of microservices.
 - `apps/worker` consumes RabbitMQ **without** splitting the catalog database. Payment webhooks publish `payment.status`; the order is updated, email is sent, and inventory is restored by the worker. If payment volume later needs its own process, that module is already a boundary.
 - Carrier integrations are isolated under `apps/api/src/lib/carriers/`. Mock adapters return Volt labels; live adapters (Posti OAuth, PostNord OAuth, Budbee Basic auth) are selected with `*_MODE=live`.
 - BI and SaaS integrations are already in the codebase: `analytics_*` SQL views for a replica warehouse, hashed `volt_test_` / `volt_live_` API keys on `/api/v1/integrations/v1/*`, and HMAC-signed webhooks. Production cutover is replica access plus Admin → Integrations keys — see [INTEGRATIONS.md](INTEGRATIONS.md).
-- **Voltie** is the shop assistant (customers) and Admin wingman (staff, role-scoped, confirmed writes). Guests get catalog/FAQ only; signed-in customers can see their own orders and confirm a claim. Tickets use a Jira-shaped payload stored locally and emailed to Mailpit (`TICKET_MODE=mock`) so the demo does not need Jira — see [VOLTIE.md](VOLTIE.md).
+- **Voltie** is the shop assistant (customers) and Admin wingman (staff, role-scoped, confirmed writes). Guests get catalog/FAQ plus how to track without an account (Find order: VC- number + last name); Voltie still does not look up orders in chat. Signed-in customers can see their own orders and confirm a claim. Tickets use a Jira-shaped payload stored locally and emailed to Mailpit (`TICKET_MODE=mock`) so the demo does not need Jira — see [VOLTIE.md](VOLTIE.md).
 
 **What is not done yet:** a separate “User Service” and “Product Service” with two databases. Joining products to brands/categories and to order lines is exactly what one relational database is for.
 
@@ -244,7 +244,7 @@ Code: `apps/storefront/components/checkout-page.tsx`, `apps/api/src/services/ord
 | Goal | How it is done |
 | --- | --- |
 | **Confidentiality** | TLS at nginx (`https://localhost:8443`); AES-256-GCM for addresses, order snapshots, payment metadata, audit `metaEnc`, and refresh JTIs in Redis; access JWT only in memory; staff 2FA; RBAC on `/admin`; two-factor fields remounted so login values are not left on the TOTP page |
-| **Integrity** | Signed JWTs; Argon2 password hashes; checkout `SELECT FOR UPDATE`; purchased-only reviews; audit log of staff writes |
+| **Integrity** | Signed JWTs; Argon2 password hashes; checkout `SELECT FOR UPDATE`; reviews only from a paid order; audit log of staff writes |
 | **Availability** | Docker healthchecks; Redis token-bucket (429 before the process melts); worker can scale off HTTP; k6 report in `docs/PERFORMANCE.md` |
 
 ---
@@ -308,7 +308,7 @@ The shop is not in pain at class-demo scale. Bottlenecks below are the ones desi
 2. Login `customer@volt.test` / `Shopping123`. Empty Local Storage is shown. jwt.io is opened on an access token from the Network tab (header / payload / signature).
 3. Refresh is called twice with the **first** refresh token (or the automated test is used) — second call 401 “reuse”.
 4. Catalog facets + sort + typeahead + grid/list; a PDP is opened (thumbs + full, metric/imperial, reviews).
-5. A review is left/voted on the seeded Sony purchase; the average is updated.
+5. A review is left from the seeded Sony **order**, then voted helpful on the product page; the average is updated.
 6. Guest: add to cart, refresh, still there; header quick cart. Sign in: the cart is merged.
 7. Checkout: prefill, bad postcode field error, Pay with `4242…4242`; confirmation shows `VC-` reference + estimated delivery; Mailpit HTML. Then `4000…9995`: the order page is opened, items are returned to the cart, the failure mail is received in Mailpit (no Stripe CLI).
 8. Admin `admin@volt.test` + TOTP `DEMOADMIN2FASECRETKEYAA`: the two-factor fields are empty (email/password are not reused). CRUD, bulk CSV, hide a review, **order handling** Print label (Posti / PostNord / Budbee mock), hand to courier, refuse a role until 2FA.

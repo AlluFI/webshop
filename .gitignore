@@ -16,6 +16,7 @@ packages/shared/dist
 
 # Local oral-review notes (not for the repo / reviewers)
 docs/ORAL_REVIEW_BRIEF.md
+docs/APIS.md
 
 # Playwright
 test-results/

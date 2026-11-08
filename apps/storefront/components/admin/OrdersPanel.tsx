@@ -4,6 +4,7 @@ import {
   formatOrderReference,
   formatOrderStatus,
   formatStoreDateTime,
+  isPickupShipping,
   ORDER_STATUSES,
   SHIPPING_CARRIERS,
   SHIPPING_CARRIER_META,
@@ -11,6 +12,7 @@ import {
   carrierTrackingUrl,
   POSTI_LIVE_TEST_TRACKING,
   storeCalendarDate,
+  warehouseAddressLines,
 } from "@volt/shared";
 import { api, ApiError } from "@/lib/api";
 import { money } from "@/lib/product";
@@ -88,6 +90,10 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
   }
 
   function openShip(item: (typeof items)[number]) {
+    if (isPickupShipping(item.shippingMethod)) {
+      setError("This order is Helsinki warehouse pickup. Mark it collected when the customer takes it.");
+      return;
+    }
     const express = item.shippingMethod === "express";
     setShipOrder(item);
     setForm({
@@ -115,10 +121,17 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
     }
     setError("");
     try {
+      const row = items.find((item) => item.id === id);
       await api(`/admin/orders/${id}/status`, {
         method: "POST",
         token,
-        body: JSON.stringify({ status, note: `Staff set ${status}` }),
+        body: JSON.stringify({
+          status,
+          note:
+            isPickupShipping(row?.shippingMethod) && status === "DELIVERED"
+              ? "Customer collected Helsinki warehouse pickup."
+              : `Staff set ${status}`,
+        }),
       });
       await load();
     } catch (err) {
@@ -367,6 +380,11 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
                             <span aria-hidden="true">!</span>
                           </span>
                         ) : null}
+                        {isPickupShipping(item.shippingMethod) ? (
+                          <span className="pickup-flag" title="Helsinki warehouse pickup">
+                            Pickup
+                          </span>
+                        ) : null}
                         <span className="locator-code">{reference}</span>
                         <span>{customer}</span>
                       </div>
@@ -381,9 +399,19 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
                             </option>
                           ))}
                         </select>
-                        {["SHIPPING", "WITH_COURIER"].includes(item.status) && (
+                        {["SHIPPING", "WITH_COURIER"].includes(item.status) &&
+                          !isPickupShipping(item.shippingMethod) && (
                           <button className="link" type="button" onClick={() => openShip(item)}>
                             {item.status === "WITH_COURIER" ? "Tracking" : "Courier"}
+                          </button>
+                        )}
+                        {item.status === "SHIPPING" && isPickupShipping(item.shippingMethod) && (
+                          <button
+                            className="link"
+                            type="button"
+                            onClick={() => void setStatus(item.id, "DELIVERED")}
+                          >
+                            Customer collected
                           </button>
                         )}
                         {canRefund &&
@@ -462,20 +490,24 @@ export function OrdersPanel({ token, canRefund }: { token: string; canRefund: bo
                             )}
                           </p>
                           <p>
-                            <span className="kicker">Deliver to</span>
+                            <span className="kicker">
+                              {isPickupShipping(item.shippingMethod) ? "Collect from" : "Deliver to"}
+                            </span>
                             <span>
-                              {item.shipping
-                                ? [
-                                    item.shipping.recipientName,
-                                    item.shipping.line1,
-                                    item.shipping.line2,
-                                    [item.shipping.postal, item.shipping.city].filter(Boolean).join(" "),
-                                    item.shipping.countryName || item.shipping.country,
-                                  ]
-                                    .map((line) => line?.trim())
-                                    .filter(Boolean)
-                                    .join(" · ") || "—"
-                                : "—"}
+                              {isPickupShipping(item.shippingMethod)
+                                ? warehouseAddressLines().join(" · ")
+                                : item.shipping
+                                  ? [
+                                      item.shipping.recipientName,
+                                      item.shipping.line1,
+                                      item.shipping.line2,
+                                      [item.shipping.postal, item.shipping.city].filter(Boolean).join(" "),
+                                      item.shipping.countryName || item.shipping.country,
+                                    ]
+                                      .map((line) => line?.trim())
+                                      .filter(Boolean)
+                                      .join(" · ") || "—"
+                                  : "—"}
                             </span>
                           </p>
                         </div>

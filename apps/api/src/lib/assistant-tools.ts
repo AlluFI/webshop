@@ -33,6 +33,7 @@ export type AssistantUiBlock =
   | { type: "products"; title?: string; items: CatalogCard[] }
   | { type: "confirm_claim"; orderId: string; reference: string; reason: string; productName?: string }
   | { type: "ticket"; reference: string; externalKey: string }
+  | { type: "link"; href: string; label: string }
   | { type: "did_you_mean"; suggestion: string }
   | {
       type: "order_picker";
@@ -77,7 +78,22 @@ function shopInfo(topic: string) {
   if (topic === "promos") {
     return "A promotion applies only inside its start and end dates. The shop then shows the promo price, the regular price, and the lowest consumer price from the 30 days before the promo (EU price-indication rule).";
   }
-  return "I can help with products, shipping, returns, orders you own, and opening a support ticket. I cannot see other customers’ data.";
+  return "I can help with products, shipping, returns, tracking an order on Find order, and opening a support ticket. I cannot see other customers’ data.";
+}
+
+export function guestOrderLookupBlock(): AssistantUiBlock {
+  return { type: "link", href: "/orders/lookup", label: "Open Find order" };
+}
+
+export function guestOrderGuidance(options?: { reference?: string | null; problem?: boolean }) {
+  const reference = options?.reference?.trim() || null;
+  const track = reference
+    ? `I can’t open ${reference} in chat. You don’t need an account — open Find order, enter that VC- number and the last name on the order. The confirmation email also has a View your order link. I never look up orders by email.`
+    : "You don’t need an account to track an order. Open Find order in the footer, then enter the VC- number from your confirmation email and the last name on the order. That email also has a View your order link. I never look up orders by email in chat.";
+  const content = options?.problem
+    ? `${track} If something arrived wrong, give me an email and I’ll send a note to support.`
+    : track;
+  return { content, uiBlocks: [guestOrderLookupBlock()] };
 }
 
 function uniqueWords(values: string[]) {
@@ -268,7 +284,7 @@ export async function toolMyOrders(actor: AssistantActor, reference?: string | n
   if (!actor.id || isStaffRole(actor.role ?? "")) {
     return {
       needsSignIn: true,
-      summary: "Sign in as the customer who placed the order. I will not look up orders by email alone.",
+      summary: guestOrderGuidance({ reference }).content,
       orders: [] as VisibleOrder[],
     };
   }

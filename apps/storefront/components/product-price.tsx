@@ -3,8 +3,10 @@
 import { formatStoreDateTime } from "@volt/shared";
 import { money, type Product, type PromotionPeriod } from "@/lib/product";
 import { Modal } from "./admin/Modal";
+import { useI18n } from "./i18n";
 
 export function ProductPrice({ product }: { product: Product }) {
+  const { t } = useI18n();
   const selling = product.sellingPrice ?? product.price;
   const onPromo = Boolean(product.onPromotion);
 
@@ -20,7 +22,7 @@ export function ProductPrice({ product }: { product: Product }) {
       )}
       {onPromo && product.lowestPrice30d != null ? (
         <p className="price-note">
-          Lowest price in the 30 days before this promotion: {money(product.lowestPrice30d)}
+          {t("price.lowest30d", { amount: money(product.lowestPrice30d) })}
         </p>
       ) : null}
     </div>

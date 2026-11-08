@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildOrderPaidEmail, buildOrderShippedEmail, formatMoney, humanStatus } from "./order-email.js";
+import {
+  buildOrderPaidEmail,
+  buildOrderPickupReadyEmail,
+  buildOrderShippedEmail,
+  formatMoney,
+  humanStatus,
+  shippingLabel,
+} from "./order-email.js";
 
 const sample = {
   orderId: "af7f062c-35bd-4d80-a438-528a2c703c0f",
@@ -54,6 +61,24 @@ describe("order confirmation email", () => {
     expect(mail.html).toContain(sample.items[0]?.thumbnailUrl);
     expect(mail.html).not.toContain("<test>");
     expect(mail.html).toContain("&lt;test&gt;");
+    expect(mail.text).toContain("Ship to");
+    expect(shippingLabel("standard", 0)).toContain("Standard");
+  });
+
+  it("labels Helsinki warehouse pickup instead of ship-to", () => {
+    const mail = buildOrderPaidEmail({ ...sample, shippingMethod: "pickup", shippingCost: 0 });
+    expect(mail.text).toContain("Helsinki warehouse pickup");
+    expect(mail.text).toContain("Collect from");
+    expect(mail.text).toContain("Volt & Co warehouse");
+    expect(mail.text).toContain("Mannerheimintie 12");
+    expect(mail.text).toContain("Contact address (VAT)");
+    expect(mail.text).toContain("Pickup in Helsinki");
+    expect(mail.text).not.toContain("Ship to");
+    expect(mail.text).not.toContain("Standard (free over");
+    expect(mail.html).toContain("Collect from");
+    expect(mail.html).toContain("Volt &amp; Co warehouse");
+    expect(mail.html).not.toContain("Ship to");
+    expect(shippingLabel("pickup", 0)).toMatch(/Pickup in Helsinki/);
   });
 
   it("humanizes payment status labels", () => {
@@ -109,5 +134,19 @@ describe("order shipped email", () => {
     expect(mail.html).toContain("View your order at Volt");
     expect(mail.html).toContain("https://www.posti.fi/en/tracking/JJFI66012700410158170/32109367922");
     expect(mail.html).not.toContain("<test>");
+  });
+});
+
+describe("order pickup-ready email", () => {
+  it("tells the customer to collect at the Helsinki warehouse", () => {
+    const mail = buildOrderPickupReadyEmail({ ...sample, shippingMethod: "pickup", shippingCost: 0 });
+    expect(mail.subject).toMatch(/ready for collection/i);
+    expect(mail.text).toContain("Collect from");
+    expect(mail.text).toContain("Volt & Co warehouse");
+    expect(mail.text).toContain("will not be handed to a courier");
+    expect(mail.html).toContain("Ready for collection");
+    expect(mail.html).toContain("Mannerheimintie 12");
+    expect(mail.html).not.toContain("Ship to");
+    expect(mail.html).not.toContain("on the way");
   });
 });

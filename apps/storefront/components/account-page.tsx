@@ -10,10 +10,12 @@ import {
 } from "@volt/shared";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "./auth";
+import { useI18n } from "./i18n";
 
 type SavedAddress = AddressInput & { id: string; label?: string | null; isDefault?: boolean };
 
 export function AccountPage() {
+  const { t } = useI18n();
   const { user, accessToken, ready, reloadUser, logout } = useAuth();
   const router = useRouter();
   const [setup, setSetup] = useState<{ qrDataUrl: string; otpauth: string } | null>(null);
@@ -35,7 +37,7 @@ export function AccountPage() {
     if (ready && (!user || !accessToken)) router.replace("/login");
   }, [ready, user, accessToken, router]);
 
-  if (!ready || !user || !accessToken) return <p>Loading…</p>;
+  if (!ready || !user || !accessToken) return <p>{t("account.loading")}</p>;
 
   async function startTotp() {
     setError("");
@@ -90,18 +92,18 @@ export function AccountPage() {
 
   return (
     <section className="auth-card" style={{ maxWidth: 560 }}>
-      <h1>Profile</h1>
+      <h1>{t("account.profile")}</h1>
       <p>
-        {user.displayName || "Customer"} · {user.email}
+        {user.displayName || t("account.customer")} · {user.email}
       </p>
       {isStaffRole(user.role) ? (
         <div className="panel">
-          <h2>Profile</h2>
+          <h2>{t("account.profile")}</h2>
           <label className="field">
-            <span>Display name</span>
+            <span>{t("account.displayName")}</span>
             <input value={user.displayName || ""} disabled readOnly />
           </label>
-          <p className="muted">Only an admin can change employee names from Users.</p>
+          <p className="muted">{t("account.staffNameHint")}</p>
         </div>
       ) : (
         <form
@@ -115,7 +117,7 @@ export function AccountPage() {
               body: JSON.stringify({ displayName, marketingOptIn }),
             })
               .then(async () => {
-                setMessage("Profile updated.");
+                setMessage(t("account.updated"));
                 await reloadUser();
               })
               .catch((err) => {
@@ -123,9 +125,9 @@ export function AccountPage() {
               });
           }}
         >
-          <h2>Profile</h2>
+          <h2>{t("account.profile")}</h2>
           <label className="field">
-            <span>Display name</span>
+            <span>{t("account.displayName")}</span>
             <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required />
           </label>
           <label className="field choice">
@@ -134,46 +136,45 @@ export function AccountPage() {
               checked={marketingOptIn}
               onChange={(event) => setMarketingOptIn(event.target.checked)}
             />
-            <span>Email me offers and product news</span>
+            <span>{t("auth.marketing")}</span>
           </label>
           <button className="primary" type="submit">
-            Save profile
+            {t("account.save")}
           </button>
         </form>
       )}
       <p>
-        Two-factor authentication: <strong>{user.totpEnabled ? "Active" : "Off"}</strong>
+        {t("account.totp")} <strong>{user.totpEnabled ? t("account.totpOn") : t("account.totpOff")}</strong>
       </p>
       {message && <p className="banner ok">{message}</p>}
       {error && <p className="banner error">{error}</p>}
       {backup.length > 0 && (
         <p>
-          Backup codes (save these now): <code>{backup.join(" ")}</code>
+          {t("account.backupCodes")} <code>{backup.join(" ")}</code>
         </p>
       )}
       {!user.totpEnabled && !setup && (
         <>
           <p className="muted">
-            Enabling is two steps: scan a QR code in Authenticator or Authy, then enter the 6-digit
-            code to confirm. The button alone does not turn 2FA on.
+            {t("account.totpHint")}
           </p>
           <button className="primary" type="button" onClick={() => void startTotp()}>
-            Enable two-factor authentication
+            {t("account.enableTotp")}
           </button>
         </>
       )}
       {setup && (
         <>
-          <p>Scan this QR code with Google Authenticator or Authy, then enter the current code.</p>
+          <p>{t("account.scanQr")}</p>
           <img src={setup.qrDataUrl} alt="Two-factor authentication QR code" width={180} height={180} />
           <p className="muted">{setup.otpauth}</p>
           <form onSubmit={(event) => void confirmTotp(event)}>
             <label className="field">
-              <span>6-digit code</span>
+              <span>{t("account.code6")}</span>
               <input name="code" inputMode="numeric" autoComplete="one-time-code" required />
             </label>
             <button className="primary" type="submit">
-              Confirm 2FA
+              {t("account.confirmTotp")}
             </button>
           </form>
         </>
@@ -181,28 +182,24 @@ export function AccountPage() {
       {user.totpEnabled && !isStaffRole(user.role) && (
         <form onSubmit={(event) => void disableTotp(event)}>
           <label className="field">
-            <span>Disable 2FA with a current authenticator code</span>
+            <span>{t("account.disableTotp")}</span>
             <input name="code" inputMode="numeric" autoComplete="one-time-code" required />
           </label>
           <button className="ghost" type="submit">
-            Turn off 2FA
+            {t("account.turnOff")}
           </button>
         </form>
       )}
       {user.totpEnabled && isStaffRole(user.role) && (
-        <p className="muted">Staff accounts must keep two-factor authentication on.</p>
+        <p className="muted">{t("account.staffMust2fa")}</p>
       )}
       {!isStaffRole(user.role) && (
         <div className="panel">
-          <h2>Delete account</h2>
-          <p className="muted">
-            This signs you out, turns off marketing, and erases your profile. Paid order records are
-            kept until 31 December six years after the last paid order, as required for Finnish
-            bookkeeping.
-          </p>
+          <h2>{t("account.deleteTitle")}</h2>
+          <p className="muted">{t("account.deleteHint")}</p>
           {!confirmDelete ? (
             <button className="ghost" type="button" onClick={() => setConfirmDelete(true)}>
-              Delete my account
+              {t("account.delete")}
             </button>
           ) : (
             <div className="row-actions">
@@ -221,10 +218,10 @@ export function AccountPage() {
                     });
                 }}
               >
-                Yes, delete my account
+                {t("account.deleteYes")}
               </button>
               <button className="ghost" type="button" onClick={() => setConfirmDelete(false)}>
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           )}
@@ -254,6 +251,7 @@ function countryName(code: string) {
 }
 
 function AddressBook({ token }: { token: string }) {
+  const { t } = useI18n();
   const [items, setItems] = useState<SavedAddress[]>([]);
   const [form, setForm] = useState<AddressInput>(emptyAddress("Home"));
   const [makeDefault, setMakeDefault] = useState(true);
@@ -300,7 +298,7 @@ function AddressBook({ token }: { token: string }) {
           isDefault: items.length === 0 || makeDefault,
         }),
       });
-      setMessage("Address saved.");
+      setMessage(t("account.saved"));
       setError("");
       setForm(emptyAddress());
       setAdding(false);
@@ -314,7 +312,7 @@ function AddressBook({ token }: { token: string }) {
     setError("");
     try {
       await api(`/addresses/${id}/default`, { method: "POST", token });
-      setMessage("Default address updated.");
+      setMessage(t("account.defaultUpdated"));
       await load();
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
@@ -325,7 +323,7 @@ function AddressBook({ token }: { token: string }) {
     setError("");
     try {
       await api(`/addresses/${id}`, { method: "DELETE", token });
-      setMessage("Address removed.");
+      setMessage(t("account.removed"));
       await load();
     } catch (err) {
       if (err instanceof ApiError) setError(err.message);
@@ -334,18 +332,18 @@ function AddressBook({ token }: { token: string }) {
 
   return (
     <div className="address-book">
-      <h2>Addresses</h2>
-      <p className="muted">Save more than one shipping address and choose which one checkout uses first.</p>
+      <h2>{t("account.addresses")}</h2>
+      <p className="muted">{t("account.addressesHint")}</p>
       {message && <p className="banner ok">{message}</p>}
       {error && <p className="banner error">{error}</p>}
-      {items.length === 0 && !adding && <p className="muted">No saved addresses yet.</p>}
+      {items.length === 0 && !adding && <p className="muted">{t("account.noAddresses")}</p>}
       <ul className="address-list">
         {items.map((item) => (
           <li key={item.id} className="address-card">
             <div>
               <div className="address-card-head">
-                <strong>{item.label || "Address"}</strong>
-                {item.isDefault && <span className="address-default">Default</span>}
+                <strong>{item.label || t("account.address")}</strong>
+                {item.isDefault && <span className="address-default">{t("common.default")}</span>}
               </div>
               <p>{item.recipientName}</p>
               <p>{item.line1}</p>
@@ -360,11 +358,11 @@ function AddressBook({ token }: { token: string }) {
             <div className="address-actions">
               {!item.isDefault && (
                 <button className="link" type="button" onClick={() => void setDefault(item.id)}>
-                  Set as default
+                  {t("account.setDefault")}
                 </button>
               )}
               <button className="link" type="button" onClick={() => void remove(item.id)}>
-                Remove
+                {t("common.remove")}
               </button>
             </div>
           </li>
@@ -372,51 +370,51 @@ function AddressBook({ token }: { token: string }) {
       </ul>
       {!adding && (
         <button className="ghost" type="button" onClick={startAdd}>
-          Add another address
+          {t("account.addAnother")}
         </button>
       )}
       {adding && (
         <form className="panel" onSubmit={(event) => void onSubmit(event)}>
-          <h3>{items.length === 0 ? "Add an address" : "Add another address"}</h3>
+          <h3>{items.length === 0 ? t("account.addAddress") : t("account.addAnother")}</h3>
           <label className="field">
-            <span>Label</span>
+            <span>{t("account.label")}</span>
             <input
               value={form.label || ""}
-              placeholder="Home, work, cabin…"
+              placeholder={t("account.labelPlaceholder")}
               onChange={(event) => setForm({ ...form, label: event.target.value })}
             />
           </label>
           <label className="field">
-            <span>Recipient</span>
+            <span>{t("checkout.recipient")}</span>
             <input
               value={form.recipientName}
               onChange={(event) => setForm({ ...form, recipientName: event.target.value })}
             />
           </label>
           <label className="field">
-            <span>Street</span>
+            <span>{t("checkout.street")}</span>
             <input value={form.line1} onChange={(event) => setForm({ ...form, line1: event.target.value })} />
           </label>
           <label className="field">
-            <span>Apartment, suite (optional)</span>
+            <span>{t("checkout.line2")}</span>
             <input value={form.line2 || ""} onChange={(event) => setForm({ ...form, line2: event.target.value })} />
           </label>
           <div className="dims">
             <label className="field">
-              <span>Postal code</span>
+              <span>{t("checkout.postal")}</span>
               <input value={form.postal} onChange={(event) => setForm({ ...form, postal: event.target.value })} />
             </label>
             <label className="field">
-              <span>City</span>
+              <span>{t("checkout.city")}</span>
               <input value={form.city} onChange={(event) => setForm({ ...form, city: event.target.value })} />
             </label>
           </div>
           <label className="field">
-            <span>Region / state (optional)</span>
+            <span>{t("checkout.region")}</span>
             <input value={form.region || ""} onChange={(event) => setForm({ ...form, region: event.target.value })} />
           </label>
           <label className="field">
-            <span>Country</span>
+            <span>{t("checkout.country")}</span>
             <select
               value={form.country}
               onChange={(event) => setForm({ ...form, country: event.target.value as AddressInput["country"] })}
@@ -429,7 +427,7 @@ function AddressBook({ token }: { token: string }) {
             </select>
           </label>
           <label className="field">
-            <span>Phone (optional)</span>
+            <span>{t("account.phoneOptional")}</span>
             <input value={form.phone || ""} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
           </label>
           <label className="field choice">
@@ -439,11 +437,11 @@ function AddressBook({ token }: { token: string }) {
               disabled={items.length === 0}
               onChange={(event) => setMakeDefault(event.target.checked)}
             />
-            <span>Set as default address</span>
+            <span>{t("account.setDefaultBox")}</span>
           </label>
           <div className="address-form-actions">
             <button className="primary" type="submit">
-              Save address
+              {t("account.saveAddress")}
             </button>
             {items.length > 0 && (
               <button
@@ -454,7 +452,7 @@ function AddressBook({ token }: { token: string }) {
                   setError("");
                 }}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             )}
           </div>

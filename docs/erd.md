@@ -202,7 +202,7 @@ erDiagram
 
 ## Part 3 — implemented
 
-Reviews are purchased-only (`PAID` / `PROCESSING` / `SHIPPING` / `WITH_COURIER` / `DELIVERED`). Helpful votes are unique per user. Product `averageRating` / `reviewCount` are recalculated from published reviews. Staff actions write an encrypted audit row. Shipping options are editable in admin. Parcel labels are created through carrier adapters (Posti, PostNord, Budbee); tracking is stored on `Order.trackingCarrier` / `Order.trackingCode`.
+Reviews are written from an order (`PAID` / `PROCESSING` / `SHIPPING` / `WITH_COURIER` / `DELIVERED`). Helpful votes are unique per user. Product `averageRating` / `reviewCount` are recalculated from published reviews. Staff actions write an encrypted audit row. Shipping options are editable in admin. Parcel labels are created through carrier adapters (Posti, PostNord, Budbee); tracking is stored on `Order.trackingCarrier` / `Order.trackingCode`.
 
 ```mermaid
 erDiagram
@@ -212,6 +212,9 @@ erDiagram
   User ||--o{ ReviewVote : casts
   User ||--o{ AuditLog : records
   User }o--|| Role : has
+  User ||--o{ WishlistItem : saves
+  Product ||--o{ WishlistItem : listed
+  Product ||--o{ StockAlert : notifies
 
   Review {
     uuid id PK
@@ -252,6 +255,18 @@ erDiagram
     string url
     string secretEnc
     string events
+  }
+  WishlistItem {
+    uuid id PK
+    uuid userId FK
+    uuid productId FK
+  }
+  StockAlert {
+    uuid id PK
+    uuid productId FK
+    string emailEnc
+    string emailHash
+    datetime notifiedAt
   }
 ```
 

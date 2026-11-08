@@ -30,6 +30,10 @@ export function wantsOrderHelp(text: string) {
   );
 }
 
+export function mentionsNoAccount(text: string) {
+  return /\b(no account|do(n'?t| not) have an account|without (an )?account|as a guest|guest checkout)\b/i.test(text);
+}
+
 export function lastOrderFromTranscript(messages: { content: string }[]) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const reference = extractOrderReference(messages[index].content);
@@ -300,7 +304,8 @@ export function classifyVoltieIntent(text: string): VoltieIntent {
   }
   if (
     ORDER_REF.test(text) ||
-    /\b(my orders?|latest order|last order|recent order|most recent|order status|where('s| is) my|tracking|delivery status|show (me )?(my )?(latest |last |recent )?(orders?)|help with (an |my |the |this )?orders?|need help.*orders?|orders? (help|issue|problem|question)|about (an |my |the )?orders?)\b/.test(
+    mentionsNoAccount(value) ||
+    /\b(my orders?|latest order|last order|recent order|most recent|order status|where('s| is) my|track(ing)?|delivery status|find (my )?order|help with (an |my |the |this )?orders?|need help.*orders?|orders? (help|issue|problem|question)|about (an |my |the )?orders?|show (me )?(my )?(latest |last |recent )?(orders?))\b/.test(
       value,
     )
   ) {

@@ -3,7 +3,9 @@ import {
   formatStoreDateLong,
   FREE_STANDARD_THRESHOLD,
   STORE_CURRENCY,
+  isPickupShipping,
   vatIncludedLabel,
+  warehouseAddressLines,
 } from "@volt/shared";
 
 export type OrderEmailItem = {
@@ -78,6 +80,7 @@ export function humanStatus(value: string) {
 }
 
 export function shippingLabel(method: string, shippingCost: number) {
+  if (isPickupShipping(method)) return "Pickup in Helsinki (warehouse, same day or next business day)";
   if (method === "express") return "Express (1–2 business days)";
   if (shippingCost === 0) return `Standard (free over ${formatMoney(FREE_STANDARD_THRESHOLD)})`;
   return "Standard (3–5 business days)";
@@ -110,6 +113,46 @@ function shippingLines(shipping: OrderEmailShipping) {
   ].filter((line): line is string => Boolean(line && line.trim()));
 }
 
+function destinationCopy(method: string, shipping?: OrderEmailShipping | null) {
+  const contact = shipping ? shippingLines(shipping) : [];
+  if (isPickupShipping(method)) {
+    return {
+      heading: "Collect from",
+      lines: warehouseAddressLines(),
+      contactHeading: contact.length ? "Contact address (VAT)" : "",
+      contactLines: contact,
+    };
+  }
+  return {
+    heading: "Ship to",
+    lines: contact,
+    contactHeading: "",
+    contactLines: [] as string[],
+  };
+}
+
+function destinationText(method: string, shipping?: OrderEmailShipping | null) {
+  const dest = destinationCopy(method, shipping);
+  if (!dest.lines.length && !dest.contactLines.length) return "";
+  const blocks = [dest.heading, ...dest.lines];
+  if (dest.contactHeading) blocks.push("", dest.contactHeading, ...dest.contactLines);
+  return blocks.join("\n");
+}
+
+function destinationHtml(method: string, shipping?: OrderEmailShipping | null) {
+  const dest = destinationCopy(method, shipping);
+  const linesHtml = dest.lines.length
+    ? `<p style="margin:0;color:${INK};line-height:1.5;">${dest.lines.map(escapeHtml).join("<br />")}</p>`
+    : `<p style="margin:0;color:${MUTED};">Shipping details are on your order page.</p>`;
+  const contactHtml = dest.contactHeading
+    ? `<p style="margin:16px 0 8px;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:${FOREST};font-weight:600;">${escapeHtml(dest.contactHeading)}</p>
+              <p style="margin:0;color:${INK};line-height:1.5;">${dest.contactLines.map(escapeHtml).join("<br />")}</p>`
+    : "";
+  return `<p style="margin:0 0 8px;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:${FOREST};font-weight:600;">${escapeHtml(dest.heading)}</p>
+              ${linesHtml}
+              ${contactHtml}`;
+}
+
 export function buildOrderPaidEmail(details: OrderEmailDetails) {
   const currency = details.currency || STORE_CURRENCY;
   const money = (value: number) => formatMoney(value, currency);
@@ -118,7 +161,9 @@ export function buildOrderPaidEmail(details: OrderEmailDetails) {
   const shipLabel = shippingLabel(details.shippingMethod, details.shippingCost);
   const placed = formatPlacedAt(details.placedAt);
   const ref = shortId(details.orderId);
-  const ship = details.shipping ? shippingLines(details.shipping) : [];
+  const pickup = isPickupShipping(details.shippingMethod);
+  const destText = destinationText(details.shippingMethod, details.shipping);
+  const destHtml = destinationHtml(details.shippingMethod, details.shipping);
 
   const failed = details.status === "PAYMENT_FAILED" || Boolean(details.failureReason);
   const reason = details.failureReason || "The card was declined.";
@@ -128,10 +173,14 @@ export function buildOrderPaidEmail(details: OrderEmailDetails) {
   const kicker = failed ? "Payment failed" : "Order confirmation";
   const introText = failed
     ? `${reason}\n\nNothing was charged. The items have been returned to the cart.`
-    : "Thanks for your order. We have received your payment and are getting it ready.";
+    : pickup
+      ? "Thanks for your order. We have received your payment. This is a Helsinki warehouse pickup — collect from Mannerheimintie 12, 00100 Helsinki. Same day or the next business day after we finish picking. We will email you when it is ready."
+      : "Thanks for your order. We have received your payment and are getting it ready.";
   const introHtml = failed
     ? `${escapeHtml(reason)} Nothing was charged. The items have been returned to the cart.`
-    : "We received your payment and your order is confirmed. A summary is below — you can track status any time from your account.";
+    : pickup
+      ? "We received your payment. This is a Helsinki warehouse pickup. Collect from Mannerheimintie 12, 00100 Helsinki — same day or the next business day after we finish picking. We will email you when it is ready."
+      : "We received your payment and your order is confirmed. A summary is below — you can track status any time from your account.";
   const statusColor = failed ? "#9b2c2c" : FOREST;
 
   const itemText = details.items
@@ -159,7 +208,7 @@ export function buildOrderPaidEmail(details: OrderEmailDetails) {
     `${vatIncludedLabel()}: ${money(details.tax)}`,
     `Total: ${money(details.total)}`,
     "",
-    ship.length ? ["Ship to", ...ship.map((line) => line)].join("\n") : "",
+    destText,
     details.phone ? `Phone: ${details.phone}` : "",
     "",
     `View your order:\n${details.orderUrl}`,
@@ -188,10 +237,6 @@ export function buildOrderPaidEmail(details: OrderEmailDetails) {
       </tr>`;
     })
     .join("");
-
-  const addressHtml = ship.length
-    ? `<p style="margin:0;color:${INK};line-height:1.5;">${ship.map(escapeHtml).join("<br />")}</p>`
-    : `<p style="margin:0;color:${MUTED};">Shipping details are on your order page.</p>`;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -242,8 +287,7 @@ export function buildOrderPaidEmail(details: OrderEmailDetails) {
                 <tr><td style="padding:6px 0;color:${MUTED};">${escapeHtml(vatIncludedLabel())}</td><td style="padding:6px 0;text-align:right;">${escapeHtml(money(details.tax))}</td></tr>
                 <tr><td style="padding:10px 0 0;border-top:1px solid ${LINE};font-weight:700;font-size:18px;">Total</td><td style="padding:10px 0 0;border-top:1px solid ${LINE};text-align:right;font-weight:700;font-size:18px;">${escapeHtml(money(details.total))}</td></tr>
               </table>
-              <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:${FOREST};font-weight:600;">Ship to</p>
-              ${addressHtml}
+              ${destHtml}
               ${details.phone ? `<p style="margin:10px 0 0;color:${MUTED};font-size:14px;">Phone ${escapeHtml(details.phone)}</p>` : ""}
               <p style="margin:28px 0 0;text-align:center;">
                 <a href="${escapeHtml(details.orderUrl)}" style="display:inline-block;background:${FOREST};color:#f7f3ea;text-decoration:none;border-radius:999px;padding:12px 22px;font-weight:600;">View your order</a>
@@ -269,7 +313,8 @@ export function buildOrderShippedEmail(details: OrderShippedEmailDetails) {
   const currency = details.currency || STORE_CURRENCY;
   const money = (value: number) => formatMoney(value, currency);
   const ref = shortId(details.orderId);
-  const ship = details.shipping ? shippingLines(details.shipping) : [];
+  const destText = destinationText(details.shippingMethod, details.shipping);
+  const destHtml = destinationHtml(details.shippingMethod, details.shipping);
   const subject = `Your Volt & Co order ${ref} is on the way`;
   const eta =
     details.estimatedDeliveryFrom === details.estimatedDeliveryTo
@@ -301,7 +346,7 @@ export function buildOrderShippedEmail(details: OrderShippedEmailDetails) {
     itemText || "- (no items)",
     "",
     `Total: ${money(details.total)}`,
-    ship.length ? ["Ship to", ...ship].join("\n") : "",
+    destText,
     "",
     "Volt & Co",
   ]
@@ -354,12 +399,79 @@ export function buildOrderShippedEmail(details: OrderShippedEmailDetails) {
               </p>
               <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:${FOREST};font-weight:600;">Carrier tracking (Finland)</p>
               <p style="margin:0 0 22px;color:${MUTED};font-size:14px;">${carrierLinks}</p>
-              ${
-                ship.length
-                  ? `<p style="margin:0 0 8px;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:${FOREST};font-weight:600;">Ship to</p>
-              <p style="margin:0;color:${INK};line-height:1.5;">${ship.map(escapeHtml).join("<br />")}</p>`
-                  : ""
-              }
+              ${destHtml}
+              <p style="margin:22px 0 0;color:${MUTED};font-size:14px;">Total ${escapeHtml(money(details.total))} · ${details.items.length} item${details.items.length === 1 ? "" : "s"}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
+export function buildOrderPickupReadyEmail(details: OrderEmailDetails) {
+  const currency = details.currency || STORE_CURRENCY;
+  const money = (value: number) => formatMoney(value, currency);
+  const ref = shortId(details.orderId);
+  const destText = destinationText("pickup", details.shipping);
+  const destHtml = destinationHtml("pickup", details.shipping);
+  const subject = `Your Volt & Co order ${ref} is ready for collection`;
+  const itemText = details.items
+    .map((item) => `- ${item.name} ×${item.quantity}  ${money(item.lineTotal)}`)
+    .join("\n");
+
+  const text = [
+    `Hi ${details.customerName || "there"},`,
+    "",
+    `Order ${ref} is packed and ready at our Helsinki warehouse. This is a pickup — it will not be handed to a courier.`,
+    "",
+    destText,
+    details.phone ? `Phone: ${details.phone}` : "",
+    "",
+    "Bring this email or your order confirmation (and ID if asked).",
+    `View your order:\n${details.orderUrl}`,
+    "",
+    "Items",
+    itemText || "- (no items)",
+    "",
+    `Total: ${money(details.total)}`,
+    "",
+    "Volt & Co",
+  ]
+    .filter((block) => block !== "")
+    .join("\n");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background:${PAPER};color:${INK};font-family:Georgia,'Times New Roman',serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAPER};padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${CARD};border:1px solid ${LINE};border-radius:14px;overflow:hidden;">
+          <tr>
+            <td style="background:${FOREST};color:#f7f3ea;padding:22px 28px;font-family:Georgia,serif;">
+              <div style="font-size:22px;letter-spacing:0.01em;">Volt <span style="color:${GOLD};">&amp;</span> Co</div>
+              <div style="margin-top:8px;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:${GOLD};">Ready for collection</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px;font-family:'Source Sans 3',Arial,sans-serif;font-size:16px;line-height:1.5;">
+              <p style="margin:0 0 12px;font-size:22px;font-family:Georgia,serif;">It's ready, ${escapeHtml(details.customerName || "there")}.</p>
+              <p style="margin:0 0 20px;color:${MUTED};">Order ${escapeHtml(ref)} is packed at our Helsinki warehouse. Collect it there — it will not be shipped with a courier. Bring this email or your order confirmation (and ID if asked).</p>
+              ${destHtml}
+              ${details.phone ? `<p style="margin:10px 0 0;color:${MUTED};font-size:14px;">Phone ${escapeHtml(details.phone)}</p>` : ""}
+              <p style="margin:28px 0 0;text-align:center;">
+                <a href="${escapeHtml(details.orderUrl)}" style="display:inline-block;background:${FOREST};color:#f7f3ea;text-decoration:none;border-radius:999px;padding:12px 22px;font-weight:600;">View your order</a>
+              </p>
               <p style="margin:22px 0 0;color:${MUTED};font-size:14px;">Total ${escapeHtml(money(details.total))} · ${details.items.length} item${details.items.length === 1 ? "" : "s"}</p>
             </td>
           </tr>

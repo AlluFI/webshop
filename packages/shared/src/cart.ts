@@ -3,6 +3,7 @@ import { z } from "zod";
 export const STORE_CURRENCY = "EUR";
 export const STANDARD_SHIPPING = 8;
 export const EXPRESS_SHIPPING = 18;
+export const PICKUP_SHIPPING = 0;
 export const FREE_STANDARD_THRESHOLD = 150;
 
 export const addCartItemSchema = z.object({

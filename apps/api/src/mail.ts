@@ -1,6 +1,12 @@
 import nodemailer from "nodemailer";
 import { config } from "./config.js";
-import { buildOrderPaidEmail, buildOrderShippedEmail, type OrderEmailDetails, type OrderShippedEmailDetails } from "./lib/order-email.js";
+import {
+  buildOrderPaidEmail,
+  buildOrderPickupReadyEmail,
+  buildOrderShippedEmail,
+  type OrderEmailDetails,
+  type OrderShippedEmailDetails,
+} from "./lib/order-email.js";
 import { buildRestockEmail, type RestockEmailDetails } from "./lib/restock-email.js";
 
 const transporter = nodemailer.createTransport({
@@ -47,6 +53,11 @@ export const mail = {
     await send(details.email, built.subject, built.text, built.html);
   },
 
+  async sendOrderPickupReady(details: OrderEmailDetails) {
+    const built = buildOrderPickupReadyEmail(details);
+    await send(details.email, built.subject, built.text, built.html);
+  },
+
   async sendPaymentFailed(details: OrderEmailDetails) {
     const built = buildOrderPaidEmail(details);
     await send(details.email, built.subject, built.text, built.html);
@@ -75,6 +86,21 @@ export const mail = {
         `Stock on hand: ${details.item.stockOnHand}`,
         `Ship to: ${shipTo}`,
         `Reference: ${details.reference}`,
+        ``,
+      ].join("\n"),
+    );
+  },
+
+  async sendBackInStock(input: { email: string; productName: string; productUrl: string }) {
+    await send(
+      input.email,
+      `${input.productName} is back in stock at Volt & Co`,
+      [
+        `${input.productName} is available again.`,
+        ``,
+        `Open the listing: ${input.productUrl}`,
+        ``,
+        `You asked us to email you when this item returned. You will not get another alert unless you subscribe again.`,
         ``,
       ].join("\n"),
     );

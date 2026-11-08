@@ -21,6 +21,8 @@ describe("voltie intent", () => {
     expect(classifyVoltieIntent("Do you sell Sony headphones?")).toBe("search");
     expect(classifyVoltieIntent("How long is standard shipping?")).toBe("shipping");
     expect(classifyVoltieIntent("Where is my order VC-23AAA1B2?")).toBe("orders");
+    expect(classifyVoltieIntent("How can I track my order?")).toBe("orders");
+    expect(classifyVoltieIntent("I have no account")).toBe("orders");
     expect(classifyVoltieIntent("Show my latest order")).toBe("orders");
     expect(classifyVoltieIntent("I need help with an order")).toBe("orders");
     expect(classifyVoltieIntent("Can you help with my order?")).toBe("orders");

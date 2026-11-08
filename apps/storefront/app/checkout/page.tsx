@@ -1,10 +1,11 @@
 import { CheckoutPage } from "@/components/checkout-page";
+import { getTranslator } from "@/lib/i18n/server";
 import { pageMetadata } from "@/lib/seo";
 
-export const metadata = pageMetadata(
-  "Checkout — Volt & Co",
-  "Guest or signed-in checkout at Volt & Co: shipping, billing, delivery method, and Stripe sandbox payment.",
-);
+export async function generateMetadata() {
+  const t = await getTranslator();
+  return pageMetadata(`${t("checkout.title")} — Volt & Co`, t("checkout.cardStay"));
+}
 
 export default function CheckoutRoute() {
   return <CheckoutPage />;

@@ -1,10 +1,11 @@
 import { OrdersPage } from "@/components/orders-page";
+import { getTranslator } from "@/lib/i18n/server";
 import { pageMetadata } from "@/lib/seo";
 
-export const metadata = pageMetadata(
-  "Orders — Volt & Co",
-  "View your Volt & Co order history, filter by status and date, and open a confirmation with delivery estimates.",
-);
+export async function generateMetadata() {
+  const t = await getTranslator();
+  return pageMetadata(`${t("orders.title")} — Volt & Co`, t("orders.guestLead"));
+}
 
 export default function OrdersRoute() {
   return <OrdersPage />;

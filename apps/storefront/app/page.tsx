@@ -1,17 +1,19 @@
 import Link from "next/link";
 import { ProductCard } from "@/components/product-card";
 import type { Category, Product } from "@/lib/product";
+import { getTranslator } from "@/lib/i18n/server";
 import { serverApi } from "@/lib/server-api";
 import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = pageMetadata(
-  "Volt & Co — Electronics",
-  "Shop headphones, laptops, phones, and home tech. Metric and imperial specs, honest stock, and Stripe sandbox checkout.",
-);
+export async function generateMetadata() {
+  const t = await getTranslator();
+  return pageMetadata(`Volt & Co — ${t("home.kicker")}`, t("home.lead"));
+}
 
 export default async function HomePage() {
+  const t = await getTranslator();
   let featured: Product[] = [];
   let categories: Category[] = [];
   let error = "";
@@ -20,7 +22,7 @@ export default async function HomePage() {
     const data = await serverApi<{ items: Product[] }>("/products?featured=true&pageSize=8&sort=rating");
     featured = data.items;
   } catch (err) {
-    error = err instanceof Error ? err.message : "Could not load featured products.";
+    error = err instanceof Error ? err.message : t("home.loadError");
   }
 
   try {
@@ -34,45 +36,39 @@ export default async function HomePage() {
     <>
       <section className="hero">
         <div>
-          <p className="kicker">Electronics &amp; technology</p>
-          <h1>Gear that earns its keep.</h1>
-          <p>
-            Headphones, repairable laptops, phones, and home tech — specified in both metric and
-            imperial, easy to filter, and sold without the circus.
-          </p>
+          <p className="kicker">{t("home.kicker")}</p>
+          <h1>{t("home.title")}</h1>
+          <p>{t("home.lead")}</p>
           <div className="actions">
             <Link className="button" href="/catalog">
-              Browse the catalog
+              {t("home.browse")}
             </Link>
             <Link className="ghost" href="/about">
-              About the shop
+              {t("home.about")}
             </Link>
           </div>
         </div>
         <div className="card">
           <div className="card-body">
-            <p className="kicker">Why Volt</p>
-            <h2>Clear specs. Real stock.</h2>
-            <p className="muted">
-              Every listing shows weight and size in metric and imperial, live inventory, and reviews
-              from people who actually bought the product.
-            </p>
+            <p className="kicker">{t("home.whyKicker")}</p>
+            <h2>{t("home.whyTitle")}</h2>
+            <p className="muted">{t("home.whyBody")}</p>
           </div>
         </div>
       </section>
-      <h2>Collections</h2>
+      <h2>{t("home.collections")}</h2>
       <div className="grid collections">
         {categories.map((category) => (
           <Link className="card collection-card" key={category.slug} href={`/catalog?category=${category.slug}`}>
             <div className="card-body">
               <h3>{category.name}</h3>
-              <p className="muted">{category.description || "Shop this aisle"}</p>
-              {category._count && <p className="muted">{category._count.products} products</p>}
+              <p className="muted">{category.description || t("home.shopAisle")}</p>
+              {category._count && <p className="muted">{t("home.productCount", { n: category._count.products })}</p>}
             </div>
           </Link>
         ))}
       </div>
-      <h2>Featured</h2>
+      <h2>{t("home.featured")}</h2>
       {error && <p className="error">{error}</p>}
       <div className="grid">
         {featured.map((product) => (
