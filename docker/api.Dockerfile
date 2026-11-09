@@ -29,4 +29,4 @@ ENV NODE_ENV=production
 EXPOSE 3000
 
 # Seed no-ops once products exist, so a restart does not reset demo addresses or 2FA.
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && pnpm exec prisma db seed && node dist/index.js"]
+CMD ["sh", "-c", "if ! pnpm exec prisma migrate deploy; then echo >&2 'Postgres login failed or database voltco is missing (Prisma P1000). Leftover Docker volume — run: docker compose down -v && ./scripts/start.sh'; exit 1; fi && pnpm exec prisma db seed && node dist/index.js"]

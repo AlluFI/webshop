@@ -90,6 +90,15 @@ docker volume rm i-love-shopping3_rabbitmq_data 2>/dev/null || true
 ./scripts/start.sh
 ```
 
+If the API exits with Prisma **P1000** / `password authentication failed for user "postgres"`, or Postgres logs **`database "voltco" does not exist`**: the named volume was initialized earlier with another password, without `voltco`, or under a different Postgres major version. `POSTGRES_DB` is only applied on an empty data directory.
+
+```bash
+docker compose down -v
+./scripts/start.sh
+```
+
+`-v` drops the leftover Postgres volume (demo catalog is seeded again). Do not keep a `DATABASE_URL` from another project in `.env` for Compose — the API container always uses `postgres:postgres@postgres:5432/voltco`.
+
 ### Demo accounts
 
 | Email | Password | Notes |

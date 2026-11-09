@@ -8,12 +8,15 @@ services:
     ports:
       - "15432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - voltco_pg16:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d voltco"]
+      # TCP + password + database, so a leftover volume with another password
+      # cannot look "healthy" while Prisma still gets P1000.
+      test: ["CMD-SHELL", "PGPASSWORD=postgres pg_isready -U postgres -d voltco -h 127.0.0.1"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 15s
 
   redis:
     image: redis:7-alpine
@@ -178,6 +181,8 @@ services:
       - api
 
 volumes:
-  postgres_data:
+  # Named separately from the old postgres_data volume so a leftover data dir
+  # (wrong password, missing voltco, or Postgres 15 files) is not reused.
+  voltco_pg16:
   uploads_data:
   rabbitmq_data:
