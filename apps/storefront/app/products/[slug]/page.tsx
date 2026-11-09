@@ -7,8 +7,8 @@ import {
   ProductSaveActions,
   ProductStockLine,
 } from "@/components/product-actions";
-import { ProductCard } from "@/components/product-card";
 import { ProductFacts } from "@/components/product-facts";
+import { RelatedProducts } from "@/components/related-products";
 import { ProductGallery } from "@/components/product-gallery";
 import { ProductJsonLd } from "@/components/product-json-ld";
 import { ProductReviews } from "@/components/reviews";
@@ -87,16 +87,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         </div>
       </article>
       <ProductReviews slug={slug} />
-      {product.related && product.related.length > 0 && (
-        <section>
-          <h2>{t("pdp.related")}</h2>
-          <div className="grid">
-            {product.related.map((item) => (
-              <ProductCard key={item.id} product={item} />
-            ))}
-          </div>
-        </section>
-      )}
+      <RelatedProducts
+        products={product.related ?? []}
+        kicker={t("pdp.relatedKicker")}
+        title={t("pdp.related")}
+      />
     </>
   );
 }

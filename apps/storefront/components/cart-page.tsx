@@ -7,7 +7,7 @@ import { api, userErrorMessage } from "@/lib/api";
 import { money, type Product } from "@/lib/product";
 import { useAuth } from "./auth";
 import { useCart } from "./cart";
-import { ProductCard } from "./product-card";
+import { RelatedProducts } from "./related-products";
 import { CustomerShopGate } from "./shop-gate";
 import { useI18n } from "./i18n";
 
@@ -135,17 +135,11 @@ function CartInner() {
           </aside>
         </div>
       )}
-      {related.length > 0 && (
-        <div style={{ marginTop: 36 }}>
-          <p className="kicker">{t("cart.relatedKicker")}</p>
-          <h2>{t("cart.related")}</h2>
-          <div className="grid">
-            {related.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        </div>
-      )}
+      <RelatedProducts
+        products={related}
+        kicker={t("cart.relatedKicker")}
+        title={t("cart.related")}
+      />
     </section>
   );
 }
