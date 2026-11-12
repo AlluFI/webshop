@@ -19,7 +19,7 @@ export default async function HomePage() {
   let error = "";
 
   try {
-    const data = await serverApi<{ items: Product[] }>("/products?featured=true&pageSize=8&sort=rating");
+    const data = await serverApi<{ items: Product[] }>("/products?featured=true&pageSize=4&sort=rating");
     featured = data.items;
   } catch (err) {
     error = err instanceof Error ? err.message : t("home.loadError");
@@ -70,7 +70,7 @@ export default async function HomePage() {
       </div>
       <h2>{t("home.featured")}</h2>
       {error && <p className="error">{error}</p>}
-      <div className="grid">
+      <div className="home-featured">
         {featured.map((product) => (
           <ProductCard key={product.id} product={product} titleAs="h3" />
         ))}

@@ -126,6 +126,46 @@ export const reviewService = {
     };
   },
 
+  async pending(userId: string) {
+    const reviewed = await prisma.review.findMany({
+      where: { userId },
+      select: { productId: true },
+    });
+    const reviewedIds = reviewed.map((row) => row.productId);
+    const rows = await prisma.orderItem.findMany({
+      where: {
+        order: {
+          userId,
+          status: { in: [...REVIEWABLE_ORDER_STATUSES] },
+        },
+        ...(reviewedIds.length ? { productId: { notIn: reviewedIds } } : {}),
+      },
+      select: {
+        productId: true,
+        productName: true,
+        orderId: true,
+        thumbnailPath: true,
+        product: { select: { slug: true, name: true } },
+        order: { select: { createdAt: true } },
+      },
+      orderBy: { order: { createdAt: "desc" } },
+    });
+    const seen = new Set<string>();
+    const items = [];
+    for (const row of rows) {
+      if (seen.has(row.productId)) continue;
+      seen.add(row.productId);
+      items.push({
+        productId: row.productId,
+        slug: row.product.slug,
+        name: row.product.name || row.productName,
+        orderId: row.orderId,
+        thumbnail: row.thumbnailPath ? `/api/v1/files/${row.thumbnailPath}` : null,
+      });
+    }
+    return { items };
+  },
+
   async create(idOrSlug: string, userId: string, input: unknown) {
     const productId = await productIdOf(idOrSlug);
     const dto = createReviewSchema.parse(input);

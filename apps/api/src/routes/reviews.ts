@@ -32,6 +32,15 @@ reviewsRouter.post(
   }),
 );
 
+reviewsRouter.get(
+  "/reviews/pending",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = (req as AuthedRequest).user;
+    res.json(await reviewService.pending(user.id));
+  }),
+);
+
 reviewsRouter.post(
   "/reviews/:id/vote",
   requireAuth,

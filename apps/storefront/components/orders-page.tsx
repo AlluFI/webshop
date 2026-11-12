@@ -6,6 +6,7 @@ import { ORDER_STATUSES, formatOrderReference, formatStoreDateTime } from "@volt
 import { api, userErrorMessage } from "@/lib/api";
 import { fulfillmentStatusKey, statusKey } from "@/lib/i18n";
 import { money } from "@/lib/product";
+import { AccountNav } from "./account-nav";
 import { useAuth } from "./auth";
 import { useI18n } from "./i18n";
 
@@ -70,7 +71,7 @@ export function OrdersPage() {
 
   return (
     <section>
-      <p className="kicker">{t("orders.account")}</p>
+      <AccountNav />
       <h1>{t("orders.title")}</h1>
       {error && <p className="banner error">{error}</p>}
       <form className="order-toolbar" onSubmit={(event) => void load(event)}>

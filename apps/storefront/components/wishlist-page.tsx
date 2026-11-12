@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { isStaffRole } from "@volt/shared";
 import { api } from "@/lib/api";
+import { AccountNav } from "./account-nav";
 import { ProductCard } from "./product-card";
 import { useAuth } from "./auth";
 import { useI18n } from "./i18n";
@@ -11,14 +13,19 @@ import type { Product } from "@/lib/product";
 
 export function WishlistPage() {
   const { t } = useI18n();
-  const { accessToken, user } = useAuth();
+  const router = useRouter();
+  const { accessToken, user, ready: authReady } = useAuth();
   const { wishlistIds, ready } = useShopLists();
   const [items, setItems] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const staff = Boolean(user && isStaffRole(user.role));
 
   useEffect(() => {
-    if (!ready) return;
+    if (authReady && !user) router.replace("/login");
+  }, [authReady, user, router]);
+
+  useEffect(() => {
+    if (!ready || !user) return;
     let cancelled = false;
     async function load() {
       setLoading(true);
@@ -47,11 +54,12 @@ export function WishlistPage() {
     };
   }, [accessToken, ready, staff, user, wishlistIds]);
 
+  if (!authReady || !user) return <p>{t("account.loading")}</p>;
+
   return (
     <section>
+      <AccountNav />
       <h1>{t("wishlist.title")}</h1>
-      {!user && <p className="muted">{t("wishlist.signIn")}</p>}
-      {!user && <p className="muted">{t("wishlist.guestHint")}</p>}
       {staff && <p className="muted">{t("wishlist.staffHint")}</p>}
       {loading ? (
         <p>…</p>

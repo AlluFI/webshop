@@ -5,7 +5,7 @@ import { money, type Product, type PromotionPeriod } from "@/lib/product";
 import { Modal } from "./admin/Modal";
 import { useI18n } from "./i18n";
 
-export function ProductPrice({ product }: { product: Product }) {
+export function ProductPrice({ product, showNote = true }: { product: Product; showNote?: boolean }) {
   const { t } = useI18n();
   const selling = product.sellingPrice ?? product.price;
   const onPromo = Boolean(product.onPromotion);
@@ -20,7 +20,7 @@ export function ProductPrice({ product }: { product: Product }) {
       ) : (
         <p className="price">{money(selling)}</p>
       )}
-      {onPromo && product.lowestPrice30d != null ? (
+      {showNote && onPromo && product.lowestPrice30d != null ? (
         <p className="price-note">
           {t("price.lowest30d", { amount: money(product.lowestPrice30d) })}
         </p>

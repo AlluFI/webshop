@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { formatOrderReference, formatStoreDateTime } from "@volt/shared";
+import {
+  FINLAND_VAT_RATE,
+  formatOrderReference,
+  formatStoreDate,
+  formatStoreDateTime,
+  warehouseAddressLines,
+} from "@volt/shared";
 import { api, readOrderToken, userErrorMessage } from "@/lib/api";
-import { fulfillmentStatusKey, shippingKey } from "@/lib/i18n";
+import { fulfillmentStatusKey, shippingKey, type MessageKey } from "@/lib/i18n";
 import { money } from "@/lib/product";
 import { useAuth } from "./auth";
 import { useCart } from "./cart";
 import { RefundForm } from "./refund-form";
-import { ReviewForm } from "./reviews";
 import { useI18n } from "./i18n";
 
 type Order = {
@@ -23,6 +28,7 @@ type Order = {
   tax?: number;
   taxLabel?: string;
   shippingMethod: string;
+  createdAt?: string;
   estimatedDelivery?: { from: string; to: string; label: string } | null;
   tracking?: { carrier: string; carrierName: string; code: string; url: string } | null;
   email: string;
@@ -48,6 +54,7 @@ type Order = {
     name: string;
     slug: string;
     quantity: number;
+    unitPrice?: number;
     lineTotal: number;
     canReview?: boolean;
   }[];
@@ -201,6 +208,7 @@ export function OrderDetail({ id }: { id: string }) {
 
   return (
     <section>
+      <div className="no-print">
       <p className="kicker">{t("orders.order", { ref: order.reference || formatOrderReference(order.id) })}</p>
       <h1>{title}</h1>
       {error && !refundOpen && !returnOpen && <p className="banner error">{error}</p>}
@@ -216,8 +224,7 @@ export function OrderDetail({ id }: { id: string }) {
       )}
       {cancelled && <p className="banner ok">{t("order.cancelledBanner")}</p>}
       {refunded && <p className="banner ok">{t("order.refundedBanner")}</p>}
-      <div className="panel invoice-print">
-        <h2 className="print-only">{t("order.invoice")}</h2>
+      <div className="panel">
         <p>
           {t("order.title")}: <strong>{order.reference || formatOrderReference(order.id)}</strong>
         </p>
@@ -283,39 +290,23 @@ export function OrderDetail({ id }: { id: string }) {
         <ul className="summary-list">
           {order.items.map((item) => (
             <li key={item.id}>
-              <Link href={`/products/${item.slug}`}>{item.name}</Link>
+              <div>
+                <Link href={`/products/${item.slug}`}>{item.name}</Link>
+                {accessToken && item.canReview && (
+                  <Link
+                    className="review-link no-print"
+                    href={`/reviews?product=${encodeURIComponent(item.slug)}&order=${encodeURIComponent(order.id)}`}
+                  >
+                    {t("review.write")}
+                  </Link>
+                )}
+              </div>
               <span>
                 ×{item.quantity} · {money(item.lineTotal)}
               </span>
             </li>
           ))}
         </ul>
-        {accessToken && order.items.some((item) => item.canReview) && (
-          <div className="no-print" style={{ marginTop: 16 }}>
-            {order.items
-              .filter((item) => item.canReview)
-              .map((item) => (
-                <ReviewForm
-                  key={item.id}
-                  slug={item.slug}
-                  heading={t("order.review", { name: item.name })}
-                  token={accessToken}
-                  onPublished={() =>
-                    setOrder((current) =>
-                      current
-                        ? {
-                            ...current,
-                            items: current.items.map((row) =>
-                              row.id === item.id ? { ...row, canReview: false } : row,
-                            ),
-                          }
-                        : current,
-                    )
-                  }
-                />
-              ))}
-          </div>
-        )}
         {order.subtotal != null && <p>{t("order.subtotal", { amount: money(order.subtotal) })}</p>}
         {order.shippingCost != null && (
           <p>{t(pickup ? "order.pickupFee" : "order.shipping", { amount: money(order.shippingCost) })}</p>
@@ -405,6 +396,169 @@ export function OrderDetail({ id }: { id: string }) {
           {t("order.all")}
         </Link>
       </div>
+      </div>
+      <InvoiceSheet order={order} pickup={pickup} t={t} />
     </section>
+  );
+}
+
+function addressLines(shipping: Order["shipping"]) {
+  if (!shipping) return [];
+  return [
+    shipping.recipientName,
+    shipping.line1,
+    shipping.line2,
+    `${shipping.postal} ${shipping.city}`.trim(),
+    shipping.region,
+    shipping.countryName || shipping.country,
+  ].filter((line) => line && String(line).trim());
+}
+
+function InvoiceSheet({
+  order,
+  pickup,
+  t,
+}: {
+  order: Order;
+  pickup: boolean;
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string;
+}) {
+  const reference = order.reference || formatOrderReference(order.id);
+  const paidAt = order.events.find((event) => event.status === "PAID")?.createdAt;
+  const invoiceDate = paidAt || order.createdAt || order.events[0]?.createdAt;
+  const paymentKey: MessageKey =
+    order.status === "REFUNDED"
+      ? "invoice.refunded"
+      : order.status === "CANCELLED" || order.status === "PAYMENT_FAILED" || order.status === "PENDING_PAYMENT"
+        ? "invoice.unpaid"
+        : "invoice.paid";
+  const destination = pickup ? warehouseAddressLines() : addressLines(order.shipping);
+
+  return (
+    <article className="invoice-sheet print-only" aria-hidden="true">
+      <header className="invoice-head">
+        <div>
+          <p className="invoice-brand">
+            Volt <span>&amp;</span> Co
+          </p>
+          <p>{t("invoice.sellerLine")}</p>
+          <p>{t("invoice.sellerEmail")}</p>
+        </div>
+        <div className="invoice-head-meta">
+          <h1>{t("order.invoice")}</h1>
+        </div>
+      </header>
+      <dl className="invoice-meta">
+        <div>
+          <dt>{t("invoice.number")}</dt>
+          <dd>{reference}</dd>
+        </div>
+        <div>
+          <dt>{t("invoice.date")}</dt>
+          <dd>{invoiceDate ? formatStoreDate(invoiceDate) : "—"}</dd>
+        </div>
+        <div>
+          <dt>{t("invoice.payment")}</dt>
+          <dd>{t(paymentKey)}</dd>
+        </div>
+        <div>
+          <dt>{t("invoice.method")}</dt>
+          <dd>{t(shippingKey(order.shippingMethod))}</dd>
+        </div>
+      </dl>
+      <div className="invoice-parties">
+        <section>
+          <h2>{t("invoice.buyer")}</h2>
+          <p>
+            <strong>{order.displayName}</strong>
+          </p>
+          <p>
+            {t("invoice.email")}: {order.email}
+          </p>
+          {order.phone ? (
+            <p>
+              {t("invoice.phone")}: {order.phone}
+            </p>
+          ) : null}
+          {!pickup &&
+            addressLines(order.shipping)
+              .slice(1)
+              .map((line) => <p key={line}>{line}</p>)}
+        </section>
+        <section>
+          <h2>{t(pickup ? "invoice.collect" : "invoice.shipTo")}</h2>
+          {destination.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </section>
+      </div>
+      <table className="invoice-table">
+        <thead>
+          <tr>
+            <th scope="col">{t("invoice.item")}</th>
+            <th className="num" scope="col">
+              {t("invoice.qty")}
+            </th>
+            <th className="num" scope="col">
+              {t("invoice.unit")}
+            </th>
+            <th className="num" scope="col">
+              {t("invoice.vat")}
+            </th>
+            <th className="num" scope="col">
+              {t("invoice.amount")}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {order.items.map((item) => {
+            const unit = item.unitPrice ?? item.lineTotal / Math.max(item.quantity, 1);
+            return (
+              <tr key={item.id}>
+                <td>{item.name}</td>
+                <td className="num">{item.quantity}</td>
+                <td className="num">{money(unit)}</td>
+                <td className="num">{t("invoice.vatRate", { rate: FINLAND_VAT_RATE })}</td>
+                <td className="num">{money(item.lineTotal)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <table className="invoice-totals">
+        <tbody>
+          {order.subtotal != null && (
+            <tr>
+              <th scope="row">{t("invoice.subtotal")}</th>
+              <td>{money(order.subtotal)}</td>
+            </tr>
+          )}
+          {order.shippingCost != null && (
+            <tr>
+              <th scope="row">{t(pickup ? "invoice.pickup" : "invoice.shipping")}</th>
+              <td>{money(order.shippingCost)}</td>
+            </tr>
+          )}
+          {order.tax != null && (
+            <tr>
+              <th scope="row">{t("checkout.vat")}</th>
+              <td>{money(order.tax)}</td>
+            </tr>
+          )}
+          <tr className="grand">
+            <th scope="row">{t("invoice.total")}</th>
+            <td>{money(order.total)}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="invoice-stamp">{t(paymentKey)}</p>
+      <p className="invoice-thanks">{t("invoice.thanks")}</p>
+      <footer className="invoice-foot">
+        <p>{t("invoice.vatNote", { rate: FINLAND_VAT_RATE })}</p>
+        <p>
+          Volt &amp; Co · {t("invoice.sellerLine")} · {t("invoice.sellerEmail")}
+        </p>
+      </footer>
+    </article>
   );
 }

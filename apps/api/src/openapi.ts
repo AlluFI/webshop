@@ -1619,6 +1619,14 @@ export const openApiDocument: OpenAPIV3.Document = {
         },
       },
     },
+    "/api/v1/reviews/pending": {
+      get: {
+        tags: ["Reviews"],
+        summary: "Products the signed-in customer can still review",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Pending review list" } },
+      },
+    },
     "/api/v1/reviews/{id}/vote": {
       post: {
         tags: ["Reviews"],

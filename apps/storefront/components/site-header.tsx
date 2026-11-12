@@ -43,6 +43,8 @@ export function SiteHeader() {
   const pathname = usePathname();
   const onAccount = pathname === "/account" || pathname.startsWith("/account/");
   const onOrders = pathname === "/orders" || pathname.startsWith("/orders/");
+  const onWishlist = pathname === "/wishlist" || pathname.startsWith("/wishlist/");
+  const onReviews = pathname === "/reviews" || pathname.startsWith("/reviews/");
 
   useEffect(() => {
     if (q.trim().length < 2) {
@@ -175,10 +177,6 @@ export function SiteHeader() {
               </div>
             )}
             <NavItem href="/catalog">{t("nav.catalog")}</NavItem>
-            <NavItem href="/wishlist">
-              {t("nav.wishlist")}
-              {wishlistIds.length > 0 ? ` (${wishlistIds.length})` : ""}
-            </NavItem>
             {compareIds.length > 0 && (
               <NavItem href="/compare">
                 {t("nav.compare")} ({compareIds.length})
@@ -194,7 +192,7 @@ export function SiteHeader() {
                     type="button"
                     aria-expanded={accountOpen}
                     aria-haspopup="menu"
-                    aria-current={onAccount || onOrders ? "page" : undefined}
+                    aria-current={onAccount || onOrders || onWishlist || onReviews ? "page" : undefined}
                     onClick={() => setAccountOpen((open) => !open)}
                   >
                     {user.displayName || user.email}
@@ -213,6 +211,19 @@ export function SiteHeader() {
                       >
                         {t("nav.profile")}
                       </Link>
+                      <Link
+                        href="/wishlist"
+                        role="menuitem"
+                        aria-current={onWishlist ? "page" : undefined}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setAccountOpen(false);
+                          router.push("/wishlist");
+                        }}
+                      >
+                        {t("nav.wishlist")}
+                        {wishlistIds.length > 0 ? ` (${wishlistIds.length})` : ""}
+                      </Link>
                       {!staff && (
                         <Link
                           href="/orders"
@@ -225,6 +236,20 @@ export function SiteHeader() {
                           }}
                         >
                           {t("nav.orders")}
+                        </Link>
+                      )}
+                      {!staff && (
+                        <Link
+                          href="/reviews"
+                          role="menuitem"
+                          aria-current={onReviews ? "page" : undefined}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            setAccountOpen(false);
+                            router.push("/reviews");
+                          }}
+                        >
+                          {t("nav.reviews")}
                         </Link>
                       )}
                     </div>

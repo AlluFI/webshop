@@ -9,6 +9,7 @@ import {
   type AddressInput,
 } from "@volt/shared";
 import { api, ApiError } from "@/lib/api";
+import { AccountNav } from "./account-nav";
 import { useAuth } from "./auth";
 import { useI18n } from "./i18n";
 
@@ -92,6 +93,7 @@ export function AccountPage() {
 
   return (
     <section className="auth-card" style={{ maxWidth: 560 }}>
+      <AccountNav />
       <h1>{t("account.profile")}</h1>
       <p>
         {user.displayName || t("account.customer")} · {user.email}
@@ -143,56 +145,54 @@ export function AccountPage() {
           </button>
         </form>
       )}
-      <p>
-        {t("account.totp")} <strong>{user.totpEnabled ? t("account.totpOn") : t("account.totpOff")}</strong>
-      </p>
-      {message && <p className="banner ok">{message}</p>}
-      {error && <p className="banner error">{error}</p>}
-      {backup.length > 0 && (
+      <div className="account-2fa">
         <p>
-          {t("account.backupCodes")} <code>{backup.join(" ")}</code>
+          {t("account.totp")} <strong>{user.totpEnabled ? t("account.totpOn") : t("account.totpOff")}</strong>
         </p>
-      )}
-      {!user.totpEnabled && !setup && (
-        <>
-          <p className="muted">
-            {t("account.totpHint")}
+        {message && <p className="banner ok">{message}</p>}
+        {error && <p className="banner error">{error}</p>}
+        {backup.length > 0 && (
+          <p>
+            {t("account.backupCodes")} <code>{backup.join(" ")}</code>
           </p>
-          <button className="primary" type="button" onClick={() => void startTotp()}>
-            {t("account.enableTotp")}
-          </button>
-        </>
-      )}
-      {setup && (
-        <>
-          <p>{t("account.scanQr")}</p>
-          <img src={setup.qrDataUrl} alt="Two-factor authentication QR code" width={180} height={180} />
-          <p className="muted">{setup.otpauth}</p>
-          <form onSubmit={(event) => void confirmTotp(event)}>
+        )}
+        {!user.totpEnabled && !setup && (
+          <>
+            <p className="muted">{t("account.totpHint")}</p>
+            <button className="primary" type="button" onClick={() => void startTotp()}>
+              {t("account.enableTotp")}
+            </button>
+          </>
+        )}
+        {setup && (
+          <>
+            <p>{t("account.scanQr")}</p>
+            <img src={setup.qrDataUrl} alt="Two-factor authentication QR code" width={180} height={180} />
+            <p className="muted">{setup.otpauth}</p>
+            <form onSubmit={(event) => void confirmTotp(event)}>
+              <label className="field">
+                <span>{t("account.code6")}</span>
+                <input name="code" inputMode="numeric" autoComplete="one-time-code" required />
+              </label>
+              <button className="primary" type="submit">
+                {t("account.confirmTotp")}
+              </button>
+            </form>
+          </>
+        )}
+        {user.totpEnabled && !isStaffRole(user.role) && (
+          <form onSubmit={(event) => void disableTotp(event)}>
             <label className="field">
-              <span>{t("account.code6")}</span>
+              <span>{t("account.disableTotp")}</span>
               <input name="code" inputMode="numeric" autoComplete="one-time-code" required />
             </label>
-            <button className="primary" type="submit">
-              {t("account.confirmTotp")}
+            <button className="ghost" type="submit">
+              {t("account.turnOff")}
             </button>
           </form>
-        </>
-      )}
-      {user.totpEnabled && !isStaffRole(user.role) && (
-        <form onSubmit={(event) => void disableTotp(event)}>
-          <label className="field">
-            <span>{t("account.disableTotp")}</span>
-            <input name="code" inputMode="numeric" autoComplete="one-time-code" required />
-          </label>
-          <button className="ghost" type="submit">
-            {t("account.turnOff")}
-          </button>
-        </form>
-      )}
-      {user.totpEnabled && isStaffRole(user.role) && (
-        <p className="muted">{t("account.staffMust2fa")}</p>
-      )}
+        )}
+        {user.totpEnabled && isStaffRole(user.role) && <p className="muted">{t("account.staffMust2fa")}</p>}
+      </div>
       {!isStaffRole(user.role) && (
         <div className="panel">
           <h2>{t("account.deleteTitle")}</h2>

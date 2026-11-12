@@ -136,7 +136,9 @@ export function ProductReviews({ slug }: { slug: string }) {
       <h2>{t("review.title")}</h2>
       {orderId && (
         <p>
-          <Link href={`/orders/${orderId}`}>{t("review.fromOrder")}</Link>
+          <Link href={`/reviews?product=${encodeURIComponent(slug)}&order=${encodeURIComponent(orderId)}`}>
+            {t("review.fromOrder")}
+          </Link>
         </p>
       )}
       {canReview && !orderId && accessToken && (

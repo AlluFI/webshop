@@ -54,21 +54,23 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
   return (
-    <div className="layout-split">
-      <CatalogFilters
-        query={query}
-        facets={data?.facets ?? { brands: [], categories: [], price: { min: 0, max: 0 } }}
-      />
-      <section>
-        <CatalogToolbar query={query} heading={heading} total={data?.total ?? 0} />
-        {error && <p className="error">{error}</p>}
-        <div className={view === "list" ? "list-view" : "grid"}>
-          {data?.items.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-        <CatalogPager query={query} page={page} totalPages={totalPages} />
-      </section>
-    </div>
+    <>
+      <CatalogToolbar query={query} heading={heading} total={data?.total ?? 0} />
+      {error && <p className="error">{error}</p>}
+      <div className="layout-split">
+        <CatalogFilters
+          query={query}
+          facets={data?.facets ?? { brands: [], categories: [], price: { min: 0, max: 0 } }}
+        />
+        <section>
+          <div className={view === "list" ? "list-view" : "grid"}>
+            {data?.items.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+          <CatalogPager query={query} page={page} totalPages={totalPages} />
+        </section>
+      </div>
+    </>
   );
 }

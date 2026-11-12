@@ -11,7 +11,7 @@ import type { Product } from "@/lib/product";
 
 export function ComparePage() {
   const { t } = useI18n();
-  const { compareIds, toggleCompare } = useShopLists();
+  const { compareIds, toggleCompare, clearCompare } = useShopLists();
   const [items, setItems] = useState<Product[]>([]);
 
   useEffect(() => {
@@ -114,6 +114,11 @@ export function ComparePage() {
           </tbody>
         </table>
       </div>
+      <p className="compare-clear">
+        <button className="ghost" type="button" onClick={clearCompare}>
+          {t("compare.clear")}
+        </button>
+      </p>
     </section>
   );
 }

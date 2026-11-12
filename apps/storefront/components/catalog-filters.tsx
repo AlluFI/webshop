@@ -100,7 +100,7 @@ export function CatalogToolbar({
   }
 
   return (
-    <div className="toolbar">
+    <div className="toolbar catalog-toolbar">
       <h1>
         {heading} <span className="muted">({total})</span>
       </h1>

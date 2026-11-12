@@ -37,6 +37,7 @@ type ShopListsValue = {
   ready: boolean;
   toggleWishlist: (productId: string) => Promise<void>;
   toggleCompare: (productId: string) => { ok: boolean; limit?: boolean };
+  clearCompare: () => void;
 };
 
 const ShopListsContext = createContext<ShopListsValue | null>(null);
@@ -118,9 +119,14 @@ export function ShopListsProvider({ children }: { children: ReactNode }) {
     [compareIds],
   );
 
+  const clearCompare = useCallback(() => {
+    setCompareIds([]);
+    writeIds(COMPARE_KEY, []);
+  }, []);
+
   const value = useMemo(
-    () => ({ wishlistIds, compareIds, ready, toggleWishlist, toggleCompare }),
-    [wishlistIds, compareIds, ready, toggleWishlist, toggleCompare],
+    () => ({ wishlistIds, compareIds, ready, toggleWishlist, toggleCompare, clearCompare }),
+    [wishlistIds, compareIds, ready, toggleWishlist, toggleCompare, clearCompare],
   );
 
   return <ShopListsContext.Provider value={value}>{children}</ShopListsContext.Provider>;

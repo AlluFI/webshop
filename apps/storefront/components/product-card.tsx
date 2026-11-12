@@ -42,8 +42,10 @@ export function ProductCard({
         {!compact && product.description ? <p className="card-excerpt">{product.description}</p> : null}
       </div>
       <div className="card-actions">
-        <ProductPrice product={product} />
-        <AddToCartButton productId={product.id} stockQuantity={product.stockQuantity} compact />
+        <div className="card-buy">
+          <ProductPrice product={product} showNote={false} />
+          <AddToCartButton productId={product.id} stockQuantity={product.stockQuantity} compact />
+        </div>
         {!compact ? <ProductSaveActions product={product} compact /> : null}
       </div>
     </article>

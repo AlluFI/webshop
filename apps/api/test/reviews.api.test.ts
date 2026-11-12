@@ -105,6 +105,12 @@ describeLive("reviews API", () => {
     expect(detail.status).toBe(200);
     expect(detail.body.items.some((item: { canReview?: boolean }) => item.canReview)).toBe(true);
 
+    const pending = await request(app)
+      .get("/api/v1/reviews/pending")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(pending.status).toBe(200);
+    expect(pending.body.items.some((item: { slug: string }) => item.slug === productSlug)).toBe(true);
+
     const created = await request(app)
       .post(`/api/v1/products/${productSlug}/reviews`)
       .set("Authorization", `Bearer ${accessToken}`)
@@ -127,5 +133,10 @@ describeLive("reviews API", () => {
       .get(`/api/v1/orders/${purchase.id}`)
       .set("Authorization", `Bearer ${accessToken}`);
     expect(afterReview.body.items.every((item: { canReview?: boolean }) => !item.canReview)).toBe(true);
+
+    const pendingAfter = await request(app)
+      .get("/api/v1/reviews/pending")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(pendingAfter.body.items.every((item: { slug: string }) => item.slug !== productSlug)).toBe(true);
   });
 });
