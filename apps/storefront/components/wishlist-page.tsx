@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isStaffRole } from "@volt/shared";
 import { api } from "@/lib/api";
 import { ProductCard } from "./product-card";
 import { useAuth } from "./auth";
@@ -14,6 +15,7 @@ export function WishlistPage() {
   const { wishlistIds, ready } = useShopLists();
   const [items, setItems] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const staff = Boolean(user && isStaffRole(user.role));
 
   useEffect(() => {
     if (!ready) return;
@@ -21,7 +23,7 @@ export function WishlistPage() {
     async function load() {
       setLoading(true);
       try {
-        if (accessToken && user) {
+        if (accessToken && user && !staff) {
           const data = await api<{ items: Product[] }>("/wishlist", { token: accessToken });
           if (!cancelled) setItems(data.items);
           return;
@@ -43,13 +45,14 @@ export function WishlistPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, ready, user, wishlistIds]);
+  }, [accessToken, ready, staff, user, wishlistIds]);
 
   return (
     <section>
       <h1>{t("wishlist.title")}</h1>
       {!user && <p className="muted">{t("wishlist.signIn")}</p>}
       {!user && <p className="muted">{t("wishlist.guestHint")}</p>}
+      {staff && <p className="muted">{t("wishlist.staffHint")}</p>}
       {loading ? (
         <p>…</p>
       ) : items.length === 0 ? (

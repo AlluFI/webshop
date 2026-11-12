@@ -72,7 +72,7 @@ export default async function HomePage() {
       {error && <p className="error">{error}</p>}
       <div className="grid">
         {featured.map((product) => (
-          <ProductCard key={product.id} product={product} />
+          <ProductCard key={product.id} product={product} titleAs="h3" />
         ))}
       </div>
     </>

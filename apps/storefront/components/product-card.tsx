@@ -6,10 +6,18 @@ import { ProductPrice } from "./product-price";
 import { AddToCartButton } from "./cart";
 import { ProductSaveActions } from "./product-actions";
 
-export function ProductCard({ product, compact = false }: { product: Product; compact?: boolean }) {
+export function ProductCard({
+  product,
+  compact = false,
+  titleAs,
+}: {
+  product: Product;
+  compact?: boolean;
+  titleAs?: "h2" | "h3";
+}) {
   const href = `/products/${product.slug}`;
   const image = product.images[0];
-  const TitleTag = compact ? "h3" : "h2";
+  const TitleTag = titleAs ?? (compact ? "h3" : "h2");
 
   return (
     <article className={compact ? "card card-compact" : "card"}>
