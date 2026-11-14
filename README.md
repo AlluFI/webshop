@@ -115,7 +115,7 @@ Registering a new user sends a link to Mailpit.
 
 The customer storefront is **English by default**. Set `I18N_ENABLED=true` (and rebuild `web`) for an **English / Finnish / Swedish** switcher that covers nav, pages, checkout, account, and legal copy. Finland requires Swedish if extra languages are offered. Catalog product names and descriptions stay English. Admin and Voltie stay English.
 
-Also on the shop: cookie banner + `/privacy`, wishlist, 2–3 product compare, low-stock and delivery lines on the PDP, back-in-stock email (Mailpit), Helsinki **pickup**, guest order lookup by `VC-` number + last name (not email), customer return request (CLAIMS ticket), and print invoice on the order page.
+Also on the shop: cookie banner + `/privacy`, wishlist, shareable **gift lists** (`/lists/{token}` — friends tick products they already bought), 2–3 product compare, low-stock and delivery lines on the PDP, back-in-stock email (Mailpit), Helsinki **pickup**, guest order lookup by `VC-` number + last name (not email), customer return request (CLAIMS ticket), and print invoice on the order page.
 
 ### Google OAuth (optional to use, mandatory for completion of the project)
 
@@ -267,7 +267,7 @@ pnpm test:e2e
 Coverage:
 
 - **Unit:** JWT generate/validate/expire, refresh rotation + reuse, input validation, product model, cart totals, address encryption, review averages, token-bucket, Posti / PostNord / Budbee mock adapters
-- **API:** register/login/refresh/revoke, catalog fields, facets, sort, suggestions, images, OpenAPI document, guest cart, merge on login, checkout validation, Stripe place + webhook (inline queue), concurrent last-unit checkout, order list/cancel/refund, wishlist, stock alerts, pickup + guest `VC-` lookup + return request, purchased-only reviews + helpful votes, admin 2FA + CRUD + bulk JSON + shipment labels
+- **API:** register/login/refresh/revoke, catalog fields, facets, sort, suggestions, images, OpenAPI document, guest cart, merge on login, checkout validation, Stripe place + webhook (inline queue), concurrent last-unit checkout, order list/cancel/refund, wishlist, shareable gift lists + reserve, stock alerts, pickup + guest `VC-` lookup + return request, purchased-only reviews + helpful votes, admin 2FA + CRUD + bulk JSON + shipment labels
 - **Security:** parameterized search (injection payload), malformed JSON, unauthenticated `/me` and `/admin`, token-bucket HTTP 429, encrypted address columns, TOTP secrets, and refresh JTIs (`v1:` AES-GCM)
 - **E2E:** Playwright smokes for home, catalog, about, 404, and header search (`pnpm test:e2e`)
 

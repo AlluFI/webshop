@@ -8,6 +8,7 @@ import { AccountNav } from "./account-nav";
 import { ProductCard } from "./product-card";
 import { useAuth } from "./auth";
 import { useI18n } from "./i18n";
+import { GiftListShare } from "./gift-list-share";
 import { useShopLists } from "./shop-lists";
 import type { Product } from "@/lib/product";
 
@@ -72,6 +73,7 @@ export function WishlistPage() {
           ))}
         </div>
       )}
+      {!staff && accessToken ? <GiftListShare token={accessToken} hasItems={!loading && items.length > 0} /> : null}
     </section>
   );
 }

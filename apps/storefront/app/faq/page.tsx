@@ -23,6 +23,11 @@ export default async function FaqPage() {
       <p>{t("faq.returnA")}</p>
       <h2>{t("faq.cardQ")}</h2>
       <p>{t("faq.cardA")}</p>
+      <h2>{t("faq.giftQ")}</h2>
+      <p>
+        {t("faq.giftA")}{" "}
+        <Link href="/wishlist">{t("nav.wishlist")}</Link>
+      </p>
     </article>
   );
 }

@@ -22,6 +22,7 @@ import { adminRouter } from "./routes/admin.js";
 import { integrationsRouter } from "./routes/integrations.js";
 import { assistantRouter } from "./routes/assistant.js";
 import { shopRouter } from "./routes/shop.js";
+import { giftListRouter } from "./routes/gift-lists.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { setPaymentStatusHandler } from "./lib/queue.js";
 import { handlePaymentStatus } from "./services/order-fulfillment.js";
@@ -73,6 +74,7 @@ export function createApp() {
   app.use("/api/v1/checkout", checkoutRouter);
   app.use("/api/v1/orders", ordersRouter);
   app.use("/api/v1", shopRouter);
+  app.use("/api/v1", giftListRouter);
   app.use("/api/v1/files", filesRouter);
   app.use("/api/v1", reviewsRouter);
   app.use("/api/v1/contact", contactRouter);

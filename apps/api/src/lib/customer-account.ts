@@ -49,6 +49,7 @@ export async function requestCustomerDeletion(userId: string) {
   const retainUntil = lastMoney ? bookkeepingRetainUntil(lastMoney) : null;
 
   await prisma.$transaction(async (tx) => {
+    await tx.giftList.deleteMany({ where: { userId } });
     await tx.address.deleteMany({ where: { userId } });
     await tx.cart.deleteMany({ where: { userId } });
     await tx.oAuthIdentity.deleteMany({ where: { userId } });

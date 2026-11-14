@@ -1591,6 +1591,87 @@ export const openApiDocument: OpenAPIV3.Document = {
         responses: { "200": { description: "Updated wishlist" } },
       },
     },
+    "/api/v1/gift-lists": {
+      get: {
+        tags: ["Shop"],
+        summary: "Signed-in customer gift lists",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Gift lists with share URLs" }, "401": { $ref: "#/components/responses/Unauthorized" } },
+      },
+      post: {
+        tags: ["Shop"],
+        summary: "Snapshot the wishlist as a shareable gift list",
+        security: [{ bearerAuth: [] }],
+        responses: { "201": { description: "Created list and share URL" }, "400": { description: "Wishlist empty" } },
+      },
+    },
+    "/api/v1/gift-lists/shared/{token}": {
+      get: {
+        tags: ["Shop"],
+        summary: "Public gift list by unguessable share token",
+        parameters: [{ name: "token", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Title, occasion, products, reserved flags" }, "404": { description: "Unknown or revoked link" } },
+      },
+    },
+    "/api/v1/gift-lists/shared/{token}/items/{productId}/reserve": {
+      post: {
+        tags: ["Shop"],
+        summary: "Reserve a gift so others do not buy the same product",
+        parameters: [
+          { name: "token", in: "path", required: true, schema: { type: "string" } },
+          { name: "productId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: { "200": { description: "Reserved; claimToken to undo from this browser" }, "409": { description: "Already reserved" } },
+      },
+    },
+    "/api/v1/gift-lists/shared/{token}/items/{productId}/release": {
+      post: {
+        tags: ["Shop"],
+        summary: "Undo a reservation with the claim token from this browser",
+        parameters: [
+          { name: "token", in: "path", required: true, schema: { type: "string" } },
+          { name: "productId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: { "200": { description: "Available again" }, "403": { description: "Wrong or missing claim token" } },
+      },
+    },
+    "/api/v1/gift-lists/{id}": {
+      patch: {
+        tags: ["Shop"],
+        summary: "Rename a gift list or refresh items from the wishlist",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Updated list" } },
+      },
+      delete: {
+        tags: ["Shop"],
+        summary: "Delete a gift list and invalidate its share link",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Remaining lists" } },
+      },
+    },
+    "/api/v1/gift-lists/{id}/rotate": {
+      post: {
+        tags: ["Shop"],
+        summary: "Issue a new share token; the old link stops working",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "List with new share URL" } },
+      },
+    },
+    "/api/v1/gift-lists/{id}/items/{productId}/release": {
+      post: {
+        tags: ["Shop"],
+        summary: "Owner marks a reserved gift as available again",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+          { name: "productId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: { "200": { description: "Updated list" } },
+      },
+    },
     "/api/v1/stock-alerts": {
       post: {
         tags: ["Shop"],

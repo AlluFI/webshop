@@ -22,6 +22,29 @@ export const wishlistItemSchema = z.object({
   productId: z.string().uuid("Choose a product"),
 });
 
+export const GIFT_OCCASIONS = ["christmas", "birthday", "other"] as const;
+export type GiftOccasion = (typeof GIFT_OCCASIONS)[number];
+export const MAX_GIFT_LISTS = 5;
+
+export const createGiftListSchema = z.object({
+  title: z.string().trim().min(2, "Give the list a name").max(80, "That name is too long"),
+  occasion: z.enum(GIFT_OCCASIONS, { errorMap: () => ({ message: "Choose an occasion" }) }),
+});
+
+export const updateGiftListSchema = z.object({
+  title: z.string().trim().min(2, "Give the list a name").max(80, "That name is too long").optional(),
+  occasion: z.enum(GIFT_OCCASIONS, { errorMap: () => ({ message: "Choose an occasion" }) }).optional(),
+  refreshFromWishlist: z.boolean().optional(),
+});
+
+export const reserveGiftItemSchema = z.object({
+  claimToken: z.string().trim().min(8).max(128).optional(),
+});
+
+export const releaseGiftItemSchema = z.object({
+  claimToken: z.string().trim().min(8, "Missing reservation").max(128),
+});
+
 export const stockAlertSchema = z.object({
   productId: z.string().uuid("Choose a product"),
   email: emailSchema,

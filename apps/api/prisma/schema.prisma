@@ -43,6 +43,7 @@ model User {
   supportTickets          SupportTicket[]
   assistantThreads        AssistantThread[]
   wishlistItems           WishlistItem[]
+  giftLists               GiftList[]
 
   @@map("users")
 }
@@ -176,6 +177,7 @@ model Product {
   priceHistory   ProductPriceHistory[]
   promotions     ProductPromotion[]
   wishlistItems  WishlistItem[]
+  giftListItems  GiftListItem[]
   stockAlerts    StockAlert[]
 
   @@index([categoryId])
@@ -662,6 +664,37 @@ model WishlistItem {
   @@index([userId])
   @@index([productId])
   @@map("wishlist_items")
+}
+
+model GiftList {
+  id         String         @id @default(uuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  occasion   String
+  shareToken String         @unique
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  items      GiftListItem[]
+
+  @@index([userId])
+  @@map("gift_lists")
+}
+
+model GiftListItem {
+  id             String    @id @default(uuid())
+  giftListId     String
+  giftList       GiftList  @relation(fields: [giftListId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  reservedAt     DateTime?
+  claimTokenHash String?
+  createdAt      DateTime  @default(now())
+
+  @@unique([giftListId, productId])
+  @@index([giftListId])
+  @@index([productId])
+  @@map("gift_list_items")
 }
 
 model StockAlert {

@@ -130,6 +130,57 @@ describeLive("shop extras API", () => {
     expect(removed.body.items.some((item: { id: string }) => item.id === productId)).toBe(false);
   });
 
+  it("shares a wishlist as a gift list that guests can reserve", async () => {
+    const added = await request(app)
+      .post("/api/v1/wishlist")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ productId });
+    expect(added.status).toBe(201);
+
+    const created = await request(app)
+      .post("/api/v1/gift-lists")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ title: "Christmas 2026", occasion: "christmas" });
+    expect(created.status).toBe(201);
+    expect(created.body.shareToken).toBeTruthy();
+    expect(created.body.items.some((item: { productId: string }) => item.productId === productId)).toBe(true);
+
+    const token = created.body.shareToken as string;
+    const publicList = await request(app).get(`/api/v1/gift-lists/shared/${token}`);
+    expect(publicList.status).toBe(200);
+    expect(publicList.body.title).toBe("Christmas 2026");
+    expect(publicList.body.ownerName).toBe("Lookup Customer");
+
+    const reserved = await request(app)
+      .post(`/api/v1/gift-lists/shared/${token}/items/${productId}/reserve`)
+      .send({});
+    expect(reserved.status).toBe(200);
+    expect(reserved.body.claimToken).toBeTruthy();
+
+    const clash = await request(app)
+      .post(`/api/v1/gift-lists/shared/${token}/items/${productId}/reserve`)
+      .send({});
+    expect(clash.status).toBe(409);
+
+    const taken = await request(app).get(`/api/v1/gift-lists/shared/${token}`);
+    expect(taken.body.items[0].reserved).toBe(true);
+
+    const released = await request(app)
+      .post(`/api/v1/gift-lists/shared/${token}/items/${productId}/release`)
+      .send({ claimToken: reserved.body.claimToken });
+    expect(released.status).toBe(200);
+
+    const openAgain = await request(app).get(`/api/v1/gift-lists/shared/${token}`);
+    expect(openAgain.body.items[0].reserved).toBe(false);
+
+    const deleted = await request(app)
+      .delete(`/api/v1/gift-lists/${created.body.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(deleted.status).toBe(200);
+    const gone = await request(app).get(`/api/v1/gift-lists/shared/${token}`);
+    expect(gone.status).toBe(404);
+  });
+
   it("accepts a back-in-stock alert and emails when warehouse stock returns", async () => {
     const alert = await request(app).post("/api/v1/stock-alerts").send({
       productId: soldOutId,
