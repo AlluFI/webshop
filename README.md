@@ -45,7 +45,7 @@ erDiagram
   }
 ```
 
-Refresh tokens are **not** stored in Postgres. A Redis family (`rf:{familyId}` → current `jti`) is created on each login. A new `jti` is written on every refresh (single use). The whole family is revoked if an old refresh token is replayed. Access tokens are JWTs held **only in React memory** (`apps/storefront/components/auth.tsx`); on logout the access `jti` is placed on a Redis denylist until expiry.
+Refresh tokens are **not** stored in Postgres. A Redis family (`rf:{familyId}` → current `jti`) is created on each login. A new `jti` is written on every refresh (single use). Replaying an old refresh token after a 10-second grace for duplicate tab refreshes revokes the whole family. Access tokens are JWTs held **only in React memory** (`apps/storefront/components/auth.tsx`); on logout the access `jti` is placed on a Redis denylist until expiry.
 
 Guest carts use an httpOnly `cart_token` cookie. The raw token is never stored — only its SHA-256. On sign-in that cart is merged into the user cart and quantities are clamped to stock. Shipping addresses are encrypted at rest with AES-256-GCM (`DATA_ENCRYPTION_KEY`).
 

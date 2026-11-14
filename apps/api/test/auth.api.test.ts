@@ -1,6 +1,8 @@
 import { afterAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
+import { config } from "../src/config.js";
+import { verifyRefreshToken } from "../src/lib/jwt.js";
 import { prisma } from "../src/prisma.js";
 import { redis } from "../src/redis.js";
 
@@ -86,6 +88,14 @@ describeLive("auth API", () => {
       .send({ refreshToken });
     expect(first.status).toBe(200);
     expect(first.body.refreshToken).not.toBe(refreshToken);
+
+    const raced = await request(app)
+      .post("/api/v1/auth/refresh")
+      .send({ refreshToken });
+    expect(raced.status).toBe(200);
+
+    const parsed = verifyRefreshToken(refreshToken, config.jwtRefreshSecret);
+    await redis.del(`rf:${parsed.fam}:prev`);
 
     const reuse = await request(app)
       .post("/api/v1/auth/refresh")

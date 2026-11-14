@@ -37,8 +37,8 @@ On `/auth/refresh`:
 
 1. The JWT signature is verified and `typ === "refresh"` is required.
 2. Redis is read. If the key is gone, the session has been revoked or expired.
-3. If Redis `jti` ≠ token `jti`, **reuse** is detected. An already-rotated token was replayed. The whole family is deleted and the request is rejected.
-4. Otherwise a **new** `jti` is written and a new refresh JWT + new access JWT are returned. The old refresh JWT still verifies as a JWT, but Redis no longer matches, so it is rejected.
+3. If Redis `jti` ≠ token `jti`, **reuse** is detected. An already-rotated token was replayed. Within **10 seconds** we treat that as a duplicate refresh (two tabs) and return the current session instead of killing it. After that window the whole family is deleted and the request is rejected (`401`).
+4. Otherwise a **new** `jti` is written and a new refresh JWT + new access JWT are returned. The previous `jti` is kept briefly for that grace window. After that, the old refresh JWT still verifies as a JWT, but Redis no longer matches.
 
 **Revocation of both token types**
 
@@ -306,7 +306,7 @@ The shop is not in pain at class-demo scale. Bottlenecks below are the ones desi
 
 1. `./scripts/start.sh` → https://localhost:8443 (the cert is accepted) or http://localhost:8088, Mailpit http://localhost:8025.
 2. Login `customer@volt.test` / `Shopping123`. Empty Local Storage is shown. jwt.io is opened on an access token from the Network tab (header / payload / signature).
-3. Refresh is called twice with the **first** refresh token (or the automated test is used) — second call 401 “reuse”.
+3. Refresh is called twice with the **first** refresh token: the second call is **200** inside the 10-second grace (duplicate tabs). After that window (or `auth.api.test.ts`) reuse is **401** and the family is revoked.
 4. Catalog facets + sort + typeahead + grid/list; a PDP is opened (thumbs + full, metric/imperial, reviews).
 5. A review is left from the seeded Sony **order**, then voted helpful on the product page; the average is updated.
 6. Guest: add to cart, refresh, still there; header quick cart. Sign in: the cart is merged.
